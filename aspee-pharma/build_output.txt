@@ -1,0 +1,141 @@
+﻿
+> aspee-pharma@0.1.0 build
+> set NODE_OPTIONS=--max-old-space-size=4096 & next build
+
+   Γû▓ Next.js 15.1.9
+   - Environments: .env.local
+
+   Creating an optimized production build ...
+ Γ£ô Compiled successfully
+   Linting and checking validity of types ...
+
+./src/app/(dashboard)/accounting/petty-cash/page.tsx
+25:11  Warning: The 'rows' logical expression could make the dependencies of useMemo Hook (at line 55) change on every render. To fix this, wrap the initialization of 'rows' in its own useMemo() Hook.  react-hooks/exhaustive-deps
+
+./src/app/(dashboard)/accounting/reports/page.tsx
+42:8  Warning: React Hook useEffect has a missing dependency: 'fetchReportData'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+
+./src/components/BOMModal.tsx
+89:8  Warning: React Hook useEffect has a missing dependency: 'populateForm'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+
+./src/components/EmployeePayrollModal.tsx
+96:8  Warning: React Hook useEffect has a missing dependency: 'availableStatuses'. Either include it or remove the dependency array. If 'setStatus' needs the current value of 'availableStatuses', you can also switch to useReducer instead of useState and read 'availableStatuses' in the reducer.  react-hooks/exhaustive-deps
+
+./src/components/MaterialRequestModal.tsx
+77:8  Warning: React Hook useEffect has missing dependencies: 'fetchOrderItems' and 'generateRequestNumber'. Either include them or remove the dependency array.  react-hooks/exhaustive-deps
+
+./src/components/ProductionCompletionModal.tsx
+28:8  Warning: React Hook useEffect has a missing dependency: 'fetchOrderItems'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+
+./src/components/ProductionOrderModal.tsx
+77:8  Warning: React Hook useEffect has a missing dependency: 'populateForm'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+
+./src/components/SupplierPaymentModal.tsx
+69:8  Warning: React Hook useEffect has a missing dependency: 'populateForm'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+
+info  - Need to disable some ESLint rules? Learn more here: https://nextjs.org/docs/app/api-reference/config/eslint#disabling-rules
+   Collecting page data ...
+   Generating static pages (0/49) ...
+node.exe :  ΓÜá 
+metadataBase property 
+in metadata export is 
+not set for resolving 
+social open graph or 
+twitter images, using "
+http://localhost:3000".
+ See https://nextjs.org
+/docs/app/api-reference
+/functions/generate-met
+adata#metadatabase
+At C:\Program Files\nod
+ejs\npm.ps1:29 char:3
++   & $NODE_EXE 
+$NPM_CLI_JS $args
++   ~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~
+    + CategoryInfo     
+         : NotSpecifi  
+  ed: ( ΓÜá metadata   
+ Ba...ta#metadataba    
+se:String) [], Rem    
+oteException
+    + FullyQualifiedEr 
+   rorId : NativeComm  
+  andError
+ 
+ ΓÜá metadataBase 
+property in metadata 
+export is not set for 
+resolving social open 
+graph or twitter 
+images, using "http://l
+ocalhost:3000". See htt
+ps://nextjs.org/docs/ap
+p/api-reference/functio
+ns/generate-metadata#me
+tadatabase
+   Generating static pages (12/49) 
+   Generating static pages (24/49) 
+   Generating static pages (36/49) 
+ Γ£ô Generating static pages (49/49)
+   Finalizing page optimization ...
+   Collecting build traces ...
+
+Route (app)                              Size     First Load JS
+Γöî Γùï /                                    2.1 kB          112 kB
+Γö£ Γùï /_not-found                          990 B           107 kB
+Γö£ Γùï /accounting/ar-aging                 6.79 kB         187 kB
+Γö£ Γùï /accounting/expenses                 7.98 kB         192 kB
+Γö£ Γùï /accounting/journal                  8.22 kB         188 kB
+Γö£ Γùï /accounting/payroll                  2.33 kB         193 kB
+Γö£ Γùï /accounting/petty-cash               6.97 kB         191 kB
+Γö£ Γùï /accounting/reports                  3.54 kB         174 kB
+Γö£ Γùï /accounting/tax                      8.24 kB         188 kB
+Γö£ ╞Æ /api/create-user                     151 B           106 kB
+Γö£ ╞Æ /api/send-email                      151 B           106 kB
+Γö£ ╞Æ /api/weekly-report                   151 B           106 kB
+Γö£ Γùï /customers                           11.8 kB         368 kB
+Γö£ Γùï /hr/attendance                       2.19 kB         187 kB
+Γö£ Γùï /hr/employees                        2.21 kB         187 kB
+Γö£ Γùï /hr/leave                            6.96 kB         187 kB
+Γö£ Γùï /hr/payroll                          2.5 kB          193 kB
+Γö£ Γùï /internal-audit                      6.68 kB         187 kB
+Γö£ Γùï /internal-audit/non-conformances     6.9 kB          187 kB
+Γö£ Γùï /internal-audit/reports              6.87 kB         187 kB
+Γö£ Γùï /login                               4.67 kB         166 kB
+Γö£ Γùï /overview                            116 kB          299 kB
+Γö£ Γùï /production                          8.95 kB         202 kB
+Γö£ Γùï /production/bom                      11.4 kB         191 kB
+Γö£ Γùï /production/material-requests        4.33 kB         184 kB
+Γö£ Γùï /purchasing/grn                      14.4 kB         202 kB
+Γö£ Γùï /purchasing/payments                 11.1 kB         198 kB
+Γö£ Γùï /purchasing/purchase-orders          16.2 kB         380 kB
+Γö£ Γùï /purchasing/suppliers                8.95 kB         189 kB
+Γö£ Γùï /qa                                  5.27 kB         189 kB
+Γö£ Γùï /qa/finished-products                7.52 kB         187 kB
+Γö£ Γùï /qa/in-process                       6.66 kB         187 kB
+Γö£ Γùï /routes                              6.9 kB          191 kB
+Γö£ Γùï /sales/credit-notes                  7.56 kB         195 kB
+Γö£ Γùï /sales/dispatch                      7.18 kB         191 kB
+Γö£ Γùï /sales/invoices                      10.8 kB         374 kB
+Γö£ Γùï /sales/receipts                      6.91 kB         194 kB
+Γö£ Γùï /settings/audit-log                  6.25 kB         186 kB
+Γö£ Γùï /settings/profile                    5.21 kB         185 kB
+Γö£ Γùï /settings/reports                    4.47 kB         175 kB
+Γö£ Γùï /settings/users                      6.72 kB         192 kB
+Γö£ Γùï /signup                              151 B           106 kB
+Γö£ Γùï /stores/material-requests            5.93 kB         180 kB
+Γö£ Γùï /stores/products                     5.13 kB         195 kB
+Γö£ Γùï /stores/stock                        7.93 kB         192 kB
+Γöö Γùï /stores/transfers                    5.97 kB         190 kB
++ First Load JS shared by all            106 kB
+  Γö£ chunks/1517-1c83d1fb1222be44.js      50.8 kB
+  Γö£ chunks/4bd1b696-ed5529c626d4c813.js  53 kB
+  Γöö other shared chunks (total)          2.14 kB
+
+
+╞Æ Middleware                             79.4 kB
+
+Γùï  (Static)   prerendered as static content
+╞Æ  (Dynamic)  server-rendered on demand
+

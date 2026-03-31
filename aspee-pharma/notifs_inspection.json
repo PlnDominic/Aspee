@@ -1,0 +1,10 @@
+{
+  "notifications": {
+    "error": {
+      "code": "PGRST205",
+      "details": null,
+      "hint": "Perhaps you meant the table 'public.stock_locations'",
+      "message": "Could not find the table 'public.notifications' in the schema cache"
+    }
+  }
+}

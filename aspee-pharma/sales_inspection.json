@@ -1,0 +1,28 @@
+{
+  "invoices": [],
+  "receipts": [],
+  "creditNotes": {
+    "error": {
+      "code": "PGRST205",
+      "details": null,
+      "hint": "Perhaps you meant the table 'public.routes'",
+      "message": "Could not find the table 'public.credit_notes' in the schema cache"
+    }
+  },
+  "salesReturns": {
+    "error": {
+      "code": "PGRST205",
+      "details": null,
+      "hint": "Perhaps you meant the table 'public.sales_receipts'",
+      "message": "Could not find the table 'public.sales_returns' in the schema cache"
+    }
+  },
+  "priceLists": {
+    "error": {
+      "code": "PGRST205",
+      "details": null,
+      "hint": "Perhaps you meant the table 'public.receipts'",
+      "message": "Could not find the table 'public.price_lists' in the schema cache"
+    }
+  }
+}

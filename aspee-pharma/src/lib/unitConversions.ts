@@ -1,0 +1,183 @@
+/**
+ * Unit Conversion Utility for Aspee Pharmaceuticals
+ * 
+ * Provides centralized conversion factors and functions to ensure
+ * consistency across Purchasing, Stores, Production, and QA departments.
+ */
+
+// --- Conversion Factor Tables ---
+// Each group uses a common base unit internally for conversion math.
+
+/** Weight conversions — base: Grams */
+const WEIGHT_FACTORS: Record<string, number> = {
+    'Milligrams': 0.001,
+    'Grams': 1,
+    'Kilograms': 1000,
+    'Ounces': 28.3495,
+    'Pounds': 453.592,
+};
+
+/** Volume conversions — base: Millilitres */
+const VOLUME_FACTORS: Record<string, number> = {
+    'Millilitres': 1,
+    'Litres': 1000,
+    'Cubic Centimeters': 1, // 1 cc = 1 mL
+    'Fluid Ounces': 29.5735,
+    'Gallons': 3785.41,
+};
+
+/** Length conversions — base: Millimeters */
+const LENGTH_FACTORS: Record<string, number> = {
+    'Millimeters': 1,
+    'Centimeters': 10,
+    'Meters': 1000,
+};
+
+/** Area conversions — base: Square Centimeters */
+const AREA_FACTORS: Record<string, number> = {
+    'Square Centimeters': 1,
+    'Square Meters': 10000,
+};
+
+/** Count units — no conversion between these */
+const COUNT_UNITS = [
+    'Pieces', 'Tablets', 'Capsules', 'Vials',
+    'Ampoules', 'Bottles', 'Boxes', 'Packs', 'Strips', 'Rolls', 'Drums', 'Cartons', 'Sachets', 'Tubes'
+];
+
+// --- Group Definitions ---
+
+export type UnitGroup = 'Weight' | 'Volume' | 'Length' | 'Area' | 'Count';
+
+export const UNIT_GROUPS: Record<UnitGroup, string[]> = {
+    Weight: Object.keys(WEIGHT_FACTORS),
+    Volume: Object.keys(VOLUME_FACTORS),
+    Length: Object.keys(LENGTH_FACTORS),
+    Area: Object.keys(AREA_FACTORS),
+    Count: COUNT_UNITS,
+};
+
+/** All factor tables for lookup */
+const ALL_FACTOR_TABLES: Record<string, Record<string, number>> = {
+    Weight: WEIGHT_FACTORS,
+    Volume: VOLUME_FACTORS,
+    Length: LENGTH_FACTORS,
+    Area: AREA_FACTORS,
+};
+
+// --- Core Functions ---
+
+/**
+ * Find which group a unit belongs to
+ */
+export function getUnitGroup(unit: string): UnitGroup | null {
+    for (const [group, units] of Object.entries(UNIT_GROUPS)) {
+        if (units.includes(unit)) return group as UnitGroup;
+    }
+    return null;
+}
+
+/**
+ * Get all units that can be converted to/from the given unit
+ */
+export function getCompatibleUnits(unit: string): string[] {
+    const group = getUnitGroup(unit);
+    if (!group) return [unit];
+    return UNIT_GROUPS[group];
+}
+
+/**
+ * Check if two units are convertible
+ */
+export function areUnitsConvertible(fromUnit: string, toUnit: string): boolean {
+    if (fromUnit === toUnit) return true;
+    const fromGroup = getUnitGroup(fromUnit);
+    const toGroup = getUnitGroup(toUnit);
+    if (!fromGroup || !toGroup) return false;
+    // Count units are not interconvertible (1 Tablet ≠ 1 Box)
+    if (fromGroup === 'Count' || toGroup === 'Count') return fromUnit === toUnit;
+    return fromGroup === toGroup;
+}
+
+/**
+ * Convert a value from one unit to another.
+ * Returns null if conversion is not possible.
+ */
+export function convertUnit(value: number, fromUnit: string, toUnit: string): number | null {
+    if (fromUnit === toUnit) return value;
+    
+    const fromGroup = getUnitGroup(fromUnit);
+    const toGroup = getUnitGroup(toUnit);
+
+    if (!fromGroup || !toGroup || fromGroup !== toGroup) return null;
+    if (fromGroup === 'Count') return null; // Can't convert between count units
+
+    const factors = ALL_FACTOR_TABLES[fromGroup];
+    if (!factors) return null;
+
+    const fromFactor = factors[fromUnit];
+    const toFactor = factors[toUnit];
+    if (fromFactor === undefined || toFactor === undefined) return null;
+
+    // Convert: value * fromFactor gives base units, then divide by toFactor
+    return (value * fromFactor) / toFactor;
+}
+
+/**
+ * Format a converted value with smart precision
+ */
+export function formatConvertedValue(value: number): string {
+    if (value >= 1000) return value.toLocaleString(undefined, { maximumFractionDigits: 2 });
+    if (value >= 1) return value.toLocaleString(undefined, { maximumFractionDigits: 4 });
+    if (value >= 0.001) return value.toLocaleString(undefined, { maximumFractionDigits: 6 });
+    return value.toExponential(2);
+}
+
+/**
+ * Generate a human-readable conversion string
+ * e.g. "5 Kilograms = 5,000 Grams"
+ */
+export function getConversionText(value: number, fromUnit: string, toUnit: string): string | null {
+    const converted = convertUnit(value, fromUnit, toUnit);
+    if (converted === null) return null;
+    return `${formatConvertedValue(value)} ${fromUnit} = ${formatConvertedValue(converted)} ${toUnit}`;
+}
+
+/**
+ * Get the base unit abbreviation for display
+ */
+export const UNIT_ABBREVIATIONS: Record<string, string> = {
+    'Milligrams': 'mg',
+    'Grams': 'g',
+    'Kilograms': 'kg',
+    'Ounces': 'oz',
+    'Pounds': 'lb',
+    'Millilitres': 'mL',
+    'Litres': 'L',
+    'Cubic Centimeters': 'cc',
+    'Fluid Ounces': 'fl oz',
+    'Gallons': 'gal',
+    'Millimeters': 'mm',
+    'Centimeters': 'cm',
+    'Meters': 'm',
+    'Square Centimeters': 'cm²',
+    'Square Meters': 'm²',
+    'Pieces': 'pcs',
+    'Tablets': 'tab',
+    'Capsules': 'cap',
+    'Vials': 'vial',
+    'Ampoules': 'amp',
+    'Bottles': 'btl',
+    'Boxes': 'box',
+    'Packs': 'pk',
+    'Strips': 'strip',
+    'Rolls': 'roll',
+    'Drums': 'drum',
+    'Cartons': 'ctn',
+    'Sachets': 'sach',
+    'Tubes': 'tube',
+};
+
+export function getAbbreviation(unit: string): string {
+    return UNIT_ABBREVIATIONS[unit] || unit;
+}

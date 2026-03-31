@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cd \"C:/Users/hp/Desktop/Developments/Aspee Pharmaceuticals/aspee-pharma\" && npx next build 2>&1 | tail -30)",
+      "Bash(cd \"C:\\\\Users\\\\hp\\\\Desktop\\\\Developments\\\\Aspee Pharmaceuticals\\\\aspee-pharma\" && npx next build 2>&1 | tail -30)",
+      "Bash(cd \"C:\\\\Users\\\\hp\\\\Desktop\\\\Developments\\\\Aspee Pharmaceuticals\\\\aspee-pharma\" && npx tsc --noEmit src/components/PurchaseOrderModal.tsx src/app/\\\\\\(dashboard\\\\\\)/purchasing/purchase-orders/page.tsx 2>&1 | head -20)",
+      "Bash(cd \"C:\\\\Users\\\\hp\\\\Desktop\\\\Developments\\\\Aspee Pharmaceuticals\\\\aspee-pharma\" && npm run build 2>&1 | tail -20)",
+      "Bash(cd:*)"
+    ]
+  }
+}
