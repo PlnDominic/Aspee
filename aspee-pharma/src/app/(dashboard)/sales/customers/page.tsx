@@ -6,23 +6,88 @@ import DataTable from '@/components/DataTable';
 import StatCard from '@/components/StatCard';
 import StatusBadge from '@/components/StatusBadge';
 import CustomerModal from '@/components/CustomerModal';
+import ExcelImportModal from '@/components/ExcelImportModal';
 import PrintableSOA from '@/components/PrintableSOA';
 import { generatePDF } from '@/lib/pdfGenerator';
-import { Plus, Download, Users, Banknote, AlertTriangle, CreditCard, Edit2, Trash2, Mail, Phone, FileText, IdCard } from 'lucide-react';
+import { Plus, Download, Upload, Users, Banknote, AlertTriangle, CreditCard, Edit2, Trash2, Phone, FileText, IdCard, Tag, MapPin, UserCheck, Eye } from 'lucide-react';
 import EntityDocumentsModal from '@/components/compliance/EntityDocumentsModal';
 import { supabase } from '@/lib/supabase';
-import { useSupabaseQuery, useDelete } from '@/lib/hooks';
+import { useFetch, useDelete } from '@/lib/hooks';
 import { useQueryClient } from '@tanstack/react-query';
 import { formatCurrency } from '@/lib/currency';
 import { toast } from 'sonner';
 
 export default function CustomersPage() {
-    const { data, isLoading: loading } = useSupabaseQuery<any>('customers', { orderBy: 'name', ascending: true });
+    const { data, isLoading: loading } = useFetch<any[]>(
+        ['customers'],
+        async () => {
+            const { data: customersData, error: customersError } = await supabase
+                .from('customers')
+                .select('*')
+                .order('name', { ascending: true });
+
+            if (customersError) {
+                return { data: null, error: customersError };
+            }
+
+            const { data: invoices, error: invoicesError } = await supabase
+                .from('sales_invoices')
+                .select('customer_name, total_amount, status');
+
+            if (invoicesError) {
+                return { data: null, error: invoicesError };
+            }
+
+            const { data: receipts, error: receiptsError } = await supabase
+                .from('sales_receipts')
+                .select('customer_name, amount, status');
+
+            if (receiptsError) {
+                return { data: null, error: receiptsError };
+            }
+
+            const normalizeCustomerName = (name: string | null | undefined) => (name || '').trim().toLowerCase();
+            const invoiceTotals = new Map<string, number>();
+            const receiptTotals = new Map<string, number>();
+
+            (invoices || []).forEach((invoice: any) => {
+                const status = (invoice.status || '').trim().toUpperCase();
+                if (status === 'DRAFT' || status === 'CANCELLED') return;
+
+                const key = normalizeCustomerName(invoice.customer_name);
+                if (!key) return;
+                invoiceTotals.set(key, (invoiceTotals.get(key) || 0) + Number(invoice.total_amount || 0));
+            });
+
+            (receipts || []).forEach((receipt: any) => {
+                const status = (receipt.status || '').trim().toUpperCase();
+                if (status === 'VOID' || status === 'CANCELLED') return;
+
+                const key = normalizeCustomerName(receipt.customer_name);
+                if (!key) return;
+                receiptTotals.set(key, (receiptTotals.get(key) || 0) + Number(receipt.amount || 0));
+            });
+
+            const enrichedCustomers = (customersData || []).map((customer: any) => {
+                const key = normalizeCustomerName(customer.name);
+                const invoiceTotal = invoiceTotals.get(key) || 0;
+                const receiptTotal = receiptTotals.get(key) || 0;
+                return {
+                    ...customer,
+                    balance: invoiceTotal - receiptTotal,
+                };
+            });
+
+            return { data: enrichedCustomers, error: null };
+        },
+    );
     const customers = data ?? [];
     const queryClient = useQueryClient();
 
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [isImportModalOpen, setIsImportModalOpen] = useState(false);
     const [selectedCustomer, setSelectedCustomer] = useState<any | null>(null);
+    const [viewOnly, setViewOnly] = useState(false);
     const [exportingSOA, setExportingSOA] = useState<string | null>(null);
 
     const [docsOpen, setDocsOpen] = useState(false);
@@ -155,6 +220,22 @@ export default function CustomersPage() {
     const overdueAccounts = customers.filter(c => (c.balance || 0) > (c.credit_limit || 0) && (c.balance || 0) > 0).length;
     const creditHolds = customers.filter(c => c.status === 'Inactive').length;
 
+    // Category counts
+    const categoryBreakdown: Record<string, number> = {};
+    customers.forEach(c => {
+        const cat = c.customer_category || 'Uncategorised';
+        categoryBreakdown[cat] = (categoryBreakdown[cat] || 0) + 1;
+    });
+    const CATEGORY_COLORS: Record<string, string> = {
+        'OTC': '#0ea5e9',
+        'WHOLESALE PHARMACY': '#8b5cf6',
+        'RETAIL PHARMACY': '#10b981',
+        'CLINIC': '#f59e0b',
+        'HOSPITAL': '#ef4444',
+        'MEDICAL STORES': '#06b6d4',
+        'Uncategorised': '#94a3b8',
+    };
+
     const columns = [
         {
             key: 'name',
@@ -167,6 +248,20 @@ export default function CustomersPage() {
                     )}
                 </div>
             )
+        },
+        {
+            key: 'customer_category',
+            label: 'Category',
+            render: (v: any) => v ? (
+                <span style={{
+                    padding: '2px 8px', borderRadius: 4, fontSize: 10, fontWeight: 600,
+                    background: (CATEGORY_COLORS[v] || '#94a3b8') + '20',
+                    color: CATEGORY_COLORS[v] || '#94a3b8',
+                    whiteSpace: 'nowrap',
+                }}>
+                    {v}
+                </span>
+            ) : <span style={{ color: 'var(--slate-400)', fontSize: 11 }}>--</span>
         },
         {
             key: 'route',
@@ -185,6 +280,13 @@ export default function CustomersPage() {
             ) : <span style={{ color: 'var(--slate-400)' }}>--</span>
         },
         {
+            key: 'sales_person',
+            label: 'Sales Person',
+            render: (v: any) => v ? (
+                <span style={{ fontSize: 11, color: 'var(--slate-700)', fontWeight: 500 }}>{v}</span>
+            ) : <span style={{ color: 'var(--slate-400)', fontSize: 11 }}>--</span>
+        },
+        {
             key: 'credit_limit',
             label: 'Credit Limit',
             render: (v: any) => (
@@ -198,20 +300,27 @@ export default function CustomersPage() {
                 const balance = v || 0;
                 const isOverLimit = balance > (row.credit_limit || 0) && balance > 0;
                 return (
-                    <span style={{ fontWeight: 700, color: isOverLimit ? 'var(--danger)' : balance > 0 ? 'var(--slate-800)' : 'var(--success)' }}>
-                        {formatCurrency(balance)}
-                    </span>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                        <span style={{ fontWeight: 700, color: isOverLimit ? 'var(--danger)' : balance > 0 ? 'var(--slate-800)' : 'var(--success)' }}>
+                            {formatCurrency(balance)}
+                        </span>
+                        <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--danger)' }}>
+                            Outstanding balance
+                        </span>
+                    </div>
                 );
             }
         },
         { key: 'payment_terms', label: 'Terms' },
         {
             key: 'phone',
-            label: 'Contact',
+            label: 'Contact Number',
             render: (v: any, row: any) => (
-                <div style={{ display: 'flex', gap: 8, color: 'var(--slate-400)' }}>
-                    {row.email && <span title={row.email} style={{ display: 'flex', cursor: 'help' }}><Mail size={12} /></span>}
-                    {v && <span title={v} style={{ display: 'flex', cursor: 'help' }}><Phone size={12} /></span>}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <Phone size={12} style={{ color: 'var(--slate-400)' }} />
+                    <span style={{ fontSize: 11, color: v ? 'var(--slate-700)' : 'var(--slate-400)' }}>
+                        {v || '--'}
+                    </span>
                 </div>
             )
         },
@@ -227,6 +336,18 @@ export default function CustomersPage() {
             label: 'Actions',
             render: (_: any, row: any) => (
                 <div style={{ display: 'flex', gap: 8 }}>
+                    <button
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedCustomer(row);
+                            setViewOnly(true);
+                            setIsModalOpen(true);
+                        }}
+                        style={actionButtonStyle}
+                        title="View Customer"
+                    >
+                        <Eye size={14} />
+                    </button>
                     <button
                         onClick={(e) => {
                             e.stopPropagation();
@@ -260,6 +381,7 @@ export default function CustomersPage() {
                         onClick={(e) => {
                             e.stopPropagation();
                             setSelectedCustomer(row);
+                            setViewOnly(false);
                             setIsModalOpen(true);
                         }}
                         style={actionButtonStyle}
@@ -298,8 +420,21 @@ export default function CustomersPage() {
                             <Download size={16} /> Export SOA
                         </button>
                         <button
+                            onClick={() => setIsImportModalOpen(true)}
+                            style={{
+                                display: 'flex', alignItems: 'center', gap: 8,
+                                padding: '9px 16px', borderRadius: 8,
+                                border: '1px solid var(--slate-200)', background: 'var(--card-bg)',
+                                fontSize: 11, fontWeight: 500, color: 'var(--slate-700)',
+                                cursor: 'pointer',
+                            }}
+                        >
+                            <Upload size={16} /> Import Excel
+                        </button>
+                        <button
                             onClick={() => {
                                 setSelectedCustomer(null);
+                                setViewOnly(false);
                                 setIsModalOpen(true);
                             }}
                             style={{
@@ -316,11 +451,50 @@ export default function CustomersPage() {
                 }
             />
 
-            <div className="animate-stagger" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 24 }}>
+            <div className="animate-stagger" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 16 }}>
                 <StatCard title="Total Customers" value={String(totalCustomers)} icon={<Users size={20} />} color="blue" />
                 <StatCard title="Total Receivables" value={formatCurrency(totalReceivables)} icon={<Banknote size={20} />} color="green" />
                 <StatCard title="Overdue Accounts" value={String(overdueAccounts)} icon={<AlertTriangle size={20} />} color="red" />
                 <StatCard title="Credit Holds" value={String(creditHolds)} icon={<CreditCard size={20} />} color="amber" />
+            </div>
+
+            {/* ── Category Breakdown ── */}
+            <div style={{
+                display: 'flex', flexWrap: 'wrap', gap: 10, marginBottom: 24,
+                padding: '14px 18px', borderRadius: 12,
+                background: 'var(--card-bg)', border: '1px solid var(--slate-100)',
+            }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginRight: 8 }}>
+                    <Tag size={12} style={{ color: 'var(--slate-400)' }} />
+                    <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--slate-500)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                        By Category
+                    </span>
+                </div>
+                {Object.entries(categoryBreakdown).sort((a, b) => b[1] - a[1]).map(([cat, count]) => (
+                    <div key={cat} style={{
+                        display: 'flex', alignItems: 'center', gap: 6,
+                        padding: '4px 12px', borderRadius: 20,
+                        background: (CATEGORY_COLORS[cat] || '#94a3b8') + '15',
+                        border: `1px solid ${(CATEGORY_COLORS[cat] || '#94a3b8')}30`,
+                    }}>
+                        <span style={{
+                            width: 7, height: 7, borderRadius: '50%',
+                            background: CATEGORY_COLORS[cat] || '#94a3b8', flexShrink: 0,
+                        }} />
+                        <span style={{ fontSize: 11, fontWeight: 600, color: CATEGORY_COLORS[cat] || '#94a3b8' }}>
+                            {cat}
+                        </span>
+                        <span style={{
+                            fontSize: 11, fontWeight: 700, color: 'var(--slate-700)',
+                            background: 'var(--slate-100)', borderRadius: 10, padding: '0 6px',
+                        }}>
+                            {count}
+                        </span>
+                    </div>
+                ))}
+                {Object.keys(categoryBreakdown).length === 0 && (
+                    <span style={{ fontSize: 11, color: 'var(--slate-400)' }}>No customers yet</span>
+                )}
             </div>
 
             <EntityDocumentsModal
@@ -336,7 +510,14 @@ export default function CustomersPage() {
                 columns={columns}
                 data={customers}
                 loading={loading}
-                searchPlaceholder="Search customers by name, route, or terms..."
+                searchPlaceholder="Search by name, category, route, sales person..."
+            />
+
+            <ExcelImportModal
+                isOpen={isImportModalOpen}
+                onClose={() => setIsImportModalOpen(false)}
+                onSuccess={() => queryClient.invalidateQueries({ queryKey: ['customers'] })}
+                entityType="customers"
             />
 
             <CustomerModal
@@ -344,6 +525,7 @@ export default function CustomersPage() {
                 onClose={() => setIsModalOpen(false)}
                 onSuccess={() => queryClient.invalidateQueries({ queryKey: ['customers'] })}
                 record={selectedCustomer}
+                readOnly={viewOnly}
             />
 
             {/* Hidden Printable SOA - rendered for PDF generation */}

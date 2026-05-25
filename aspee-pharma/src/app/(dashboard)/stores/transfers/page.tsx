@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import PageHeader from '@/components/PageHeader';
 import DataTable from '@/components/DataTable';
-import StatusBadge from '@/components/StatusBadge';
+import EntityLink from '@/components/EntityLink';
 import { Plus, Eye, Pencil, Trash2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useFetch, useAction } from '@/lib/hooks';
@@ -35,52 +35,14 @@ export default function TransfersPage() {
     const saveTransfer = useAction<any, void>({
         mutationFn: async (transferData: any) => {
             const { id, items, ...header } = transferData;
-            if (!id) {
-                // New Transfer
-                const { data: headerData, error: headerError } = await supabase
-                    .from('stock_transfers')
-                    .insert([header])
-                    .select()
-                    .single();
+            const { error } = await supabase.rpc('post_stock_transfer', {
+                transfer_payload: id ? { ...header, id } : header,
+                item_payload: items || [],
+            });
 
-                if (headerError) throw headerError;
-
-                const itemsToSave = items.map((item: any) => ({
-                    ...item,
-                    transfer_id: headerData.id
-                }));
-
-                const { error: itemsError } = await supabase
-                    .from('stock_transfer_items')
-                    .insert(itemsToSave);
-
-                if (itemsError) throw itemsError;
-            } else {
-                // Update header
-                const { error: headerError } = await supabase
-                    .from('stock_transfers')
-                    .update(header)
-                    .eq('id', id);
-
-                if (headerError) throw headerError;
-
-                // For simplified item update: delete all and re-insert
-                await supabase.from('stock_transfer_items').delete().eq('transfer_id', id);
-
-                const itemsToSave = items.map((item: any) => ({
-                    product_id: item.product_id,
-                    quantity: item.quantity,
-                    transfer_id: id
-                }));
-
-                const { error: itemsError } = await supabase
-                    .from('stock_transfer_items')
-                    .insert(itemsToSave);
-
-                if (itemsError) throw itemsError;
-            }
+            if (error) throw error;
         },
-        invalidateKeys: ['stock_transfers'],
+        invalidateKeys: ['stock_transfers', 'stock_levels', 'stock-levels-matrix', 'stock_movements'],
         successMessage: 'Transfer saved successfully',
     });
 
@@ -91,10 +53,14 @@ export default function TransfersPage() {
     const handleDeleteTransfer = async (id: string) => {
         if (!confirm('Are you sure you want to delete this transfer record?')) return;
         try {
-            const { error } = await supabase.from('stock_transfers').delete().eq('id', id);
+            const { error } = await supabase.rpc('delete_stock_transfer', { transfer_uuid: id });
             if (error) throw error;
+
             toast.success('Transfer deleted');
             queryClient.invalidateQueries({ queryKey: ['stock_transfers'] });
+            queryClient.invalidateQueries({ queryKey: ['stock_levels'] });
+            queryClient.invalidateQueries({ queryKey: ['stock-levels-matrix'] });
+            queryClient.invalidateQueries({ queryKey: ['stock_movements'] });
         } catch (error: any) {
             toast.error('Error deleting transfer: ' + error.message);
         }
@@ -111,13 +77,19 @@ export default function TransfersPage() {
             label: 'Date',
             render: (v: any) => new Date(v as string).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
         },
-        { key: 'from', label: 'From Source', render: (v: any) => <span style={{ fontWeight: 500 }}>{(v as any)?.name || '-'}</span> },
-        { key: 'to', label: 'Destination', render: (v: any) => <span style={{ fontWeight: 500 }}>{(v as any)?.name || '-'}</span> },
         {
-            key: 'status', label: 'Status', render: (v: any) => {
-                const variant = v === 'Completed' ? 'success' : v === 'Pending' ? 'warning' : 'info';
-                return <StatusBadge status={v as string} variant={variant} />;
-            }
+            key: 'from',
+            label: 'From Source',
+            render: (v: any) => v?.name
+                ? <EntityLink href={`/stores/stock?search=${encodeURIComponent(v.name)}`} subtle title="View stock at this location">{v.name}</EntityLink>
+                : <span>-</span>,
+        },
+        {
+            key: 'to',
+            label: 'Destination',
+            render: (v: any) => v?.name
+                ? <EntityLink href={`/stores/stock?search=${encodeURIComponent(v.name)}`} subtle title="View stock at this location">{v.name}</EntityLink>
+                : <span>-</span>,
         },
         {
             key: 'actions',
@@ -154,7 +126,7 @@ export default function TransfersPage() {
         <div className="animate-fade-in">
             <PageHeader
                 title="Stock Transfers"
-                subtitle="Inter-location stock movements and transfers"
+                subtitle="Inter-location stock movements with Sales flow routed through Sales Department"
                 breadcrumbs={[
                     { label: 'Stores', href: '/stores/transfers' },
                     { label: 'Transfers' },

@@ -42,7 +42,7 @@ const AREA_FACTORS: Record<string, number> = {
 /** Count units — no conversion between these */
 const COUNT_UNITS = [
     'Pieces', 'Tablets', 'Capsules', 'Vials',
-    'Ampoules', 'Bottles', 'Boxes', 'Packs', 'Strips', 'Rolls', 'Drums', 'Cartons', 'Sachets', 'Tubes'
+    'Ampoules', 'Bottles', 'Boxes', 'Packs', 'Strips', 'Rolls', 'Drums', 'Cartons', 'Sachets', 'Tubes', 'Skellets'
 ];
 
 // --- Group Definitions ---
@@ -176,8 +176,77 @@ export const UNIT_ABBREVIATIONS: Record<string, string> = {
     'Cartons': 'ctn',
     'Sachets': 'sach',
     'Tubes': 'tube',
+    'Skellets': 'sklt',
 };
 
 export function getAbbreviation(unit: string): string {
     return UNIT_ABBREVIATIONS[unit] || unit;
+}
+
+// --- Pack / Bulk Conversion Helpers ---
+
+/** Convert base units to bulk units. Returns null if ratio is invalid. */
+export function toBulkQty(baseQty: number, ratio: number): number | null {
+    if (!ratio || ratio <= 0) return null;
+    return baseQty / ratio;
+}
+
+/** Convert bulk units to base units. Returns null if ratio is invalid. */
+export function toBaseQty(bulkQty: number, ratio: number): number | null {
+    if (!ratio || ratio <= 0) return null;
+    return bulkQty * ratio;
+}
+
+/**
+ * Format a base quantity with its bulk equivalent.
+ * e.g. formatWithBulk(60, 'Bottles', 'Cartons', 30) → "60 Btl (2 Ctn)"
+ */
+export function formatWithBulk(
+    baseQty: number,
+    baseUnit: string,
+    bulkUnit: string | null | undefined,
+    ratio: number | null | undefined,
+): string {
+    const baseAbbr = getAbbreviation(baseUnit);
+    const base = `${baseQty.toLocaleString()} ${baseAbbr}`;
+    if (!bulkUnit || !ratio || ratio <= 0) return base;
+    const bulkQty = baseQty / ratio;
+    const bulkAbbr = getAbbreviation(bulkUnit);
+    const bulkFormatted = Number.isInteger(bulkQty)
+        ? bulkQty.toLocaleString()
+        : bulkQty.toLocaleString(undefined, { maximumFractionDigits: 2 });
+    return `${base} (${bulkFormatted} ${bulkAbbr})`;
+}
+
+/**
+ * Format a base quantity as mixed whole-bulk + remainder-base units.
+ * e.g. formatMixedBulk(30, 'Skellets', 'Cartons', 24) → "1 Cartons 6 Skellets"
+ *      formatMixedBulk(48, 'Skellets', 'Cartons', 24) → "2 Cartons"
+ * Returns null when the whole-bulk portion is 0 (nothing useful to show).
+ */
+export function formatMixedBulk(
+    baseQty: number,
+    baseUnit: string,
+    bulkUnit: string | null | undefined,
+    ratio: number | null | undefined,
+): string | null {
+    if (!bulkUnit || !ratio || ratio <= 0 || baseQty <= 0) return null;
+    const whole = Math.floor(baseQty / ratio);
+    if (whole === 0) return null;
+    const remainder = Math.round((baseQty - whole * ratio) * 1000) / 1000;
+    return remainder > 0
+        ? `${whole} ${bulkUnit} ${remainder} ${baseUnit}`
+        : `${whole} ${bulkUnit}`;
+}
+
+/**
+ * Returns a short label like "1 Carton = 30 Bottles" for product display.
+ */
+export function bulkConversionLabel(
+    baseUnit: string,
+    bulkUnit: string | null | undefined,
+    ratio: number | null | undefined,
+): string | null {
+    if (!bulkUnit || !ratio || ratio <= 0) return null;
+    return `1 ${bulkUnit} = ${ratio % 1 === 0 ? ratio : ratio.toFixed(2)} ${baseUnit}`;
 }
