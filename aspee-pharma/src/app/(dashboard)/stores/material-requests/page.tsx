@@ -58,111 +58,11 @@ export default function MaterialRequestsPage() {
         if (!confirm(`Are you sure you want to issue materials for request ${request.request_number}? This will apply FEFO (First Expired, First Out) logic.`)) return;
 
         try {
-            // 1. Fetch Request Items
-            const { data: requestItems, error: itemsError } = await supabase
-                .from('material_request_items')
-                .select('*, product:products(name)')
-                .eq('request_id', request.id);
+            const { error } = await supabase.rpc('issue_material_request', {
+                request_uuid: request.id,
+            });
 
-            if (itemsError) throw itemsError;
-            if (!requestItems || requestItems.length === 0) {
-                toast.error('No items found in this request.');
-                return;
-            }
-
-            const { data: mainStore, error: mainStoreError } = await supabase
-                .from('stock_locations')
-                .select('id, name')
-                .eq('name', 'Main Warehouse')
-                .single();
-
-            if (mainStoreError) throw mainStoreError;
-            if (!mainStore?.id) {
-                toast.error('Main Warehouse location was not found in stock_locations.');
-                return;
-            }
-
-            const mainStoreId = mainStore.id;
-
-            // 2. Pre-flight Check: Validate Total Stock Availability
-            for (const item of requestItems) {
-                const { data: stockBatches } = await supabase
-                    .from('stock_levels')
-                    .select('qty_on_hand')
-                    .eq('product_id', item.product_id)
-                    .eq('location_id', mainStoreId);
-                
-                const totalAvailable = stockBatches?.reduce((sum, batch) => sum + batch.qty_on_hand, 0) || 0;
-                
-                if (totalAvailable < item.quantity_requested) {
-                    toast.error(`Insufficient stock for ${item.product?.name || 'Product'}. Available: ${totalAvailable}, Requested: ${item.quantity_requested}`);
-                    return; 
-                }
-            }
-
-            // 3. Process Issuance (FEFO)
-            for (const item of requestItems) {
-                let qtyRemainingToIssue = item.quantity_requested;
-
-                // Fetch batches sorted by expiry (FEFO) - Earliest expiry first
-                const { data: batches } = await supabase
-                    .from('stock_levels')
-                    .select('*')
-                    .eq('product_id', item.product_id)
-                    .eq('location_id', mainStoreId)
-                    .gt('qty_on_hand', 0)
-                    .order('expiry_date', { ascending: true, nullsFirst: false }) 
-                    .order('created_at', { ascending: true });
-
-                if (!batches) continue;
-
-                for (const batch of batches) {
-                    if (qtyRemainingToIssue <= 0) break;
-
-                    const qtyToTake = Math.min(batch.qty_on_hand, qtyRemainingToIssue);
-                    
-                    // Update batch quantity
-                    const { error: batchError } = await supabase
-                        .from('stock_levels')
-                        .update({ 
-                            qty_on_hand: batch.qty_on_hand - qtyToTake,
-                            updated_at: new Date().toISOString()
-                        })
-                        .eq('id', batch.id);
-
-                    if (batchError) throw batchError;
-
-                    // Record movement
-                    await supabase
-                        .from('stock_movements')
-                        .insert([{
-                            product_id: item.product_id,
-                            movement_type: 'OUT',
-                            quantity: qtyToTake,
-                            reference_type: 'Material Request',
-                            reference_id: request.id,
-                            batch_number: batch.batch_number,
-                            expiry_date: batch.expiry_date,
-                            notes: `Issued to Production (Req: ${request.request_number})`
-                        }]);
-
-                    qtyRemainingToIssue -= qtyToTake;
-                }
-                
-                // Update item issued quantity
-                await supabase
-                    .from('material_request_items')
-                    .update({ quantity_issued: item.quantity_requested })
-                    .eq('id', item.id);
-            }
-
-            // 4. Update Request Status
-            const { error: updateError } = await supabase
-                .from('material_requests')
-                .update({ status: 'Issued' })
-                .eq('id', request.id);
-            
-            if (updateError) throw updateError;
+            if (error) throw error;
 
             toast.success('Materials issued successfully. Stock updated via FEFO.');
             fetchRequests();
