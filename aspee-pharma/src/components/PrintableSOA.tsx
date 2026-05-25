@@ -33,7 +33,7 @@ export default function PrintableSOA({ customer, transactions, summary, dateRang
                 left: '-9999px',
                 width: '210mm',
                 minHeight: '297mm',
-                background: 'var(--card-bg)',
+                background: '#ffffff',
                 padding: '15mm',
                 color: '#1e293b',
                 fontFamily: 'Arial, sans-serif',

@@ -216,8 +216,6 @@ export default function BankReconciliationPage() {
     const formData = new FormData();
     formData.append('file', csvFile);
     formData.append('accountId', selectedAccount);
-    formData.append('createdBy', 'current-user'); // TODO: Get actual user ID
-
     try {
       const response = await fetch('/api/bank-statements/upload', {
         method: 'POST',

@@ -27,7 +27,7 @@ export default function QAInProcessModal({ isOpen, onClose, onSave, record }: QA
     const [status, setStatus] = useState('Pending');
     const [inspector, setInspector] = useState('');
     const [inspectionDate, setInspectionDate] = useState(new Date().toISOString().split('T')[0]);
-    const [remarks, setRemarks] = useState('');
+    const [notes, setNotes] = useState('');
 
     useEffect(() => {
         if (isOpen) fetchProductionOrders();
@@ -65,7 +65,7 @@ export default function QAInProcessModal({ isOpen, onClose, onSave, record }: QA
             setStatus(record.status || 'Pending');
             setInspector(record.inspector || '');
             setInspectionDate(record.inspection_date ? new Date(record.inspection_date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]);
-            setRemarks(record.remarks || '');
+            setNotes(record.notes || record.remarks || '');
         } else {
             setProductionOrderId('');
             setBatchNumber('');
@@ -76,7 +76,7 @@ export default function QAInProcessModal({ isOpen, onClose, onSave, record }: QA
             setStatus('Pending');
             setInspector('');
             setInspectionDate(new Date().toISOString().split('T')[0]);
-            setRemarks('');
+            setNotes('');
         }
     }, [record, isOpen]);
 
@@ -104,7 +104,7 @@ export default function QAInProcessModal({ isOpen, onClose, onSave, record }: QA
             status,
             inspector,
             inspection_date: inspectionDate,
-            remarks,
+            notes,
         };
 
         try {
@@ -247,10 +247,10 @@ export default function QAInProcessModal({ isOpen, onClose, onSave, record }: QA
                     </div>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '16px' }}>
-                    <label style={{ fontSize: '11px', fontWeight: 600, color: '#64748b' }}>Remarks</label>
+                    <label style={{ fontSize: '11px', fontWeight: 600, color: '#64748b' }}>Notes</label>
                     <textarea
-                        value={remarks}
-                        onChange={(e) => setRemarks(e.target.value)}
+                        value={notes}
+                        onChange={(e) => setNotes(e.target.value)}
                         rows={2}
                         style={{ padding: '8px 12px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '11px', outline: 'none', resize: 'vertical' }}
                     />

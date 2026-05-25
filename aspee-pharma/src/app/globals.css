@@ -606,6 +606,15 @@ body {
   pointer-events: auto;
 }
 
+.modal-content-canvas {
+  max-width: none !important;
+  width: calc(100vw - var(--sidebar-width) - 48px);
+  min-height: calc(100vh - 48px);
+  max-height: calc(100vh - 48px);
+  display: flex;
+  flex-direction: column;
+}
+
 .modal-header {
   padding: 24px 28px 20px;
   border-bottom: 1px solid var(--slate-100);
@@ -682,10 +691,25 @@ body {
   overflow-y: auto;
 }
 
+.modal-body-canvas {
+  flex: 1;
+  max-height: none;
+  min-height: 0;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .modal-positioner {
     left: 0;
     padding: 16px;
   }
+
+  .modal-content-canvas {
+    width: calc(100vw - 32px);
+    min-height: calc(100vh - 32px);
+    max-height: calc(100vh - 32px);
+  }
 }
+/* Hide number input spinners in waybill table */
+input[type=number].no-spinner::-webkit-outer-spin-button,
+input[type=number].no-spinner::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }

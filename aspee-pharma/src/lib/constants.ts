@@ -32,6 +32,7 @@ export const UNIT_OPTIONS = [
   'Cartons',
   'Sachets',
   'Tubes',
+  'Skellets',
   // Length
   'Millimeters',
   'Centimeters',
@@ -57,7 +58,7 @@ export const GROUPED_UNIT_OPTIONS: { label: string; units: string[] }[] = [
   },
   {
     label: 'Count / Quantity',
-    units: ['Pieces', 'Tablets', 'Capsules', 'Vials', 'Ampoules', 'Bottles', 'Boxes', 'Packs', 'Strips', 'Rolls', 'Drums', 'Cartons', 'Sachets', 'Tubes']
+    units: ['Pieces', 'Tablets', 'Capsules', 'Vials', 'Ampoules', 'Bottles', 'Boxes', 'Packs', 'Strips', 'Rolls', 'Drums', 'Cartons', 'Sachets', 'Tubes', 'Skellets']
   },
   {
     label: 'Length',

@@ -1,0 +1,659 @@
+ASPEE PHARMACEUTICALS
+Stock & Inventory Management System
+Product Requirements Document (PRD)
+Document Version
+1.0
+Status
+Draft — For Review
+Prepared For
+Aspee Pharmaceuticals
+Tech Stack
+Supabase · Node.js · Next.js
+Date
+March 2026
+Classification
+Confidential
+Table of Contents
+1. Executive Summary
+Aspee Pharmaceuticals requires a comprehensive, integrated Stock and Inventory Management System to digitize and streamline its end-to-end supply chain, warehouse operations, distribution, sales, and financial accounting processes. This document defines the complete product requirements for a web-based platform built on Supabase (PostgreSQL backend + Auth + Realtime), Node.js (API layer), and Next.js (frontend framework).
+The system will replace manual or fragmented processes across six core operational domains: Purchasing, Stores & Production, Route-based Distribution, Sales, Customer Management, and Accounting. It is designed for multi-user, role-based access and will serve purchasing managers, store managers, production managers, route/van sales teams, accountants, and executive management.
+2. Problem Statement
+Aspee Pharmaceuticals currently faces the following operational challenges:
+Lack of real-time visibility into stock levels across warehouses and vans
+Manual purchase order and supplier management creating errors and delays
+No systematic tracking of goods from purchase → storage → production → dispatch → sale
+Disconnected sales and invoicing from inventory, leading to stock discrepancies
+Accounting processes (receipts, payments, expenses, payroll) handled in silos
+No consolidated dashboard for management decision-making
+Difficulty tracking petty cash, tax obligations, and salary disbursements
+3. Goals & Objectives
+3.1 Primary Goals
+Provide full traceability of pharmaceutical products from supplier to customer
+Automate purchase orders, stock receipts, and supplier management
+Enable real-time inventory tracking across stores, production, and delivery vans
+Digitize sales invoicing, receipting, and customer accounts
+Centralize accounting: money receipts, payments, expenses, salaries, tax, petty cash
+Deliver a management dashboard with actionable KPIs and reports
+3.2 Success Metrics
+Metric
+Target
+Stock discrepancy rate
+< 1% after 3 months
+Purchase order processing time
+Reduced by 60%
+Invoice generation time
+< 2 minutes per invoice
+Accounting reconciliation time
+Reduced by 70%
+System uptime
+99.5% SLA
+User adoption rate
+100% of target roles within 60 days
+4. Scope
+4.1 In Scope
+Purchasing Management (Suppliers, Purchase Orders, Goods Receipt)
+Stores Management (Stock In/Out, Transfers, Stock Adjustments)
+Production Management (Raw Materials, Work-in-Progress, Finished Goods)
+Route/Van Sales Management (Van Loading, Deliveries, Van Inventory)
+Sales Module (Invoices, Credit Notes, Receipts)
+Customer Management (Customer Accounts, Credit Limits, Statement of Account)
+Accounting Module (Debit/Credit entries, Expenses, Salaries, Tax, Petty Cash)
+Reporting & Dashboard (KPIs, stock reports, financial summaries)
+User & Role Management
+4.2 Out of Scope
+Manufacturing ERP (complex BOM, production scheduling)
+LIMS (Laboratory Information Management)
+HR Management beyond salary processing
+External e-commerce or patient-facing portals
+Third-party ERP integration (Phase 1)
+5. Stakeholders & User Roles
+Role
+Responsibilities
+Primary Modules
+Super Admin
+Full system access, user management, configuration
+All modules
+Purchasing Manager
+Manage suppliers, raise POs, receive goods
+Purchasing
+Store Manager
+Manage stock levels, transfers, adjustments
+Stores
+Production Manager
+Manage raw material consumption, finished goods
+Production
+Van/Route Sales Rep
+Load van, deliver, record sales on route
+Routes, Sales
+Sales Manager
+Create invoices, manage customer accounts
+Sales, Customers
+Accountant
+Record all financial transactions, reconcile accounts
+Accounting
+Management/Executive
+View dashboard, reports, approve transactions
+Dashboard, Reports
+6. System Architecture
+6.1 Tech Stack
+Layer
+Technology
+Purpose
+Frontend
+Next.js 14 (App Router)
+UI, SSR, API routes
+Backend API
+Node.js + Express (or Next.js API routes)
+Business logic, middleware
+Database
+Supabase (PostgreSQL)
+Primary data store
+Authentication
+Supabase Auth (JWT + RLS)
+Role-based access control
+Realtime
+Supabase Realtime
+Live stock updates, notifications
+File Storage
+Supabase Storage
+Documents, receipts, attachments
+Hosting
+Vercel (Next.js) + Supabase Cloud
+Production deployment
+6.2 Architecture Principles
+Row Level Security (RLS) enforced at database level via Supabase policies
+All financial transactions are double-entry: every credit has a corresponding debit
+Immutable audit trail: no hard deletes on inventory or financial records
+Optimistic UI with Supabase Realtime subscriptions for live stock counts
+Offline-capable van sales app using PWA with sync on reconnect
+6.3 High-Level Module Map
+Module
+Sub-Components
+Key DB Tables
+Purchasing
+Suppliers, POs, GRN
+suppliers, purchase_orders, grn, grn_items
+Stores
+Stock, Transfers, Adjustments
+products, stock_levels, stock_movements
+Production
+BOM, Production Orders, WIP
+production_orders, bom, consumption_logs
+Routes / Vans
+Van Inventory, Route Plans
+vans, van_stock, route_orders
+Sales
+Invoices, Credit Notes, Receipts
+invoices, invoice_items, payments
+Customers
+Accounts, Credit, Statements
+customers, customer_balances
+Accounting
+Chart of Accounts, Ledger
+accounts, journal_entries, transactions
+7. Functional Requirements by Module
+7.1 Dashboard
+The dashboard is the landing page for all authenticated users, showing role-filtered KPIs and alerts.
+7.1.1 Features
+Real-time stock summary: total SKUs, low-stock alerts, out-of-stock items
+Financial snapshot: today's receipts, payments, outstanding invoices
+Recent activity feed: last 10 transactions across modules
+Van/Route status cards: each van's loaded stock value and today's sales
+Purchase order status: pending, approved, partially received, complete
+Top-selling products (last 7 / 30 days)
+Expiry alerts: products expiring within 30 / 60 / 90 days
+Overdue customer balances widget
+7.2 Purchasing Module — Supplier Management
+7.2.1 Supplier Master
+Create, edit, deactivate supplier records
+Fields: Name, Contact Person, Phone, Email, Address, Tax ID, Payment Terms, Bank Details
+Supplier category (local, imported, contract manufacturer)
+Attach supplier documents (registration certificates, licenses)
+View full purchase history per supplier
+7.2.2 Purchase Orders (PO)
+Create PO: select supplier, add line items (product, quantity, unit price, discount)
+PO approval workflow: Draft → Submitted → Approved → Sent to Supplier
+Auto-generate PO number (e.g., PO-2026-00001)
+Attach PO document (PDF export) and email to supplier directly
+Track expected delivery date per PO
+Partial delivery support: PO remains open until fully received
+PO amendment with audit trail (versioning)
+7.2.3 Goods Receipt Note (GRN)
+Create GRN against open PO: scan/select PO, confirm quantities received
+Record batch numbers, expiry dates, and manufacturing dates per item
+Record discrepancies: received qty vs ordered qty
+Auto-update stock levels in Stores upon GRN confirmation
+Link supplier invoice to GRN for 3-way matching (PO → GRN → Invoice)
+Return to Supplier (RTS) note creation from GRN
+7.3 Stores Module
+7.3.1 Product Master
+Product fields: Name, SKU/Barcode, Category, Unit of Measure, Pack Size
+Pharmaceutical-specific: Dosage Form, Strength, Registration Number
+Reorder level, minimum stock, maximum stock configuration
+FIFO / FEFO (First Expiry First Out) costing method
+Product images and document attachments
+7.3.2 Stock Management
+Real-time stock balance per product per location (main store, secondary stores)
+Stock movement log: every IN/OUT transaction with timestamp, reference, user
+Stock transfer between locations (e.g., main store to production store)
+Stock adjustment (with reason codes: damaged, expired, counted, correction)
+Physical stocktake module: freeze stock, count, reconcile, post adjustments
+Batch / Lot tracking with full traceability
+Expiry date management with automated alerts
+7.4 Production Manager Module
+7.4.1 Bill of Materials (BOM)
+Define BOM per finished product: list of raw materials and quantities
+Support multi-level BOM (intermediates and finished goods)
+Version control on BOM with effective dates
+7.4.2 Production Orders
+Create production order: select finished product, quantity to produce, BOM version
+Statuses: Draft → Released → In Progress → Completed → Closed
+Auto-calculate raw material requirements from BOM
+Issue raw materials from store: deducts stock, creates consumption log
+Record actual consumption vs planned (yield tracking)
+Receive finished goods into store upon production completion
+Production cost calculation (materials + labour overhead)
+7.5 Routes & Van Sales Module
+7.5.1 Van / Route Setup
+Create van profiles: Van ID, registration plate, assigned driver, route area
+Define route plans: list of customers per route with delivery sequence
+Assign products and target quantities per route
+7.5.2 Van Loading
+Create van loading order: select van, products, quantities to load
+Loading requires approval before stock is deducted from main store
+Print loading list for warehouse staff
+Van inventory balance tracked separately per van
+7.5.3 Route Sales (Van Invoicing)
+Sales rep creates invoices on the road (mobile-optimised PWA)
+Select customer from route list, add products from van stock
+Collect payment (cash) and record receipt on spot
+Unsold stock returned to main store at end of day (Van Return)
+End-of-day van reconciliation: loaded - sold - returned = 0
+Offline mode: queue transactions when no internet, sync on reconnect
+7.6 Sales Module
+7.6.1 Sales Invoices
+Create invoice: select customer, add products, apply discount, add tax
+Invoice types: Cash Sale, Credit Sale, Proforma Invoice
+Auto-generate invoice number (e.g., INV-2026-00001)
+PDF export and email/WhatsApp send
+Invoice statuses: Draft → Issued → Partially Paid → Paid → Overdue → Voided
+Credit limit enforcement: block invoice if customer exceeds credit limit
+Stock is reserved on invoice creation and deducted on confirmation
+7.6.2 Credit Notes
+Create credit note against original invoice (returns, price corrections)
+Partial or full credit note support
+Credit note reverses stock and adjusts customer balance
+7.6.3 Sales Receipts
+Record payment against invoice: Cash or Cheque
+Cheque details: bank name, cheque number, date, amount
+Partial payment support with running balance
+Automatic ledger entry on receipt confirmation
+7.7 Customer Management Module
+Customer master: Name, Address, Contact, Tax ID, Route assignment
+Credit limit and payment terms configuration
+Customer Statement of Account (SOA): all invoices, receipts, credits, balance
+Overdue analysis: 0-30 days, 31-60 days, 61-90 days, 90+ days
+Customer price list / special pricing tiers
+Transaction history: all invoices and payments
+Credit hold: block new invoices for customers with overdue balances
+7.8 Accounting Module
+The accounting module implements double-entry bookkeeping integrated with all operational modules. Every financial event auto-generates the appropriate journal entries.
+7.8.1 Chart of Accounts
+Configurable chart of accounts: Assets, Liabilities, Equity, Revenue, Expenses
+Account hierarchy: Class → Group → Sub-group → Account
+Default account mapping for automated journal entries
+7.8.2 Money Receipts (Debit Entries)
+Record cash receipts: amount, date, received from, account, reference
+Record cheque receipts: bank, cheque no., date, drawer, status (pending/cleared/bounced)
+Cheque bounce handling: reverse receipt, notify user, add penalty charge
+Bulk receipt entry for multiple customers in one session
+Auto journal: Debit Cash/Bank → Credit Customer Account / Revenue
+7.8.3 Payments (Credit Entries)
+Record supplier payments: cash or cheque against purchase invoice
+Record other payments: utilities, rent, maintenance, etc.
+Payment approval workflow for amounts above configurable threshold
+Cheque issuance register with status tracking
+Auto journal: Debit Supplier Account / Expense → Credit Cash/Bank
+7.8.4 Expenses
+Expense categories: Utilities, Transport, Marketing, Maintenance, Other
+Expense voucher: amount, date, category, description, payee, receipt attachment
+Monthly expense summary by category
+Recurring expense setup (e.g., monthly rent)
+Expense approval workflow
+7.8.5 Salaries
+Employee register: name, role, base salary, allowances, deductions
+Monthly payroll run: calculate net pay (gross - deductions - tax)
+Payroll approval before disbursement
+Salary slip generation (PDF)
+PAYE / income tax calculation (configurable tax brackets)
+Auto journal: Debit Salary Expense → Credit Cash/Bank
+7.8.6 Tax Management
+VAT / GST / sales tax rate configuration per product category
+Tax collected on sales invoices (output tax) tracking
+Tax paid on purchase invoices (input tax) tracking
+Net tax liability calculation (output - input)
+Tax return period configuration (monthly, quarterly)
+Tax report for filing: summarised by period
+7.8.7 Petty Cash
+Petty cash fund setup: float amount, custodian assignment
+Petty cash voucher: amount, date, purpose, approved by
+Petty cash balance tracking (float - disbursements)
+Replenishment request when balance falls below threshold
+Petty cash reconciliation report
+7.8.8 Financial Reports
+Trial Balance: all account debit and credit balances
+Profit & Loss Statement (monthly / quarterly / annual)
+Balance Sheet
+Cash Flow Statement
+General Ledger: all entries per account with running balance
+Bank Reconciliation
+Accounts Payable Aging (supplier balances)
+Accounts Receivable Aging (customer balances)
+8. Non-Functional Requirements
+Category
+Requirement
+Performance
+Page load < 2s on standard broadband; stock queries < 500ms
+Scalability
+Support up to 50 concurrent users; 10M+ transaction records
+Security
+Supabase RLS; HTTPS everywhere; AES-256 encryption at rest; MFA for admin accounts
+Availability
+99.5% uptime SLA; Supabase managed backups (daily)
+Compliance
+Pharmaceutical regulatory data retention for 7 years minimum
+Audit Trail
+All record changes logged with user ID, timestamp, old/new values
+Offline Support
+Van sales PWA must function offline with sync queue
+Accessibility
+WCAG 2.1 AA compliant; responsive design (desktop + tablet + mobile)
+Localisation
+Currency, date format, and tax rules configurable per region
+9. Database Schema (Supabase / PostgreSQL)
+9.1 Core Tables Overview
+The following tables represent the primary entities. All tables include: id (UUID), created_at, updated_at, created_by (FK to auth.users), and is_deleted (soft delete).
+9.1.1 Products & Inventory
+Table
+Key Columns
+Description
+products
+sku, name, category_id, uom, pack_size, reorder_level
+Product master data
+product_batches
+product_id, batch_no, expiry_date, mfg_date, qty
+Batch/lot tracking
+stock_locations
+name, type (store/van/production)
+Warehouse locations
+stock_levels
+product_id, location_id, qty_on_hand, qty_reserved
+Current stock by location
+stock_movements
+product_id, from_loc, to_loc, qty, movement_type, reference_id
+Full movement audit
+9.1.2 Purchasing
+Table
+Key Columns
+Description
+suppliers
+name, contact, payment_terms, tax_id, bank_details
+Supplier master
+purchase_orders
+po_number, supplier_id, status, expected_date, total_amount
+Purchase orders
+po_items
+po_id, product_id, qty_ordered, unit_price, discount
+PO line items
+grn
+grn_number, po_id, received_date, status
+Goods Receipt Notes
+grn_items
+grn_id, product_id, qty_received, batch_no, expiry_date
+GRN line items
+9.1.3 Sales & Customers
+Table
+Key Columns
+Description
+customers
+name, address, credit_limit, payment_terms, route_id
+Customer master
+invoices
+invoice_number, customer_id, type, status, total, tax, discount
+Sales invoices
+invoice_items
+invoice_id, product_id, qty, unit_price, discount, batch_id
+Invoice line items
+payments
+invoice_id, amount, method (cash/cheque), cheque_details, status
+Customer payments
+credit_notes
+cn_number, invoice_id, amount, reason, status
+Sales returns/adjustments
+9.1.4 Accounting
+Table
+Key Columns
+Description
+chart_of_accounts
+code, name, type, parent_id, is_active
+Account hierarchy
+journal_entries
+entry_number, date, description, reference_type, reference_id
+Journal header
+journal_lines
+entry_id, account_id, debit, credit, description
+Double-entry lines
+expenses
+date, category, amount, payee, payment_method, attachment
+Expense records
+employees
+name, role, salary, allowances, tax_deductions
+Employee payroll data
+payroll_runs
+period, employee_id, gross, deductions, net, status
+Monthly payroll
+petty_cash
+date, description, amount, custodian_id, balance_after
+Petty cash ledger
+tax_transactions
+period, type (input/output), amount, rate, invoice_id
+Tax ledger
+10. API Design (Node.js / Next.js API Routes)
+10.1 API Conventions
+Base URL: /api/v1/
+Authentication: Bearer JWT (Supabase JWT passed in Authorization header)
+Response format: { success: boolean, data: any, meta: { pagination }, error: string }
+Pagination: ?page=1&limit=20 on all list endpoints
+Filtering: ?filter[status]=active&filter[supplier_id]=uuid
+Sorting: ?sort=created_at&order=desc
+10.2 Key API Endpoints
+Method
+Endpoint
+Description
+GET
+/api/v1/products
+List all products with stock levels
+POST
+/api/v1/products
+Create new product
+GET
+/api/v1/stock/levels
+Current stock across all locations
+POST
+/api/v1/purchase-orders
+Create new purchase order
+PATCH
+/api/v1/purchase-orders/:id/approve
+Approve PO
+POST
+/api/v1/grn
+Create goods receipt note
+POST
+/api/v1/invoices
+Create sales invoice
+POST
+/api/v1/invoices/:id/payment
+Record payment against invoice
+GET
+/api/v1/customers/:id/statement
+Customer SOA
+POST
+/api/v1/vans/:id/load
+Van loading order
+POST
+/api/v1/accounting/journal
+Manual journal entry
+GET
+/api/v1/reports/trial-balance
+Generate trial balance
+GET
+/api/v1/reports/pl
+Profit & Loss statement
+POST
+/api/v1/payroll/run
+Process monthly payroll
+11. User Interface Requirements
+11.1 Design Principles
+Clean, professional design suitable for pharmaceutical industry
+Sidebar navigation with module grouping
+Data-dense tables with in-line search, sort, and filter
+Consistent form design with validation feedback
+Status badges with colour coding (green = active/paid, amber = pending, red = overdue/critical)
+Responsive: full functionality on desktop; read-optimised on tablet; van sales on mobile
+11.2 Key Screens
+Screen
+Key UI Elements
+Dashboard
+KPI cards, stock alerts table, financial snapshot, activity feed
+Product List
+Searchable table, stock level column, expiry alert indicator, quick edit
+PO Creation
+Supplier search, line-item table with product autocomplete, totals
+GRN Entry
+PO lookup, batch/expiry entry per line, discrepancy flag
+Invoice Creation
+Customer search, product table, tax/discount calculator, PDF preview
+Van Sales (Mobile)
+Customer list, quick-add products, cash receipt button, offline indicator
+Accounting Ledger
+Account tree, date-range filter, debit/credit columns, running balance
+Payroll Run
+Employee grid, auto-calculated columns, approve all button, pay slips
+12. Security & Compliance
+All API routes protected by Supabase JWT verification middleware
+Row Level Security (RLS) policies per table: users only see records in their scope
+Role-based permissions matrix: defined per module × action (Create / Read / Update / Delete / Approve)
+All passwords hashed via Supabase Auth (bcrypt)
+MFA enforced for Accountant, Management, and Super Admin roles
+Sensitive data (salary, bank details) encrypted at column level
+Audit log table: every INSERT/UPDATE/DELETE logged via PostgreSQL triggers
+HTTPS enforced; HSTS header; CSP headers configured
+Rate limiting on all API endpoints via Next.js middleware
+Data retention policy: financial records retained minimum 7 years
+13. Reporting & Analytics
+Report
+Module
+Format
+Stock Valuation Report
+Stores
+PDF / Excel
+Expiry Report
+Stores
+PDF / Excel
+Slow-Moving Stock
+Stores
+PDF / Excel
+Supplier Purchase Summary
+Purchasing
+PDF / Excel
+GRN Discrepancy Report
+Purchasing
+PDF
+Sales by Product
+Sales
+PDF / Excel / Chart
+Sales by Customer
+Sales
+PDF / Excel
+Customer Aging Report
+Customers
+PDF / Excel
+Van Performance Report
+Routes
+PDF / Chart
+Profit & Loss Statement
+Accounting
+PDF / Excel
+Balance Sheet
+Accounting
+PDF
+Cash Flow Statement
+Accounting
+PDF
+Tax Return Summary
+Accounting
+PDF
+Payroll Summary
+Accounting
+PDF / Excel
+Petty Cash Ledger
+Accounting
+PDF
+Trial Balance
+Accounting
+PDF / Excel
+14. Integrations (Phase 1 & 2)
+14.1 Phase 1 — Internal Integrations
+Supabase Auth → All modules (JWT, RLS, user management)
+Supabase Realtime → Dashboard stock levels (live updates)
+Supabase Storage → Document attachments (POs, GRNs, receipts, pay slips)
+PDF generation → Node.js puppeteer/pdfkit for invoice and report PDFs
+14.2 Phase 2 — External Integrations
+SMS gateway (Twilio / Africa's Talking) — invoice notifications, payment reminders
+Email service (SendGrid / Resend) — PO sending, invoice delivery
+Banking API — cheque clearing status sync (if bank supports)
+Tax authority API — automated VAT return submission
+Barcode scanner integration — GRN and van loading via USB/Bluetooth scanner
+15. Implementation Plan
+Phase
+Duration
+Deliverables
+Milestone
+1
+Weeks 1–3
+Project setup, DB schema, Auth, user management, Dashboard shell
+Foundation Complete
+2
+Weeks 4–7
+Product master, Stores module, Purchase module, GRN
+Inventory Live
+3
+Weeks 8–11
+Sales module, Customer management, Invoicing, Receipts
+Sales Live
+4
+Weeks 12–14
+Routes & Van Sales module (PWA with offline support)
+Van Sales Live
+5
+Weeks 15–18
+Full Accounting module (journal, expenses, payroll, tax, petty cash)
+Accounting Live
+6
+Weeks 19–21
+Production module, BOM, production orders, costing
+Production Live
+7
+Weeks 22–24
+Reporting suite, PDF exports, dashboard analytics, UAT
+8
+Weeks 25–26
+Performance tuning, security audit, staff training, go-live
+Production Launch
+16. Risks & Mitigations
+Risk
+Severity
+Mitigation
+Scope creep during development
+High
+Lock Phase 1 scope; use change request process for additions
+Poor internet connectivity on van routes
+High
+PWA offline sync with IndexedDB queue
+Data migration from legacy systems
+Medium
+Dedicated migration scripts with validation; parallel run period
+User adoption resistance
+Medium
+Role-specific training sessions; champion users per department
+Regulatory compliance gaps
+Medium
+Engage pharmaceutical compliance consultant for review
+Supabase RLS misconfiguration
+High
+Penetration testing; third-party security audit before go-live
+17. Glossary
+Term
+Definition
+GRN
+Goods Receipt Note — document confirming delivery of purchased goods
+BOM
+Bill of Materials — list of raw materials needed to produce a finished product
+FEFO
+First Expiry First Out — inventory method prioritising soonest-expiring stock
+RLS
+Row Level Security — Supabase/PostgreSQL access control at row level
+PWA
+Progressive Web App — web app with offline and mobile device capabilities
+SOA
+Statement of Account — customer balance summary showing all transactions
+3-Way Match
+PO + GRN + Supplier Invoice verification before payment approval
+JWT
+JSON Web Token — secure token used for user authentication sessions
+PO
+Purchase Order — formal document sent to supplier to request goods
+KPI
+Key Performance Indicator — measurable metric for business performance
+— End of Document —
+Aspee Pharmaceuticals  |  Stock & Inventory Management System PRD  |  v1.0

@@ -23,6 +23,8 @@ interface OutstandingInvoice {
     currency: string;
     daysOutstanding: number;
     bucket: AgingBucket;
+    outstanding: number;
+    amount_paid: number;
 }
 
 export default function ARAgingPage() {
@@ -32,9 +34,30 @@ export default function ARAgingPage() {
             const result = await supabase
                 .from('sales_invoices')
                 .select('id, invoice_number, customer_name, date, total_amount, status, currency')
-                .in('status', ['Issued', 'Partially Paid', 'Overdue'])
+                .in('status', ['Issued', 'ISSUED', 'Partially Paid', 'PARTIALLY PAID', 'Overdue', 'OVERDUE'])
                 .order('date', { ascending: true });
-            return { data: result.data, error: result.error };
+            if (result.error) return { data: null, error: result.error };
+
+            const invoiceIds = (result.data || []).map((i: any) => i.id);
+            // Fetch all receipts/collections to subtract from outstanding
+            const paidMap: Record<string, number> = {};
+            if (invoiceIds.length > 0) {
+                const { data: receipts } = await supabase
+                    .from('sales_receipts')
+                    .select('invoice_id, amount_collected')
+                    .in('invoice_id', invoiceIds);
+                for (const r of receipts || []) {
+                    paidMap[r.invoice_id] = (paidMap[r.invoice_id] || 0) + Number(r.amount_collected || 0);
+                }
+            }
+
+            const enriched = (result.data || []).map((inv: any) => ({
+                ...inv,
+                amount_paid: paidMap[inv.id] || 0,
+                outstanding: Number(inv.total_amount) - (paidMap[inv.id] || 0),
+            })).filter((inv: any) => inv.outstanding > 0);
+
+            return { data: enriched, error: null };
         }
     );
 
@@ -60,11 +83,11 @@ export default function ARAgingPage() {
     }, [rawInvoices]);
 
     const stats = {
-        totalOutstanding: invoices.reduce((sum, inv) => sum + Number(inv.total_amount), 0),
-        bucket0_30: invoices.filter(i => i.bucket === '0-30 Days').reduce((sum, inv) => sum + Number(inv.total_amount), 0),
-        bucket31_60: invoices.filter(i => i.bucket === '31-60 Days').reduce((sum, inv) => sum + Number(inv.total_amount), 0),
-        bucket61_90: invoices.filter(i => i.bucket === '61-90 Days').reduce((sum, inv) => sum + Number(inv.total_amount), 0),
-        bucket90Plus: invoices.filter(i => i.bucket === '90+ Days').reduce((sum, inv) => sum + Number(inv.total_amount), 0),
+        totalOutstanding: invoices.reduce((sum, inv) => sum + Number(inv.outstanding ?? inv.total_amount), 0),
+        bucket0_30: invoices.filter(i => i.bucket === '0-30 Days').reduce((sum, inv) => sum + Number(inv.outstanding ?? inv.total_amount), 0),
+        bucket31_60: invoices.filter(i => i.bucket === '31-60 Days').reduce((sum, inv) => sum + Number(inv.outstanding ?? inv.total_amount), 0),
+        bucket61_90: invoices.filter(i => i.bucket === '61-90 Days').reduce((sum, inv) => sum + Number(inv.outstanding ?? inv.total_amount), 0),
+        bucket90Plus: invoices.filter(i => i.bucket === '90+ Days').reduce((sum, inv) => sum + Number(inv.outstanding ?? inv.total_amount), 0),
     };
 
     const handleExport = () => {
@@ -82,7 +105,7 @@ export default function ARAgingPage() {
                 { header: 'Date', accessor: (r) => new Date(r.date).toLocaleDateString() },
                 { header: 'Days Outstanding', accessor: (r) => r.daysOutstanding },
                 { header: 'Aging Bucket', accessor: (r) => r.bucket },
-                { header: 'Amount', accessor: (r) => r.total_amount },
+                { header: 'Outstanding', accessor: (r) => r.outstanding ?? r.total_amount },
                 { header: 'Status', accessor: (r) => r.status },
             ]
         );
@@ -113,7 +136,8 @@ export default function ARAgingPage() {
                 );
             }
         },
-        { key: 'total_amount', label: 'Amount', render: (v: unknown, row: any) => <span style={{ fontWeight: 700 }}>{formatCurrency(v as number, row.currency)}</span> },
+        { key: 'total_amount', label: 'Invoice Total', render: (v: unknown, row: any) => <span style={{ color: 'var(--slate-500)' }}>{formatCurrency(v as number, row.currency)}</span> },
+        { key: 'outstanding', label: 'Outstanding', render: (_v: unknown, row: any) => <span style={{ fontWeight: 700, color: 'var(--danger)' }}>{formatCurrency(row.outstanding ?? row.total_amount)}</span> },
     ];
 
     return (

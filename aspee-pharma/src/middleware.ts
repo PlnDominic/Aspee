@@ -1,25 +1,7 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-
-// Define route permissions
-const routePermissions: Record<string, string[]> = {
-    '/dashboard': ['*'],
-    '/sales': ['Super Admin', 'Sales Manager', 'Van Sales Rep'],
-    '/customers': ['Super Admin', 'Sales Manager', 'Van Sales Rep'],
-    '/purchasing': ['Super Admin', 'Purchasing Manager'],
-    '/suppliers': ['Super Admin', 'Purchasing Manager'],
-    '/stores': ['Super Admin', 'Store Manager'],
-    '/production': ['Super Admin', 'Production Manager', 'Store Manager'],
-    '/qa': ['Super Admin', 'Quality Assurance'],
-    '/accounting': ['Super Admin', 'Accountant'],
-    '/internal-audit': ['Super Admin', 'Internal Auditor'],
-    '/hr': ['Super Admin', 'HR Manager'],
-    '/weekly-reports/review': ['Super Admin', 'Managing Director'],
-    '/weekly-reports': ['*'],
-    '/settings/profile': ['*'],
-    '/settings': ['Super Admin'],
-};
+import { routePermissions } from '@/lib/routePermissions';
 
 export async function middleware(request: NextRequest) {
     const { pathname } = request.nextUrl;
@@ -94,10 +76,10 @@ export async function middleware(request: NextRequest) {
 
         const userRole = userData?.role;
 
-        // If the role lookup failed (DB error or user not yet in system_users),
-        // allow access rather than locking the user out of every page.
         if (roleError || !userData) {
-            return supabaseResponse;
+            const url = request.nextUrl.clone();
+            url.pathname = '/overview';
+            return NextResponse.redirect(url);
         }
 
         let hasAccess = false;

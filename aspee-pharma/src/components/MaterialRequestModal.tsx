@@ -21,6 +21,8 @@ interface Product {
     name: string;
     sku: string;
     unit: string;
+    bulk_unit?: string | null;
+    bulk_to_base_ratio?: number | null;
     material_type?: string;
 }
 
@@ -184,7 +186,7 @@ export default function MaterialRequestModal({ isOpen, onClose, onSuccess, produ
                 if (bom) {
                     const { data: bomItems } = await supabase
                         .from('bom_items')
-                        .select('*, component:products(id, name, sku, unit, material_type)')
+                        .select('*, component:products(id, name, sku, unit, bulk_unit, bulk_to_base_ratio, material_type)')
                         .eq('bom_id', bom.id);
                     
                     if (bomItems) {
@@ -552,6 +554,14 @@ export default function MaterialRequestModal({ isOpen, onClose, onSuccess, produ
                                                     min="0"
                                                     step="any"
                                                 />
+                                                {item.product?.bulk_unit && item.product?.bulk_to_base_ratio && item.quantity_requested > 0 && (
+                                                    <div style={{ fontSize: 10, color: 'var(--primary-600)', fontWeight: 600, marginTop: 2, whiteSpace: 'nowrap' }}>
+                                                        ≈ {(item.quantity_requested / item.product.bulk_to_base_ratio % 1 === 0
+                                                            ? (item.quantity_requested / item.product.bulk_to_base_ratio).toLocaleString()
+                                                            : (item.quantity_requested / item.product.bulk_to_base_ratio).toLocaleString(undefined, { maximumFractionDigits: 2 })
+                                                        )} {item.product.bulk_unit}
+                                                    </div>
+                                                )}
                                             </td>
                                             <td>
                                                 <div style={{ 

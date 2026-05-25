@@ -1,0 +1,32 @@
+product,normalized_name,pack_size,cash_price,credit_price,pricing_basis
+ASPIMOL SYRUP,Aspimol Syrup,60,7.00,8.00,Per bottle
+KINDERCOF SYRUP,Kinder-Cof Syrup,60,9.00,11.00,Per bottle
+ASPROLEX-F SYRUP,Asprolex-F Syrup,60,10.00,12.00,Per bottle
+ASPICOF SYRUP,Aspi-Cof Syrup,60,8.00,10.00,Per bottle
+CODACOF SYRUP,Coda-Cof Syrup,60,12.00,14.00,Per bottle
+ADULTCOF SYRUP,Adult-Cof Syrup,60,10.00,12.00,Per bottle
+QUININE SYRUP,Quinine Syrup,60,7.00,9.00,Per bottle
+KINDERVITE SYRUP,Kindervite Syrup,60,8.00,10.00,Per bottle
+ASPITONE SYRUP,Aspitone Syrup,30,14.00,16.00,Per bottle
+ASPIDYNE SYRUP,Aspidyne Syrup,30,14.00,16.00,Per bottle
+HAEMATOSE SYRUP,Haematose Syrup,30,15.00,17.00,Per bottle
+LISTA SYRUP,Lista Syrup,30,14.00,16.00,Per bottle
+KINDERPLEX SYRUP,Kinderplex Syrup,60,8.00,10.00,Per bottle
+NASAL DROP 1%,Nasal Drop 1%,180,5.00,6.00,Per bottle
+NASAL DROP 0.5%,Nasal Drop 0.5%,180,5.00,6.00,Per bottle
+DIAZEPAM 10MG TABS,Diazepam 10mg Tablets,24,37.00,40.00,Per skellet
+DIAZEPAM 5MG TABS,Diazepam 5mg Tablets,24,33.00,35.00,Per skellet
+FOLIC ACID TABS,Folic Acid Tablets,24,32.00,34.00,Per skellet
+ASPIMOL FORTE CAPS,Aspimol Forte Capsules,24,65.00,70.00,Per skellet
+ASCOLD TABS,Ascold Tablets,24,41.00,43.00,Per skellet
+ASPIMOL PLUS TABS,Aspimol Plus Tablets,24,35.00,42.00,Per skellet
+ASPIMOL EXTRA TABS,Aspimol Extra Tablets,24,42.00,46.00,Per skellet
+ASPIMOL-X TABS,Aspimol-X Tablets,24,30.00,38.00,Per skellet
+ASPIMAK CAPS,Aspimak Capsules,24,35.00,37.00,Per skellet
+ASPIDYNE CAPS,Aspidyne Capsules,18,45.00,48.00,Per skellet
+MULTIVITE TABS,Multivite Tablets,24,37.00,40.00,Per skellet
+B'CO TABS,B-Co Tablets,24,35.00,37.00,Per skellet
+ASCAP TABS,Ascap Tablets,24,40.00,42.00,Per skellet
+ASPIMOL EXTRA CAPS,Aspimol Extra Capsules,24,40.00,45.00,Per skellet
+ASTRADOL-P CAPLETS,Astradol Tablets,24,55.00,,Per skellet
+HAEMATOSE CAPS,Haematose Capsules,10,25.00,28.00,Per skellet

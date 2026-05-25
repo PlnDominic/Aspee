@@ -30,6 +30,8 @@ interface Product {
     name: string;
     sku: string;
     unit: string;
+    bulk_unit?: string | null;
+    bulk_to_base_ratio?: number | null;
 }
 
 interface POItem {
@@ -128,7 +130,7 @@ export default function GRNModal({ isOpen, onClose, onSave, initialData, mode = 
                 .from('purchase_order_items')
                 .select(`
                     *,
-                    product:products(id, name, sku, unit)
+                    product:products(id, name, sku, unit, bulk_unit, bulk_to_base_ratio)
                 `)
                 .eq('po_id', poId);
 
@@ -215,7 +217,7 @@ export default function GRNModal({ isOpen, onClose, onSave, initialData, mode = 
                 .from('grn_items')
                 .select(`
                     *,
-                    product:products(id, name, sku, unit)
+                    product:products(id, name, sku, unit, bulk_unit, bulk_to_base_ratio)
                 `)
                 .eq('grn_id', grn.id);
 
@@ -1283,6 +1285,14 @@ export default function GRNModal({ isOpen, onClose, onSave, initialData, mode = 
                                                     placeholder="0"
                                                     className="qty-input"
                                                 />
+                                                {item.product?.bulk_unit && item.product?.bulk_to_base_ratio && item.received_qty > 0 && (
+                                                    <div style={{ fontSize: 10, color: 'var(--primary-600)', fontWeight: 600, marginTop: 2, whiteSpace: 'nowrap' }}>
+                                                        ≈ {(item.received_qty / item.product.bulk_to_base_ratio % 1 === 0
+                                                            ? (item.received_qty / item.product.bulk_to_base_ratio).toLocaleString()
+                                                            : (item.received_qty / item.product.bulk_to_base_ratio).toLocaleString(undefined, { maximumFractionDigits: 2 })
+                                                        )} {item.product.bulk_unit}
+                                                    </div>
+                                                )}
                                             </td>
                                             <td className={`text-right ${item.discrepancies !== 0 ? 'has-discrepancy' : ''}`}>
                                                 {item.discrepancies > 0 ? '+' : ''}{item.discrepancies}
@@ -1345,7 +1355,23 @@ export default function GRNModal({ isOpen, onClose, onSave, initialData, mode = 
 
                     <div className="form-grid-3">
                         <div className="form-field">
-                            <label>QA Inspector Name *</label>
+                            <label>QA Status *</label>
+                            <div className="input-wrapper">
+                                <CheckCircle size={16} className="icon" />
+                                <select
+                                    value={qaStatus}
+                                    onChange={(e) => setQaStatus(e.target.value)}
+                                >
+                                    <option value="Pending">Pending</option>
+                                    <option value="Approved">Approved</option>
+                                    <option value="Rejected">Rejected</option>
+                                    <option value="Quarantine">Quarantine</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div className="form-field">
+                            <label>QA Inspector Name</label>
                             <div className="input-wrapper">
                                 <AlertCircle size={16} className="icon" />
                                 <input

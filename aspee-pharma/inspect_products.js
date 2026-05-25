@@ -25,7 +25,7 @@ async function inspect() {
   // Actually, we can just run a select query to see what happens
   const { data, error } = await supabase
     .from('products')
-    .select('id, name')
+    .select('*')
     .limit(1);
 
   console.log('Sample product:', data?.[0]);

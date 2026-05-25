@@ -92,16 +92,7 @@ export default function UserManagementPage() {
                 throw new Error(json.error || 'Failed to create user');
             }
 
-            if (json.emailSent) {
-                toast.success(`Account created — login credentials sent to ${formData.email}`);
-            } else {
-                // SMTP not set up yet — show the temp password in a prominent toast so the
-                // admin can share it manually with the new user.
-                toast.warning(
-                    `Account created, but email could not be sent.\nShare this password manually with ${formData.name}:\n\n${json.tempPassword}`,
-                    { duration: 15000 }
-                );
-            }
+            toast.success(`Account created — login credentials sent to ${formData.email}`);
 
             await logAudit({
                 action: 'CREATE',

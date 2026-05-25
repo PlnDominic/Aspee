@@ -31,6 +31,9 @@ interface Product {
     name: string;
     sku: string;
     unit: string;
+    purchase_unit?: string | null;
+    bulk_unit?: string | null;
+    bulk_to_base_ratio?: number | null;
     material_type: string;
 }
 
@@ -59,6 +62,8 @@ interface PurchaseOrderModalProps {
     mode?: 'create' | 'edit' | 'view';
 }
 
+const blankPOItem = (): POItem => ({ product_id: '', quantity: 1, unit_price: 0, unit: 'Pieces' });
+
 export default function PurchaseOrderModal({ isOpen, onClose, onSave, initialData, mode = 'create' }: PurchaseOrderModalProps) {
     const [suppliers, setSuppliers] = useState<Supplier[]>([]);
     const [products, setProducts] = useState<Product[]>([]);
@@ -68,12 +73,12 @@ export default function PurchaseOrderModal({ isOpen, onClose, onSave, initialDat
     const [supplierId, setSupplierId] = useState('');
     const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(null);
     const [poNumber, setPoNumber] = useState('');
-    const [rawItems, setRawItems] = useState<POItem[]>([{ product_id: '', quantity: 1, unit_price: 0, unit: 'Pieces' }]);
-    const [pkgItems, setPkgItems] = useState<POItem[]>([{ product_id: '', quantity: 1, unit_price: 0, unit: 'Pieces' }]);
-    const [labItems, setLabItems] = useState<POItem[]>([{ product_id: '', quantity: 1, unit_price: 0, unit: 'Pieces' }]);
-    const [factoryItems, setFactoryItems] = useState<POItem[]>([{ product_id: '', quantity: 1, unit_price: 0, unit: 'Pieces' }]);
-    const [stationeryItems, setStationeryItems] = useState<POItem[]>([{ product_id: '', quantity: 1, unit_price: 0, unit: 'Pieces' }]);
-    const [generalItems, setGeneralItems] = useState<POItem[]>([{ product_id: '', quantity: 1, unit_price: 0, unit: 'Pieces' }]);
+    const [rawItems, setRawItems] = useState<POItem[]>([blankPOItem()]);
+    const [pkgItems, setPkgItems] = useState<POItem[]>([blankPOItem()]);
+    const [labItems, setLabItems] = useState<POItem[]>([blankPOItem()]);
+    const [factoryItems, setFactoryItems] = useState<POItem[]>([blankPOItem()]);
+    const [stationeryItems, setStationeryItems] = useState<POItem[]>([blankPOItem()]);
+    const [generalItems, setGeneralItems] = useState<POItem[]>([blankPOItem()]);
     const [currency, setCurrency] = useState('GHS');
 
     // Quick Add State
@@ -88,6 +93,9 @@ export default function PurchaseOrderModal({ isOpen, onClose, onSave, initialDat
             if (mode === 'create') {
                 resetForm();
                 generatePONumber();
+                if (initialData?.items?.length) {
+                    populateFromRequest(initialData);
+                }
             } else if (initialData) {
                 populateForm(initialData);
             }
@@ -105,14 +113,49 @@ export default function PurchaseOrderModal({ isOpen, onClose, onSave, initialDat
         setSupplierId('');
         setSelectedSupplier(null);
         setPoNumber('');
-        setRawItems([{ product_id: '', quantity: 1, unit_price: 0, unit: 'Pieces' }]);
-        setPkgItems([{ product_id: '', quantity: 1, unit_price: 0, unit: 'Pieces' }]);
-        setLabItems([{ product_id: '', quantity: 1, unit_price: 0, unit: 'Pieces' }]);
-        setFactoryItems([{ product_id: '', quantity: 1, unit_price: 0, unit: 'Pieces' }]);
-        setStationeryItems([{ product_id: '', quantity: 1, unit_price: 0, unit: 'Pieces' }]);
-        setGeneralItems([{ product_id: '', quantity: 1, unit_price: 0, unit: 'Pieces' }]);
+        setRawItems([blankPOItem()]);
+        setPkgItems([blankPOItem()]);
+        setLabItems([blankPOItem()]);
+        setFactoryItems([blankPOItem()]);
+        setStationeryItems([blankPOItem()]);
+        setGeneralItems([blankPOItem()]);
         setCurrency('GHS');
         setQuickAddName('');
+    };
+
+    const populateFromRequest = (request: any) => {
+        const requestItems = (request.items || []).map((item: any) => ({
+            product_id: item.product_id,
+            quantity: Number(item.quantity) || 1,
+            unit_price: Number(item.unit_price) || 0,
+            unit: item.unit || item.product?.purchase_unit || item.product?.unit || 'Pieces',
+            product: item.product,
+        }));
+
+        const byType = (materialType: string) => requestItems.filter((item: POItem) => item.product?.material_type === materialType);
+
+        const raw = byType('Raw Material');
+        const pkg = byType('Packaging Material');
+        const lab = byType('Lab Consumables');
+        const factory = byType('Factory Consumables');
+        const stationery = byType('Stationery & Printing Accessories');
+        const general = requestItems.filter((item: POItem) => {
+            const type = item.product?.material_type;
+            return type === 'General Consumables' || ![
+                'Raw Material',
+                'Packaging Material',
+                'Lab Consumables',
+                'Factory Consumables',
+                'Stationery & Printing Accessories'
+            ].includes(type || '');
+        });
+
+        setRawItems(raw.length > 0 ? raw : [blankPOItem()]);
+        setPkgItems(pkg.length > 0 ? pkg : [blankPOItem()]);
+        setLabItems(lab.length > 0 ? lab : [blankPOItem()]);
+        setFactoryItems(factory.length > 0 ? factory : [blankPOItem()]);
+        setStationeryItems(stationery.length > 0 ? stationery : [blankPOItem()]);
+        setGeneralItems(general.length > 0 ? general : [blankPOItem()]);
     };
 
     const populateForm = async (po: any) => {
@@ -138,12 +181,12 @@ export default function PurchaseOrderModal({ isOpen, onClose, onSave, initialDat
                 const stationery = data.filter(item => item.product?.material_type === 'Stationery & Printing Accessories');
                 const general = data.filter(item => item.product?.material_type === 'General Consumables');
 
-                setRawItems(raw.length > 0 ? raw.map(i => ({ ...i, unit: i.unit || 'Pieces' })) : [{ product_id: '', quantity: 1, unit_price: 0, unit: 'Pieces' }]);
-                setPkgItems(pkg.length > 0 ? pkg.map(i => ({ ...i, unit: i.unit || 'Pieces' })) : [{ product_id: '', quantity: 1, unit_price: 0, unit: 'Pieces' }]);
-                setLabItems(lab.length > 0 ? lab.map(i => ({ ...i, unit: i.unit || 'Pieces' })) : [{ product_id: '', quantity: 1, unit_price: 0, unit: 'Pieces' }]);
-                setFactoryItems(factory.length > 0 ? factory.map(i => ({ ...i, unit: i.unit || 'Pieces' })) : [{ product_id: '', quantity: 1, unit_price: 0, unit: 'Pieces' }]);
-                setStationeryItems(stationery.length > 0 ? stationery.map(i => ({ ...i, unit: i.unit || 'Pieces' })) : [{ product_id: '', quantity: 1, unit_price: 0, unit: 'Pieces' }]);
-                setGeneralItems(general.length > 0 ? general.map(i => ({ ...i, unit: i.unit || 'Pieces' })) : [{ product_id: '', quantity: 1, unit_price: 0, unit: 'Pieces' }]);
+                setRawItems(raw.length > 0 ? raw.map(i => ({ ...i, unit: i.unit || 'Pieces' })) : [blankPOItem()]);
+                setPkgItems(pkg.length > 0 ? pkg.map(i => ({ ...i, unit: i.unit || 'Pieces' })) : [blankPOItem()]);
+                setLabItems(lab.length > 0 ? lab.map(i => ({ ...i, unit: i.unit || 'Pieces' })) : [blankPOItem()]);
+                setFactoryItems(factory.length > 0 ? factory.map(i => ({ ...i, unit: i.unit || 'Pieces' })) : [blankPOItem()]);
+                setStationeryItems(stationery.length > 0 ? stationery.map(i => ({ ...i, unit: i.unit || 'Pieces' })) : [blankPOItem()]);
+                setGeneralItems(general.length > 0 ? general.map(i => ({ ...i, unit: i.unit || 'Pieces' })) : [blankPOItem()]);
             }
         } catch (error: any) {
             toast.error('Failed to load PO items: ' + error.message);
@@ -157,7 +200,7 @@ export default function PurchaseOrderModal({ isOpen, onClose, onSave, initialDat
         try {
             const [suppliersRes, productsRes] = await Promise.all([
                 supabase.from('suppliers').select('*').order('name'),
-                supabase.from('products').select('id, name, sku, unit, material_type')
+                supabase.from('products').select('id, name, sku, unit, purchase_unit, bulk_unit, bulk_to_base_ratio, material_type')
                     .neq('material_type', 'Finished Good')
                     .order('name')
             ]);
@@ -274,29 +317,41 @@ export default function PurchaseOrderModal({ isOpen, onClose, onSave, initialDat
 
     const updateItem = (type: 'raw' | 'pkg' | 'lab' | 'factory' | 'stationery' | 'general', index: number, field: keyof POItem, value: any) => {
         if (type === 'raw') {
-            const newItems = [...rawItems];
-            newItems[index] = { ...newItems[index], [field]: value };
-            setRawItems(newItems);
+            setRawItems(prev => {
+                const newItems = [...prev];
+                newItems[index] = { ...newItems[index], [field]: value };
+                return newItems;
+            });
         } else if (type === 'pkg') {
-            const newItems = [...pkgItems];
-            newItems[index] = { ...newItems[index], [field]: value };
-            setPkgItems(newItems);
+            setPkgItems(prev => {
+                const newItems = [...prev];
+                newItems[index] = { ...newItems[index], [field]: value };
+                return newItems;
+            });
         } else if (type === 'lab') {
-            const newItems = [...labItems];
-            newItems[index] = { ...newItems[index], [field]: value };
-            setLabItems(newItems);
+            setLabItems(prev => {
+                const newItems = [...prev];
+                newItems[index] = { ...newItems[index], [field]: value };
+                return newItems;
+            });
         } else if (type === 'factory') {
-            const newItems = [...factoryItems];
-            newItems[index] = { ...newItems[index], [field]: value };
-            setFactoryItems(newItems);
+            setFactoryItems(prev => {
+                const newItems = [...prev];
+                newItems[index] = { ...newItems[index], [field]: value };
+                return newItems;
+            });
         } else if (type === 'stationery') {
-            const newItems = [...stationeryItems];
-            newItems[index] = { ...newItems[index], [field]: value };
-            setStationeryItems(newItems);
+            setStationeryItems(prev => {
+                const newItems = [...prev];
+                newItems[index] = { ...newItems[index], [field]: value };
+                return newItems;
+            });
         } else {
-            const newItems = [...generalItems];
-            newItems[index] = { ...newItems[index], [field]: value };
-            setGeneralItems(newItems);
+            setGeneralItems(prev => {
+                const newItems = [...prev];
+                newItems[index] = { ...newItems[index], [field]: value };
+                return newItems;
+            });
         }
     };
 
@@ -535,6 +590,9 @@ export default function PurchaseOrderModal({ isOpen, onClose, onSave, initialDat
 
                     <div className="a4-preview-scroller">
                         <div className="a4-page" ref={printRef}>
+                            {/* Scoped styles for on-screen rendering */}
+                            <style dangerouslySetInnerHTML={{ __html: docStyles }} />
+
                             {/* Company Header */}
                             <div className="doc-header">
                                 <div className="company-info">
@@ -685,6 +743,12 @@ export default function PurchaseOrderModal({ isOpen, onClose, onSave, initialDat
             width={1200}
         >
             <form onSubmit={handleSubmit} className="grn-form">
+                {mode === 'create' && initialData?.source_request_number && (
+                    <div className="source-request-banner">
+                        <ClipboardList size={16} />
+                        <span>Prefilled from purchase requisition {initialData.source_request_number}</span>
+                    </div>
+                )}
                 <div className="form-section">
                     <h4 className="section-title">
                         <ClipboardList size={16} />
@@ -809,28 +873,30 @@ export default function PurchaseOrderModal({ isOpen, onClose, onSave, initialDat
                                         ].reduce((a, b) => a + b, 0) + index + 1;
 
                                         return (
-                                            <tr key={`${group.type}-${index}`}>
+                                            <tr key={`${group.type}-${index}-${item.product_id || 'empty'}`}>
                                                 <td className="text-slate-400 font-mono text-xs">{totalIdx}</td>
                                                 <td>
                                                     <span className={`cat-badge ${group.color}`}>{group.label}</span>
                                                 </td>
                                                 <td>
                                                     <select
-                                                        required={group.items.some(i => i.product_id || i.quantity > 0)}
                                                         value={item.product_id}
                                                         onChange={(e) => {
                                                             const pId = e.target.value;
                                                             updateItem(group.type as any, index, 'product_id', pId);
                                                             const selectedProduct = products.find(p => p.id === pId);
-                                                            if (selectedProduct && selectedProduct.unit) {
-                                                                updateItem(group.type as any, index, 'unit', selectedProduct.unit);
+                                                            if (selectedProduct) {
+                                                                updateItem(group.type as any, index, 'unit', selectedProduct.purchase_unit || selectedProduct.unit);
                                                             }
                                                         }}
                                                         className="qa-status-select"
                                                         style={{ textAlign: 'left' }}
                                                     >
                                                         <option value="">Select {group.label}</option>
-                                                        {products.filter(p => p.material_type === (group.type === 'raw' ? 'Raw Material' : group.type === 'pkg' ? 'Packaging Material' : group.type === 'lab' ? 'Lab Consumables' : group.type === 'factory' ? 'Factory Consumables' : group.type === 'stationery' ? 'Stationery & Printing Accessories' : 'General Consumables')).map(p => (
+                                                        {products.filter(p => {
+                                                            const filterType = group.type === 'raw' ? 'Raw Material' : group.type === 'pkg' ? 'Packaging Material' : group.type === 'lab' ? 'Lab Consumables' : group.type === 'factory' ? 'Factory Consumables' : group.type === 'stationery' ? 'Stationery & Printing Accessories' : 'General Consumables';
+                                                            return p.material_type === filterType;
+                                                        }).map(p => (
                                                             <option key={p.id} value={p.id}>{p.name}</option>
                                                         ))}
                                                     </select>
@@ -860,7 +926,6 @@ export default function PurchaseOrderModal({ isOpen, onClose, onSave, initialDat
                                                 </td>
                                                 <td>
                                                     <input
-                                                        required
                                                         type="number"
                                                         min="0"
                                                         value={item.quantity || ''}
@@ -868,12 +933,22 @@ export default function PurchaseOrderModal({ isOpen, onClose, onSave, initialDat
                                                         className="qty-input"
                                                         placeholder="0"
                                                     />
+                                                    {item.product_id && item.quantity > 0 && (() => {
+                                                        const prod = products.find(p => p.id === item.product_id);
+                                                        if (!prod?.bulk_unit || !prod?.bulk_to_base_ratio) return null;
+                                                        const bulkQty = item.quantity / prod.bulk_to_base_ratio;
+                                                        const fmt = bulkQty % 1 === 0 ? bulkQty.toLocaleString() : bulkQty.toLocaleString(undefined, { maximumFractionDigits: 2 });
+                                                        return (
+                                                            <div style={{ fontSize: 10, color: 'var(--primary-600)', fontWeight: 600, marginTop: 2, whiteSpace: 'nowrap' }}>
+                                                                ≈ {fmt} {prod.bulk_unit}
+                                                            </div>
+                                                        );
+                                                    })()}
                                                 </td>
                                                 <td>
                                                     <div className="price-input-container">
                                                         <span className="currency-label">{currency === 'GHS' ? '₵' : '$'}</span>
                                                         <input
-                                                            required
                                                             type="number"
                                                             step="0.01"
                                                             min="0"
@@ -943,6 +1018,18 @@ export default function PurchaseOrderModal({ isOpen, onClose, onSave, initialDat
                     display: flex;
                     flex-direction: column;
                     gap: 24px;
+                }
+                .source-request-banner {
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    padding: 10px 14px;
+                    border: 1px solid var(--primary-100);
+                    border-radius: 8px;
+                    background: var(--primary-50);
+                    color: var(--primary-700);
+                    font-size: 11px;
+                    font-weight: 700;
                 }
                 .form-section {
                     display: flex;

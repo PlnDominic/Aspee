@@ -1,12 +1,10 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
 import nodemailer from 'nodemailer';
 import { REPORT_DEPARTMENTS } from '@/lib/hooks';
+import { REPORT_ADMIN_ROLES } from '@/lib/routePermissions';
+import { createServiceRoleClient, isAuthorizedCronRequest, requireRoles } from '@/lib/serverAuth';
 
-const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-);
+const supabase = createServiceRoleClient();
 
 function getCurrentWeekStart() {
     const now = new Date();
@@ -50,8 +48,13 @@ function reminderHtml(department: string, weekStart: string) {
 </html>`;
 }
 
-export async function POST() {
+export async function POST(request: Request) {
     try {
+        if (!isAuthorizedCronRequest(request)) {
+            const { error } = await requireRoles(REPORT_ADMIN_ROLES);
+            if (error) return error;
+        }
+
         const today = new Date();
         if (today.getDay() !== 5) {
             return NextResponse.json({ success: true, message: 'Today is not Friday. No reminders sent.' });

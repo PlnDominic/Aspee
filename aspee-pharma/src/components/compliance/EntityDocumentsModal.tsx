@@ -4,7 +4,7 @@ import React from 'react';
 import Modal from '@/components/Modal';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
-import { Upload, Trash2, FileText } from 'lucide-react';
+import { Upload, Trash2, FileText, FileCheck, FileX, Shield, Calendar, Hash, File, Image } from 'lucide-react';
 
 type EntityType = 'customer' | 'employee';
 
@@ -178,95 +178,228 @@ export default function EntityDocumentsModal(props: {
     }
   };
 
+  const getFileIcon = (mimeType: string | null) => {
+    if (!mimeType) return <FileText size={20} style={{ color: '#64748b' }} />;
+    if (mimeType.startsWith('image/')) return <Image size={20} style={{ color: '#8b5cf6' }} />;
+    if (mimeType === 'application/pdf') return <FileText size={20} style={{ color: '#ef4444' }} />;
+    return <File size={20} style={{ color: '#64748b' }} />;
+  };
+
+  const isExpired = (expiryDate: string | null) => {
+    if (!expiryDate) return false;
+    return new Date(expiryDate) < new Date();
+  };
+
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={title} size="lg">
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 14 }}>
-        {/* Upload */}
-        <div style={{ padding: 14, border: '1px solid var(--slate-200)', borderRadius: 12, background: 'var(--slate-50)' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+    <>
+      <style>{`
+        @keyframes spin {
+          to { transform: rotate(360deg); }
+        }
+        input:focus, select:focus {
+          border-color: var(--primary-400) !important;
+          box-shadow: 0 0 0 3px rgba(6, 182, 212, 0.15);
+        }
+        label:hover > div:first-child {
+          border-color: var(--primary-400) !important;
+          background: linear-gradient(135deg, #e0f2fe, #dbeafe) !important;
+        }
+        button:hover {
+          transform: translateY(-1px);
+        }
+      `}</style>
+    <Modal isOpen={isOpen} onClose={onClose} title={title} size="lg" noPadding>
+      <div style={containerStyle}>
+        {/* Upload Section */}
+        <div style={sectionStyle}>
+          <div style={sectionHeaderStyle}>
+            <div style={sectionIconStyle}>
+              <Upload size={16} />
+            </div>
+            <span>Upload New Document</span>
+          </div>
+          
+          <div style={formGridStyle}>
             <div>
-              <label style={labelStyle}>Document Type</label>
-              <select value={documentType} onChange={(e) => setDocumentType(e.target.value)} style={inputStyle}>
+              <label style={labelStyle}>
+                <Hash size={12} /> Document Type
+              </label>
+              <select 
+                value={documentType} 
+                onChange={(e) => setDocumentType(e.target.value)} 
+                style={selectStyle}
+              >
                 {allowedDocumentTypes.map(t => (
                   <option key={t.value} value={t.value}>{t.label}</option>
                 ))}
               </select>
             </div>
             <div>
-              <label style={labelStyle}>Document Number (optional)</label>
-              <input value={documentNumber} onChange={(e) => setDocumentNumber(e.target.value)} style={inputStyle} />
+              <label style={labelStyle}>
+                <Shield size={12} /> Document Number
+              </label>
+              <input 
+                value={documentNumber} 
+                onChange={(e) => setDocumentNumber(e.target.value)} 
+                placeholder="e.g. GHA-XXXXXXXXX-X"
+                style={inputStyle} 
+              />
             </div>
             <div>
-              <label style={labelStyle}>Expiry Date (optional)</label>
-              <input type="date" value={expiryDate} onChange={(e) => setExpiryDate(e.target.value)} style={inputStyle} />
+              <label style={labelStyle}>
+                <Calendar size={12} /> Expiry Date
+              </label>
+              <input 
+                type="date" 
+                value={expiryDate} 
+                onChange={(e) => setExpiryDate(e.target.value)} 
+                style={inputStyle} 
+              />
             </div>
             <div>
-              <label style={labelStyle}>Notes (optional)</label>
-              <input value={notes} onChange={(e) => setNotes(e.target.value)} style={inputStyle} />
+              <label style={labelStyle}>Notes</label>
+              <input 
+                value={notes} 
+                onChange={(e) => setNotes(e.target.value)} 
+                placeholder="Optional notes..."
+                style={inputStyle} 
+              />
             </div>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 12 }}>
+          <div style={uploadAreaStyle}>
             <input
               type="file"
+              id="doc-upload"
               onChange={(e) => setFile(e.target.files?.[0] || null)}
-              style={{ flex: 1 }}
+              style={{ display: 'none' }}
               accept="application/pdf,image/*"
             />
+            <label htmlFor="doc-upload" style={uploadLabelStyle}>
+              {file ? (
+                <>
+                  <div style={filePreviewStyle}>
+                    {file.type?.startsWith('image/') ? (
+                      <img 
+                        src={URL.createObjectURL(file)} 
+                        alt="Preview" 
+                        style={previewImageStyle}
+                      />
+                    ) : (
+                      <FileText size={32} style={{ color: '#ef4444' }} />
+                    )}
+                  </div>
+                  <div style={fileInfoStyle}>
+                    <span style={fileNameStyle}>{file.name}</span>
+                    <span style={fileSizeStyle}>{formatBytes(file.size)}</span>
+                  </div>
+                  <button 
+                    type="button"
+                    onClick={(e) => { e.preventDefault(); setFile(null); }}
+                    style={clearBtnStyle}
+                  >
+                    ×
+                  </button>
+                </>
+              ) : (
+                <>
+                  <div style={uploadIconWrapperStyle}>
+                    <Upload size={24} />
+                  </div>
+                  <span style={uploadTextStyle}>Click to upload or drag and drop</span>
+                  <span style={uploadHintStyle}>PDF or Images (max 10MB)</span>
+                </>
+              )}
+            </label>
+          </div>
+
+          <div style={uploadActionStyle}>
             <button
               onClick={upload}
-              disabled={loading}
+              disabled={loading || !file}
               style={{
-                padding: '10px 14px',
-                borderRadius: 10,
-                border: 'none',
-                background: 'var(--primary-600)',
-                color: 'white',
-                fontWeight: 700,
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                opacity: loading ? 0.7 : 1,
+                ...uploadBtnStyle,
+                opacity: loading || !file ? 0.6 : 1,
               }}
             >
-              <Upload size={16} /> Upload
+              {loading ? (
+                <>
+                  <span style={spinnerStyle} />
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <Upload size={16} /> Save Document
+                </>
+              )}
             </button>
-          </div>
-          <div style={{ fontSize: 11, color: 'var(--slate-500)', marginTop: 8 }}>
-            Allowed: PDF / images. Storage bucket: <span style={{ fontFamily: 'var(--font-mono)' }}>{BUCKET}</span>
+            <span style={bucketHintStyle}>
+              Storage: <code>{BUCKET}</code>
+            </span>
           </div>
         </div>
 
-        {/* List */}
-        <div style={{ padding: 14, border: '1px solid var(--slate-200)', borderRadius: 12 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-            <h3 style={{ margin: 0, fontSize: 14, fontWeight: 800, color: 'var(--slate-900)' }}>Uploaded Documents</h3>
-            <button onClick={refresh} disabled={loading} style={linkBtnStyle}>Refresh</button>
+        {/* Documents List Section */}
+        <div style={sectionStyle}>
+          <div style={sectionHeaderStyle}>
+            <div style={sectionIconStyle}>
+              <FileCheck size={16} />
+            </div>
+            <span>Uploaded Documents</span>
+            <span style={docCountBadgeStyle}>{docs.length}</span>
+            <button onClick={refresh} disabled={loading} style={refreshBtnStyle}>
+              ↻ Refresh
+            </button>
           </div>
 
           {docs.length === 0 ? (
-            <div style={{ fontSize: 12, color: 'var(--slate-500)' }}>No documents uploaded yet.</div>
+            <div style={emptyStateStyle}>
+              <FileX size={40} style={{ color: '#cbd5e1' }} />
+              <p>No documents uploaded yet</p>
+              <span>Upload a document using the form above</span>
+            </div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div style={docListStyle}>
               {docs.map((d) => (
-                <div key={d.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: 10, borderRadius: 10, border: '1px solid var(--slate-200)', background: 'white' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <FileText size={18} />
-                    <div style={{ display: 'flex', flexDirection: 'column' }}>
-                      <span style={{ fontWeight: 800, fontSize: 12, color: 'var(--slate-900)' }}>{d.document_type}</span>
-                      <span style={{ fontSize: 11, color: 'var(--slate-500)' }}>
-                        {(d.file_name || 'file')} • {formatBytes(d.file_size || 0)}
-                        {d.expiry_date ? ` • Exp: ${d.expiry_date}` : ''}
+                <div key={d.id} style={docCardStyle}>
+                  <div style={docCardLeftStyle}>
+                    <div style={docIconWrapperStyle}>
+                      {getFileIcon(d.mime_type)}
+                    </div>
+                    <div style={docInfoStyle}>
+                      <span style={docTypeStyle}>{d.document_type}</span>
+                      <span style={docMetaStyle}>
+                        {d.file_name || 'Unnamed file'} • {formatBytes(d.file_size || 0)}
                       </span>
+                      {d.document_number && (
+                        <span style={docNumberStyle}>
+                          <Hash size={10} /> {d.document_number}
+                        </span>
+                      )}
                     </div>
                   </div>
-
-                  <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                    <button onClick={() => openDoc(d)} style={linkBtnStyle}>Open</button>
-                    <button onClick={() => remove(d)} style={{ ...linkBtnStyle, color: 'var(--danger)', display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <Trash2 size={14} /> Delete
-                    </button>
+                  
+                  <div style={docCardRightStyle}>
+                    {d.expiry_date && (
+                      <span style={{
+                        ...expiryBadgeStyle,
+                        background: isExpired(d.expiry_date) ? '#fef2f2' : '#f0fdf4',
+                        color: isExpired(d.expiry_date) ? '#dc2626' : '#16a34a',
+                        borderColor: isExpired(d.expiry_date) ? '#fecaca' : '#bbf7d0',
+                      }}>
+                        <Calendar size={10} />
+                        {d.expiry_date}
+                        {isExpired(d.expiry_date) && ' (Expired)'}
+                      </span>
+                    )}
+                    <div style={docActionsStyle}>
+                      <button onClick={() => openDoc(d)} style={actionBtnStyle}>
+                        <FileText size={14} /> View
+                      </button>
+                      <button onClick={() => remove(d)} style={deleteBtnStyle}>
+                        <Trash2 size={14} /> Delete
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -275,33 +408,343 @@ export default function EntityDocumentsModal(props: {
         </div>
       </div>
     </Modal>
+    </>
   );
 }
 
-const labelStyle: React.CSSProperties = {
-  fontSize: 12,
+const containerStyle: React.CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+};
+
+const sectionStyle: React.CSSProperties = {
+  padding: 20,
+  borderBottom: '1px solid var(--slate-100)',
+};
+
+const sectionHeaderStyle: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 10,
+  fontSize: 13,
   fontWeight: 700,
+  color: 'var(--slate-800)',
+  marginBottom: 16,
+  textTransform: 'uppercase',
+  letterSpacing: '0.04em',
+};
+
+const sectionIconStyle: React.CSSProperties = {
+  width: 32,
+  height: 32,
+  borderRadius: 8,
+  background: 'linear-gradient(135deg, var(--primary-600), var(--primary-500))',
+  color: 'white',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+};
+
+const formGridStyle: React.CSSProperties = {
+  display: 'grid',
+  gridTemplateColumns: '1fr 1fr',
+  gap: 14,
+  marginBottom: 16,
+};
+
+const labelStyle: React.CSSProperties = {
+  fontSize: 11,
+  fontWeight: 600,
   color: 'var(--slate-600)',
-  display: 'block',
+  display: 'flex',
+  alignItems: 'center',
+  gap: 6,
   marginBottom: 6,
 };
 
 const inputStyle: React.CSSProperties = {
   width: '100%',
-  padding: '9px 12px',
-  borderRadius: 8,
-  border: '1px solid var(--slate-200)',
+  padding: '10px 14px',
+  borderRadius: 10,
+  border: '1.5px solid var(--slate-200)',
   fontSize: 13,
   outline: 'none',
   background: 'white',
+  transition: 'border-color 0.2s, box-shadow 0.2s',
 };
 
-const linkBtnStyle: React.CSSProperties = {
+const selectStyle: React.CSSProperties = {
+  ...inputStyle,
+  cursor: 'pointer',
+  appearance: 'none',
+  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")`,
+  backgroundRepeat: 'no-repeat',
+  backgroundPosition: 'right 12px center',
+  paddingRight: 36,
+};
+
+const uploadAreaStyle: React.CSSProperties = {
+  marginBottom: 16,
+};
+
+const uploadLabelStyle: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 14,
+  padding: '14px 18px',
+  border: '2px dashed var(--slate-300)',
+  borderRadius: 12,
+  background: 'var(--slate-50)',
+  cursor: 'pointer',
+  transition: 'all 0.2s',
+};
+
+const uploadIconWrapperStyle: React.CSSProperties = {
+  width: 48,
+  height: 48,
+  borderRadius: 10,
+  background: 'linear-gradient(135deg, #e0f2fe, #bae6fd)',
+  color: '#0284c7',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+};
+
+const uploadTextStyle: React.CSSProperties = {
+  flex: 1,
+  fontSize: 13,
+  fontWeight: 600,
+  color: 'var(--slate-700)',
+};
+
+const uploadHintStyle: React.CSSProperties = {
+  fontSize: 11,
+  color: 'var(--slate-400)',
+};
+
+const filePreviewStyle: React.CSSProperties = {
+  width: 48,
+  height: 48,
+  borderRadius: 8,
+  background: 'var(--slate-100)',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  overflow: 'hidden',
+};
+
+const previewImageStyle: React.CSSProperties = {
+  width: '100%',
+  height: '100%',
+  objectFit: 'cover',
+};
+
+const fileInfoStyle: React.CSSProperties = {
+  flex: 1,
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 2,
+};
+
+const fileNameStyle: React.CSSProperties = {
+  fontSize: 13,
+  fontWeight: 600,
+  color: 'var(--slate-800)',
+};
+
+const fileSizeStyle: React.CSSProperties = {
+  fontSize: 11,
+  color: 'var(--slate-500)',
+};
+
+const clearBtnStyle: React.CSSProperties = {
+  width: 24,
+  height: 24,
+  borderRadius: '50%',
+  border: 'none',
+  background: 'var(--slate-200)',
+  color: 'var(--slate-600)',
+  fontSize: 16,
+  cursor: 'pointer',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+};
+
+const uploadActionStyle: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+};
+
+const uploadBtnStyle: React.CSSProperties = {
+  padding: '11px 20px',
+  borderRadius: 10,
+  border: 'none',
+  background: 'linear-gradient(135deg, var(--primary-600), var(--primary-500))',
+  color: 'white',
+  fontWeight: 600,
+  fontSize: 13,
+  cursor: 'pointer',
+  display: 'flex',
+  alignItems: 'center',
+  gap: 8,
+  boxShadow: '0 2px 8px rgba(6,182,212,0.25)',
+};
+
+const spinnerStyle: React.CSSProperties = {
+  width: 14,
+  height: 14,
+  borderRadius: '50%',
+  border: '2px solid rgba(255,255,255,0.3)',
+  borderTopColor: 'white',
+  animation: 'spin 0.6s linear infinite',
+  display: 'inline-block',
+};
+
+const bucketHintStyle: React.CSSProperties = {
+  fontSize: 11,
+  color: 'var(--slate-400)',
+};
+
+const docCountBadgeStyle: React.CSSProperties = {
+  marginLeft: 'auto',
+  background: 'var(--primary-100)',
+  color: 'var(--primary-700)',
+  padding: '2px 10px',
+  borderRadius: 12,
+  fontSize: 11,
+  fontWeight: 700,
+};
+
+const refreshBtnStyle: React.CSSProperties = {
   background: 'transparent',
   border: 'none',
-  padding: 0,
+  padding: '4px 10px',
   color: 'var(--primary-600)',
   cursor: 'pointer',
-  fontSize: 12,
-  fontWeight: 800,
+  fontSize: 11,
+  fontWeight: 600,
+  marginLeft: 8,
+};
+
+const emptyStateStyle: React.CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'center',
+  justifyContent: 'center',
+  padding: '40px 20px',
+  textAlign: 'center',
+};
+
+const docListStyle: React.CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 10,
+};
+
+const docCardStyle: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  gap: 16,
+  padding: 14,
+  borderRadius: 12,
+  border: '1px solid var(--slate-200)',
+  background: 'white',
+  transition: 'box-shadow 0.2s',
+};
+
+const docCardLeftStyle: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 14,
+  flex: 1,
+  minWidth: 0,
+};
+
+const docIconWrapperStyle: React.CSSProperties = {
+  width: 44,
+  height: 44,
+  borderRadius: 10,
+  background: 'var(--slate-100)',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  flexShrink: 0,
+};
+
+const docInfoStyle: React.CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 3,
+  minWidth: 0,
+};
+
+const docTypeStyle: React.CSSProperties = {
+  fontSize: 13,
+  fontWeight: 700,
+  color: 'var(--slate-800)',
+};
+
+const docMetaStyle: React.CSSProperties = {
+  fontSize: 11,
+  color: 'var(--slate-500)',
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  whiteSpace: 'nowrap',
+};
+
+const docNumberStyle: React.CSSProperties = {
+  fontSize: 11,
+  color: 'var(--primary-600)',
+  fontWeight: 600,
+  display: 'flex',
+  alignItems: 'center',
+  gap: 4,
+};
+
+const docCardRightStyle: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 12,
+  flexShrink: 0,
+};
+
+const expiryBadgeStyle: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 4,
+  padding: '3px 8px',
+  borderRadius: 6,
+  fontSize: 10,
+  fontWeight: 600,
+  border: '1px solid',
+};
+
+const docActionsStyle: React.CSSProperties = {
+  display: 'flex',
+  gap: 8,
+};
+
+const actionBtnStyle: React.CSSProperties = {
+  padding: '6px 12px',
+  borderRadius: 8,
+  border: '1px solid var(--slate-200)',
+  background: 'white',
+  color: 'var(--slate-700)',
+  fontSize: 11,
+  fontWeight: 600,
+  cursor: 'pointer',
+  display: 'flex',
+  alignItems: 'center',
+  gap: 5,
+  transition: 'all 0.2s',
+};
+
+const deleteBtnStyle: React.CSSProperties = {
+  ...actionBtnStyle,
+  borderColor: '#fecaca',
+  color: '#dc2626',
+  background: '#fef2f2',
 };

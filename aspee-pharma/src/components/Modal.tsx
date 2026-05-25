@@ -13,11 +13,12 @@ interface ModalProps {
     width?: number;
     noPadding?: boolean;
     size?: 'sm' | 'md' | 'lg';
+    fullCanvas?: boolean;
 }
 
 const SIZE_MAP = { sm: 420, md: 560, lg: 720 };
 
-export default function Modal({ isOpen, onClose, title, subtitle, children, width, noPadding = false, size }: ModalProps) {
+export default function Modal({ isOpen, onClose, title, subtitle, children, width, noPadding = false, size, fullCanvas = true }: ModalProps) {
     const resolvedWidth = width ?? (size ? SIZE_MAP[size] : 500);
     const contentRef = useRef<HTMLDivElement>(null);
 
@@ -46,8 +47,8 @@ export default function Modal({ isOpen, onClose, title, subtitle, children, widt
             <div className="modal-positioner">
                 <div
                     ref={contentRef}
-                    className="modal-content"
-                    style={{ maxWidth: resolvedWidth }}
+                    className={`modal-content${fullCanvas ? ' modal-content-canvas' : ''}`}
+                    style={fullCanvas ? undefined : { maxWidth: resolvedWidth }}
                 >
                     {/* Header */}
                     <div className="modal-header">
@@ -65,7 +66,7 @@ export default function Modal({ isOpen, onClose, title, subtitle, children, widt
                     </div>
 
                     {/* Body */}
-                    <div className={noPadding ? "modal-body-no-padding" : "modal-body"}>{children}</div>
+                    <div className={`${noPadding ? "modal-body-no-padding" : "modal-body"}${fullCanvas ? ' modal-body-canvas' : ''}`}>{children}</div>
                 </div>
             </div>
         </div>

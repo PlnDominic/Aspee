@@ -8,9 +8,11 @@ interface PrintableInvoiceProps {
 export default function PrintableInvoice({ invoice }: PrintableInvoiceProps) {
     if (!invoice) return null;
 
-    const subtotal = invoice.items?.reduce((sum: number, item: any) => sum + Number(item.total_price), 0) || 0;
-    const tax = invoice.tax_amount || 0;
-    const total = invoice.total_amount || 0;
+    const hasDiscounts = invoice.items?.some((item: any) => Number(item.discount_pct || 0) > 0) ?? false;
+    const netSubtotal = invoice.items?.reduce((sum: number, item: any) => sum + Number(item.total_price || 0), 0) || 0;
+    const totalDiscount = invoice.total_discount || invoice.items?.reduce((sum: number, item: any) => sum + Number(item.discount_amount || 0), 0) || 0;
+    const grossSubtotal = netSubtotal + totalDiscount;
+    const total = invoice.total_amount || netSubtotal;
 
     return (
         <div id="printable-invoice" style={{
@@ -19,7 +21,7 @@ export default function PrintableInvoice({ invoice }: PrintableInvoiceProps) {
             left: '-9999px',
             width: '210mm',         // A4 width
             minHeight: '297mm',     // A4 height
-            background: 'var(--card-bg)',
+            background: '#ffffff',
             padding: '20mm',
             color: 'black',
             fontFamily: 'sans-serif',
@@ -55,6 +57,7 @@ export default function PrintableInvoice({ invoice }: PrintableInvoiceProps) {
                         <th style={{ padding: '3mm', textAlign: 'left', borderBottom: '1px solid #cbd5e1', fontSize: '10pt', color: '#334155' }}>Item Description</th>
                         <th style={{ padding: '3mm', textAlign: 'center', borderBottom: '1px solid #cbd5e1', fontSize: '10pt', color: '#334155' }}>Qty</th>
                         <th style={{ padding: '3mm', textAlign: 'right', borderBottom: '1px solid #cbd5e1', fontSize: '10pt', color: '#334155' }}>Unit Price</th>
+                        {hasDiscounts && <th style={{ padding: '3mm', textAlign: 'right', borderBottom: '1px solid #cbd5e1', fontSize: '10pt', color: '#334155' }}>Discount</th>}
                         <th style={{ padding: '3mm', textAlign: 'right', borderBottom: '1px solid #cbd5e1', fontSize: '10pt', color: '#334155' }}>Total</th>
                     </tr>
                 </thead>
@@ -62,11 +65,18 @@ export default function PrintableInvoice({ invoice }: PrintableInvoiceProps) {
                     {invoice.items?.map((item: any, idx: number) => (
                         <tr key={idx}>
                             <td style={{ padding: '3mm', borderBottom: '1px solid #e2e8f0', fontSize: '10pt' }}>
-                                <strong>{item.product?.name}</strong><br/>
-                                <span style={{ fontSize: '8pt', color: '#64748b' }}>SKU: {item.product?.sku}</span>
+                                <strong>{item.product?.name ?? item.product_name ?? '—'}</strong><br/>
+                                <span style={{ fontSize: '8pt', color: '#64748b' }}>SKU: {item.product?.sku ?? item.sku ?? ''}</span>
                             </td>
                             <td style={{ padding: '3mm', textAlign: 'center', borderBottom: '1px solid #e2e8f0', fontSize: '10pt' }}>{item.quantity}</td>
                             <td style={{ padding: '3mm', textAlign: 'right', borderBottom: '1px solid #e2e8f0', fontSize: '10pt' }}>{formatCurrency(item.unit_price, invoice.currency)}</td>
+                            {hasDiscounts && (
+                                <td style={{ padding: '3mm', textAlign: 'right', borderBottom: '1px solid #e2e8f0', fontSize: '10pt', color: '#16a34a' }}>
+                                    {Number(item.discount_pct || 0) > 0
+                                        ? `${Number(item.discount_pct).toFixed(1)}% (−${formatCurrency(item.discount_amount || 0, invoice.currency)})`
+                                        : '—'}
+                                </td>
+                            )}
                             <td style={{ padding: '3mm', textAlign: 'right', borderBottom: '1px solid #e2e8f0', fontSize: '10pt' }}>{formatCurrency(item.total_price, invoice.currency)}</td>
                         </tr>
                     ))}
@@ -78,16 +88,22 @@ export default function PrintableInvoice({ invoice }: PrintableInvoiceProps) {
                 <table style={{ width: '80mm', borderCollapse: 'collapse' }}>
                     <tbody>
                         <tr>
-                            <td style={{ padding: '2mm', textAlign: 'right', fontSize: '10pt', color: '#475569' }}>Subtotal:</td>
-                            <td style={{ padding: '2mm', textAlign: 'right', fontSize: '11pt', fontWeight: 600 }}>{formatCurrency(subtotal, invoice.currency)}</td>
+                            <td style={{ padding: '2mm', textAlign: 'right', fontSize: '10pt', color: '#475569' }}>
+                                {totalDiscount > 0 ? 'Gross Subtotal:' : 'Subtotal:'}
+                            </td>
+                            <td style={{ padding: '2mm', textAlign: 'right', fontSize: '11pt', fontWeight: 600 }}>
+                                {formatCurrency(totalDiscount > 0 ? grossSubtotal : netSubtotal, invoice.currency)}
+                            </td>
                         </tr>
+                        {totalDiscount > 0 && (
+                            <tr>
+                                <td style={{ padding: '2mm', textAlign: 'right', fontSize: '10pt', color: '#16a34a' }}>Discount:</td>
+                                <td style={{ padding: '2mm', textAlign: 'right', fontSize: '11pt', fontWeight: 600, color: '#16a34a' }}>− {formatCurrency(totalDiscount, invoice.currency)}</td>
+                            </tr>
+                        )}
                         <tr>
-                            <td style={{ padding: '2mm', textAlign: 'right', fontSize: '10pt', color: '#475569', borderBottom: '1px solid #cbd5e1' }}>Tax (15%):</td>
-                            <td style={{ padding: '2mm', textAlign: 'right', fontSize: '11pt', fontWeight: 600, borderBottom: '1px solid #cbd5e1' }}>{formatCurrency(tax, invoice.currency)}</td>
-                        </tr>
-                        <tr>
-                            <td style={{ padding: '3mm 2mm', textAlign: 'right', fontSize: '12pt', fontWeight: 700, color: '#0f172a' }}>Total Amount:</td>
-                            <td style={{ padding: '3mm 2mm', textAlign: 'right', fontSize: '14pt', fontWeight: 800, color: '#0ea5e9' }}>{formatCurrency(total, invoice.currency)}</td>
+                            <td style={{ padding: '3mm 2mm', textAlign: 'right', fontSize: '12pt', fontWeight: 700, color: '#0f172a', borderTop: '1px solid #cbd5e1' }}>Total Amount:</td>
+                            <td style={{ padding: '3mm 2mm', textAlign: 'right', fontSize: '14pt', fontWeight: 800, color: '#0ea5e9', borderTop: '1px solid #cbd5e1' }}>{formatCurrency(total, invoice.currency)}</td>
                         </tr>
                     </tbody>
                 </table>

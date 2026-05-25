@@ -1,0 +1,90 @@
+group,source_label,normalized_name,material_type,unit,purchase_unit,issue_unit,bulk_unit,bulk_to_base_ratio,notes
+Pieces,ASPIMOL PLUS INNERS,Aspimol Plus Inners,Packaging Material,Pieces,,,,,Tablet/capsule pack piece
+Pieces,ASPIMOL PLUS OUTERS,Aspimol Plus Outers,Packaging Material,Pieces,,,,,Tablet/capsule pack piece
+Pieces,ASPIMOL X INNERS,Aspimol X Inners,Packaging Material,Pieces,,,,,Tablet/capsule pack piece
+Pieces,ASPIMOL X OUTERS,Aspimol X Outers,Packaging Material,Pieces,,,,,Tablet/capsule pack piece
+Pieces,EXTRA CAPSULES INNERS,Extra Capsules Inners,Packaging Material,Pieces,,,,,Tablet/capsule pack piece
+Pieces,EXTRA CAPSULES OUTERS,Extra Capsules Outers,Packaging Material,Pieces,,,,,Tablet/capsule pack piece
+Pieces,ASPIMAK CAPSULES INNERS,Aspimak Capsules Inners,Packaging Material,Pieces,,,,,Tablet/capsule pack piece
+Pieces,ASPIMOL FORTE CAPSULES INNERS,Aspimol Forte Capsules Inners,Packaging Material,Pieces,,,,,Tablet/capsule pack piece
+Pieces,ASPIMOL FORTE CAPSULES OUTERS,Aspimol Forte Capsules Outers,Packaging Material,Pieces,,,,,Tablet/capsule pack piece
+Pieces,B.CO OUTERS,B.Co Outers,Packaging Material,Pieces,,,,,Tablet/capsule pack piece
+Pieces,FOLIC ACID OUTERS,Folic Acid Outers,Packaging Material,Pieces,,,,,Tablet/capsule pack piece
+Pieces,MULTIVITE OUTERS,Multivite Outers,Packaging Material,Pieces,,,,,Tablet/capsule pack piece
+Pieces,DIAZEPAM 5 OUTERS,Diazepam 5 Outers,Packaging Material,Pieces,,,,,Tablet/capsule pack piece
+Pieces,DIAZEPAM 10 OUTERS,Diazepam 10 Outers,Packaging Material,Pieces,,,,,Tablet/capsule pack piece
+Pieces,ASCOLD OUTERS,Ascold Outers,Packaging Material,Pieces,,,,,Tablet/capsule pack piece
+Pieces,ASPITONE SYRUP OUTERS,Aspitone Syrup Outers,Packaging Material,Pieces,,,,,Syrup pack piece
+Pieces,ASPITONE SYRUP LABELS,Aspitone Syrup Labels,Packaging Material,Pieces,,,,,Syrup pack piece
+Pieces,ASPIDYNE OUTERS,Aspidyne Outers,Packaging Material,Pieces,,,,,Syrup pack piece
+Pieces,ASPIDYNE LABELS,Aspidyne Labels,Packaging Material,Pieces,,,,,Syrup pack piece
+Pieces,LISTA OUTERS,Lista Outers,Packaging Material,Pieces,,,,,Syrup pack piece
+Pieces,LISTA LABELS,Lista Labels,Packaging Material,Pieces,,,,,Syrup pack piece
+Pieces,HAEMATOSE OUTERS,Haematose Outers,Packaging Material,Pieces,,,,,Syrup pack piece
+Pieces,HAEMATOSE LABELS,Haematose Labels,Packaging Material,Pieces,,,,,Syrup pack piece
+Pieces,ASPICOF OUTERS,Aspicof Outers,Packaging Material,Pieces,,,,,Syrup pack piece
+Pieces,ASPICOF LABELS,Aspicof Labels,Packaging Material,Pieces,,,,,Syrup pack piece
+Pieces,KINDERVITE OUTERS,Kindervite Outers,Packaging Material,Pieces,,,,,Syrup pack piece
+Pieces,KINDERVITE LABELS,Kindervite Labels,Packaging Material,Pieces,,,,,Syrup pack piece
+Pieces,ASPIMOL OUTERS,Aspimol Outers,Packaging Material,Pieces,,,,,Syrup pack piece
+Pieces,ASPIMOL LABELS,Aspimol Labels,Packaging Material,Pieces,,,,,Syrup pack piece
+Pieces,CODACOF OUTERS,Codacof Outers,Packaging Material,Pieces,,,,,Syrup pack piece
+Pieces,CODACOF LABELS,Codacof Labels,Packaging Material,Pieces,,,,,Syrup pack piece
+Pieces,KINDERCOF SYRUP OUTERS,Kindercof Syrup Outers,Packaging Material,Pieces,,,,,Syrup pack piece
+Pieces,KINDERCOF SYRUP LABELS,Kindercof Syrup Labels,Packaging Material,Pieces,,,,,Syrup pack piece
+Pieces,ADULTCOF SYRUP OUTERS,Adultcof Syrup Outers,Packaging Material,Pieces,,,,,Syrup pack piece
+Pieces,ADULTCOF SYRUP LABELS,Adultcof Syrup Labels,Packaging Material,Pieces,,,,,Syrup pack piece
+Pieces,QUININE SYRUP OUTERS,Quinine Syrup Outers,Packaging Material,Pieces,,,,,Syrup pack piece
+Pieces,QUININE SYRUP LABELS,Quinine Syrup Labels,Packaging Material,Pieces,,,,,Syrup pack piece
+Pieces,ASPROLEX F SYRUP OUTERS,Asprolex F Syrup Outers,Packaging Material,Pieces,,,,,Syrup pack piece
+Pieces,ASPROLEX F SYRUP LABELS,Asprolex F Syrup Labels,Packaging Material,Pieces,,,,,Syrup pack piece
+Pieces,NASAL DROP 0.5 % INNERS,Nasal Drop 0.5% Inners,Packaging Material,Pieces,,,,,Dropper pack piece
+Pieces,NASAL DROP 0.5 % OUTERS,Nasal Drop 0.5% Outers,Packaging Material,Pieces,,,,,Dropper pack piece
+Pieces,NASAL DROP 0.5 LABELS,Nasal Drop 0.5% Labels,Packaging Material,Pieces,,,,,Dropper pack piece
+Pieces,NASAL DROP 1 % INNERS,Nasal Drop 1% Inners,Packaging Material,Pieces,,,,,Dropper pack piece
+Pieces,NASAL DROP 1%OUTERS,Nasal Drop 1% Outers,Packaging Material,Pieces,,,,,Dropper pack piece
+Pieces,NASAL DROP 1 % LABELS,Nasal Drop 1% Labels,Packaging Material,Pieces,,,,,Dropper pack piece
+Pieces,125 MLS PLSTIC BOTTLES,125ml Plastic Bottles,Packaging Material,Pieces,,,,,Primary packaging
+Pieces,125 MLS PP CUPS,125ml PP Cups,Packaging Material,Pieces,,,,,Primary packaging
+Pieces,200 MLS PLASTIC BOTTLES,200ml Plastic Bottles,Packaging Material,Pieces,,,,,Primary packaging
+Pieces,MEASURING CUPS,Measuring Cups,Packaging Material,Pieces,,,,,Primary packaging
+Weight,PVC 152,PVC 152,Packaging Material,Grams,Kilograms,Grams,,,Purchased in kg, stocked/issued in g
+Weight,PVC 174,PVC 174,Packaging Material,Grams,Kilograms,Grams,,,Purchased in kg, stocked/issued in g
+Weight,PVC 184,PVC 184,Packaging Material,Grams,Kilograms,Grams,,,Purchased in kg, stocked/issued in g
+Weight,PVC 78,PVC 78,Packaging Material,Grams,Kilograms,Grams,,,Purchased in kg, stocked/issued in g
+Weight,FOIC ACID FOIL,Folic Acid Foil,Packaging Material,Grams,Kilograms,Grams,,,Purchased in kg, stocked/issued in g
+Weight,ASTRADOL FOIL,Astradol Foil,Packaging Material,Grams,Kilograms,Grams,,,Purchased in kg, stocked/issued in g
+Weight,B.CO TABLET FOIL,B.Co Tablet Foil,Packaging Material,Grams,Kilograms,Grams,,,Purchased in kg, stocked/issued in g
+Weight,ASPIMOL PLUS FOIL,Aspimol Plus Foil,Packaging Material,Grams,Kilograms,Grams,,,Purchased in kg, stocked/issued in g
+Weight,ASPIMOL X FOIL,Aspimol X Foil,Packaging Material,Grams,Kilograms,Grams,,,Purchased in kg, stocked/issued in g
+Weight,ASPIDYNE CAPSULES FOILS,Aspidyne Capsules Foil,Packaging Material,Grams,Kilograms,Grams,,,Purchased in kg, stocked/issued in g
+Weight,HAEMATOSE FOIL,Haematose Foil,Packaging Material,Grams,Kilograms,Grams,,,Purchased in kg, stocked/issued in g
+Weight,DIAZEPAM 10 TABLET-FOIL,Diazepam 10 Tablet Foil,Packaging Material,Grams,Kilograms,Grams,,,Purchased in kg, stocked/issued in g
+Weight,DIAZEPAM 5 TABLET FOIL,Diazepam 5 Tablet Foil,Packaging Material,Grams,Kilograms,Grams,,,Purchased in kg, stocked/issued in g
+Weight,ASCOLD FOIL,Ascold Foil,Packaging Material,Grams,Kilograms,Grams,,,Purchased in kg, stocked/issued in g
+Weight,ASPIMOL FORT FOIL,Aspimol Forte Foil,Packaging Material,Grams,Kilograms,Grams,,,Purchased in kg, stocked/issued in g
+Weight,MULTIVITE FOIL,Multivite Foil,Packaging Material,Grams,Kilograms,Grams,,,Purchased in kg, stocked/issued in g
+Weight,EXTRA CAPSULES FOILS,Extra Capsules Foil,Packaging Material,Grams,Kilograms,Grams,,,Purchased in kg, stocked/issued in g
+Weight,ASPIMAK FORTE FOIL,Aspimak Forte Foil,Packaging Material,Grams,Kilograms,Grams,,,Purchased in kg, stocked/issued in g
+Weight,ASPIMAK CAPS FOIL,Aspimak Caps Foil,Packaging Material,Grams,Kilograms,Grams,,,Purchased in kg, stocked/issued in g
+Weight,ASCOLD TABLET FOIL,Ascold Tablet Foil,Packaging Material,Grams,Kilograms,Grams,,,Purchased in kg, stocked/issued in g
+Cartons,125 SYRUP,125 Syrup Carton,Packaging Material,Pieces,,,,,Carton piece
+Cartons,LISTA SYRUP,Lista Syrup Carton,Packaging Material,Pieces,,,,,Carton piece
+Cartons,ASPIDYNE SYRUP,Aspidyne Syrup Carton,Packaging Material,Pieces,,,,,Carton piece
+Cartons,ASPITONE SYRUP,Aspitone Syrup Carton,Packaging Material,Pieces,,,,,Carton piece
+Cartons,HAEMATOSE SYRUP,Haematose Syrup Carton,Packaging Material,Pieces,,,,,Carton piece
+Cartons,ASPIDYNE SYRUP (NJ),Aspidyne Syrup (NJ) Carton,Packaging Material,Pieces,,,,,Carton piece
+Cartons,NASAL DROP 1%,Nasal Drop 1% Carton,Packaging Material,Pieces,,,,,Carton piece
+Cartons,NASAL DROP 0.5 %,Nasal Drop 0.5% Carton,Packaging Material,Pieces,,,,,Carton piece
+Cartons,SDA,SDA Carton,Packaging Material,Pieces,,,,,Carton piece
+Cartons,125 ML SYRUP ( NJ),125ml Syrup (NJ) Carton,Packaging Material,Pieces,,,,,Carton piece
+Cartons,MULTIVITE TABLET,Multivite Tablet Carton,Packaging Material,Pieces,,,,,Carton piece
+Cartons,FOLIC ACID TABLET,Folic Acid Tablet Carton,Packaging Material,Pieces,,,,,Carton piece
+Cartons,B.CO TABLET,B.Co Tablet Carton,Packaging Material,Pieces,,,,,Carton piece
+Cartons,ASPIMAK TABLET,Aspimak Tablet Carton,Packaging Material,Pieces,,,,,Carton piece
+Cartons,ASPIMOL PLUS TABLET,Aspimol Plus Tablet Carton,Packaging Material,Pieces,,,,,Carton piece
+Cartons,ASPIMOL X TABLET,Aspimol X Tablet Carton,Packaging Material,Pieces,,,,,Carton piece
+Cartons,DIAZEPAM 10 TABLET,Diazepam 10 Tablet Carton,Packaging Material,Pieces,,,,,Carton piece
+Cartons,DIAZEPAM 5 TABLET,Diazepam 5 Tablet Carton,Packaging Material,Pieces,,,,,Carton piece
+Cartons,EXTRA TABLET,Extra Tablet Carton,Packaging Material,Pieces,,,,,Carton piece
+Cartons,ASTRADOL - P TABLET,Astradol-P Tablet Carton,Packaging Material,Pieces,,,,,Carton piece

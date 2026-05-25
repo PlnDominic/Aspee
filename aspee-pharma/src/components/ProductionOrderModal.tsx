@@ -25,6 +25,8 @@ interface Product {
     name: string;
     sku: string;
     unit: string;
+    bulk_unit?: string | null;
+    bulk_to_base_ratio?: number | null;
     material_type: string;
 }
 
@@ -122,7 +124,7 @@ export default function ProductionOrderModal({ isOpen, onClose, onSave, initialD
             // Step 2: Fetch BOM items with component details
             const { data: items, error: itemsError } = await supabase
                 .from('bom_items')
-                .select('*, component:products(id, name, sku, unit, material_type)')
+                .select('*, component:products(id, name, sku, unit, bulk_unit, bulk_to_base_ratio, material_type)')
                 .eq('bom_id', bom.id)
                 .order('position');
 
@@ -170,9 +172,13 @@ export default function ProductionOrderModal({ isOpen, onClose, onSave, initialD
         const date = new Date();
         const year = date.getFullYear().toString().slice(-2);
         const month = (date.getMonth() + 1).toString().padStart(2, '0');
-        const random = Math.floor(1000 + Math.random() * 9000);
-        setOrderNumber(`PRD-${year}${month}-${random}`);
-    };
+    const day = date.getDate().toString().padStart(2, '0');
+    const hours = date.getHours().toString().padStart(2, '0');
+    const minutes = date.getMinutes().toString().padStart(2, '0');
+    const seconds = date.getSeconds().toString().padStart(2, '0');
+    const ms = date.getMilliseconds().toString().padStart(3, '0');
+    setOrderNumber(`PRD-${year}${month}${day}-${hours}${minutes}${seconds}${ms}`);
+  };
 
     const resetForm = () => {
         setOrderNumber('');
@@ -451,13 +457,29 @@ export default function ProductionOrderModal({ isOpen, onClose, onSave, initialD
                                                 </td>
                                                 <td>
                                                     <div className="qty-required">{item.quantity_required}</div>
+                                                    {item.product?.bulk_unit && item.product?.bulk_to_base_ratio && (
+                                                        <div style={{ fontSize: 10, color: 'var(--primary-600)', fontWeight: 500 }}>
+                                                            ≈ {(item.quantity_required / item.product.bulk_to_base_ratio % 1 === 0
+                                                                ? (item.quantity_required / item.product.bulk_to_base_ratio).toLocaleString()
+                                                                : (item.quantity_required / item.product.bulk_to_base_ratio).toLocaleString(undefined, { maximumFractionDigits: 2 })
+                                                            )} {item.product.bulk_unit}
+                                                        </div>
+                                                    )}
                                                 </td>
                                                 <td>
                                                     <div className="qty-total">{(item.quantity_required * quantity).toLocaleString()}</div>
+                                                    {item.product?.bulk_unit && item.product?.bulk_to_base_ratio && (
+                                                        <div style={{ fontSize: 10, color: 'var(--primary-600)', fontWeight: 500 }}>
+                                                            ≈ {((item.quantity_required * quantity) / item.product.bulk_to_base_ratio % 1 === 0
+                                                                ? ((item.quantity_required * quantity) / item.product.bulk_to_base_ratio).toLocaleString()
+                                                                : ((item.quantity_required * quantity) / item.product.bulk_to_base_ratio).toLocaleString(undefined, { maximumFractionDigits: 2 })
+                                                            )} {item.product.bulk_unit}
+                                                        </div>
+                                                    )}
                                                 </td>
                                                 <td>
-                                                    <div style={{ 
-                                                        fontWeight: 700, 
+                                                    <div style={{
+                                                        fontWeight: 700,
                                                         color: (item.quantity_available || 0) >= (item.quantity_required * quantity) ? 'var(--success-600)' : 'var(--danger)',
                                                         fontSize: 12
                                                     }}>
@@ -506,12 +528,28 @@ export default function ProductionOrderModal({ isOpen, onClose, onSave, initialD
                                                 </td>
                                                 <td>
                                                     <div className="qty-required">{item.quantity_required}</div>
+                                                    {item.product?.bulk_unit && item.product?.bulk_to_base_ratio && (
+                                                        <div style={{ fontSize: 10, color: 'var(--primary-600)', fontWeight: 500 }}>
+                                                            ≈ {(item.quantity_required / item.product.bulk_to_base_ratio % 1 === 0
+                                                                ? (item.quantity_required / item.product.bulk_to_base_ratio).toLocaleString()
+                                                                : (item.quantity_required / item.product.bulk_to_base_ratio).toLocaleString(undefined, { maximumFractionDigits: 2 })
+                                                            )} {item.product.bulk_unit}
+                                                        </div>
+                                                    )}
                                                 </td>
                                                 <td>
                                                     <div className="qty-total">{(item.quantity_required * quantity).toLocaleString()}</div>
+                                                    {item.product?.bulk_unit && item.product?.bulk_to_base_ratio && (
+                                                        <div style={{ fontSize: 10, color: 'var(--primary-600)', fontWeight: 500 }}>
+                                                            ≈ {((item.quantity_required * quantity) / item.product.bulk_to_base_ratio % 1 === 0
+                                                                ? ((item.quantity_required * quantity) / item.product.bulk_to_base_ratio).toLocaleString()
+                                                                : ((item.quantity_required * quantity) / item.product.bulk_to_base_ratio).toLocaleString(undefined, { maximumFractionDigits: 2 })
+                                                            )} {item.product.bulk_unit}
+                                                        </div>
+                                                    )}
                                                 </td>
                                                 <td>
-                                                    <div style={{ 
+                                                    <div style={{
                                                         fontWeight: 700, 
                                                         color: (item.quantity_available || 0) >= (item.quantity_required * quantity) ? 'var(--success-600)' : 'var(--danger)',
                                                         fontSize: 12

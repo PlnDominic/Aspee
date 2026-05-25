@@ -1,25 +1,102 @@
 'use client';
 
 import React, { useState, useCallback, useEffect } from 'react';
-import { useSupabaseQuery } from '@/lib/hooks';
+import { useFetch } from '@/lib/hooks';
 import { useQueryClient } from '@tanstack/react-query';
 import PageHeader from '@/components/PageHeader';
 import DataTable from '@/components/DataTable';
 import StatusBadge from '@/components/StatusBadge';
 import QAInProcessModal from '@/components/QAInProcessModal';
-import { Plus, FileCheck, Download, ShieldCheck, CheckCircle, XCircle, Clock } from 'lucide-react';
+import EntityLink from '@/components/EntityLink';
+import { Plus, Download, ShieldCheck, CheckCircle, XCircle, Clock, Microscope, AlertTriangle } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
+import { useRouter } from 'next/navigation';
+import Modal from '@/components/Modal';
 
 export default function QAInProcessPage() {
-    const { data, isLoading } = useSupabaseQuery<any>('qa_in_process', {
-        columns: `*, production_order:production_orders(order_number)`
-    });
-    const records = data ?? [];
+    // Fetch IPC records with a plain select — no FK join so it works even
+    // if migration_production_qa_link.sql has not yet been applied.
+    const { data: ipcData, isLoading } = useFetch<any[]>(
+        ['qa_in_process'],
+        async () => {
+            const { data, error } = await supabase
+                .from('qa_in_process')
+                .select('*')
+                .order('created_at', { ascending: false });
+            return { data: data || [], error };
+        }
+    );
+    const records = ipcData ?? [];
+
+    // Separately fetch production orders just for the "Job Order" column display.
+    const { data: productionOrders = [] } = useFetch<any[]>(
+        ['production_orders_basic'],
+        async () => {
+            const { data, error } = await supabase
+                .from('production_orders')
+                .select('id, order_number');
+            return { data: data || [], error };
+        }
+    );
+
     const queryClient = useQueryClient();
+    const router = useRouter();
 
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedRecord, setSelectedRecord] = useState<any | null>(null);
+
+    // NCR-raising state
+    const [isNCRModalOpen, setIsNCRModalOpen] = useState(false);
+    const [ncrSaving, setNcrSaving] = useState(false);
+    const [ncrForm, setNcrForm] = useState({
+        ncr_number: '', department: 'Quality Assurance', description: '',
+        root_cause: '', corrective_action: '', raised_date: new Date().toISOString().split('T')[0],
+        due_date: '', raised_by: '', severity: 'Major', status: 'Open',
+    });
+
+    const openNCRModal = (ipcRecord: any) => {
+        const order = (productionOrders as any[]).find(o => o.id === ipcRecord.production_order_id);
+        const d = new Date();
+        const ncr_number = `NCR-${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}-${Math.floor(1000+Math.random()*9000)}`;
+        const description =
+            `IPC Failure — Batch: ${ipcRecord.batch_number} | Product: ${ipcRecord.product_name} | Stage: ${ipcRecord.stage}` +
+            (order ? ` | Job Order: ${order.order_number}` : '') +
+            `\n\nParameters Checked: ${ipcRecord.parameters_checked || '—'}` +
+            `\nResults: ${ipcRecord.results || '—'}` +
+            (ipcRecord.notes ? `\nNotes: ${ipcRecord.notes}` : '');
+        setNcrForm({
+            ncr_number,
+            department: 'Quality Assurance',
+            description,
+            root_cause: '',
+            corrective_action: '',
+            raised_date: new Date().toISOString().split('T')[0],
+            due_date: '',
+            raised_by: '',
+            severity: 'Major',
+            status: 'Open',
+        });
+        setIsNCRModalOpen(true);
+    };
+
+    const handleRaiseNCR = async () => {
+        if (!ncrForm.ncr_number || !ncrForm.raised_date) {
+            toast.error('NCR number and raised date are required');
+            return;
+        }
+        setNcrSaving(true);
+        try {
+            const { error } = await supabase.from('non_conformances').insert(ncrForm);
+            if (error) throw error;
+            toast.success(`NCR ${ncrForm.ncr_number} raised — go to Internal Audit → Non-Conformances to track it`);
+            setIsNCRModalOpen(false);
+        } catch (err: any) {
+            toast.error('Failed to raise NCR: ' + err.message);
+        } finally {
+            setNcrSaving(false);
+        }
+    };
 
     // Pending material requests awaiting QA
     const [pendingMaterialRequests, setPendingMaterialRequests] = useState<any[]>([]);
@@ -134,11 +211,14 @@ export default function QAInProcessPage() {
 
     const columns = [
         {
-            key: 'production_order',
+            key: 'production_order_id',
             label: 'Job Order',
-            render: (value: any) => value?.order_number 
-                ? <span style={{ display:'inline-flex', alignItems:'center', gap:4, fontSize:11, color:'var(--primary-600)', fontWeight:600 }}>{value.order_number}</span>
-                : <span style={{ fontSize:10, color:'var(--slate-400)' }}>-</span>
+            render: (value: any) => {
+                const order = (productionOrders as any[]).find(o => o.id === value);
+                return order?.order_number
+                    ? <EntityLink href={`/production?search=${encodeURIComponent(order.order_number)}`} mono>{order.order_number}</EntityLink>
+                    : <span style={{ fontSize:10, color:'var(--slate-400)' }}>—</span>;
+            }
         },
         {
             key: 'batch_number',
@@ -161,6 +241,51 @@ export default function QAInProcessPage() {
             key: 'inspection_date',
             label: 'Date',
             render: (value: any) => value ? new Date(value).toLocaleDateString() : '-'
+        },
+        {
+            key: 'ipc_actions',
+            label: '',
+            render: (_: any, row: any) => {
+                if (row.status === 'Passed') {
+                    return (
+                        <button
+                            onClick={(e) => { e.stopPropagation(); router.push(`/qa/finished-products?search=${encodeURIComponent(row.batch_number)}`); }}
+                            title="Go to Finished Products Analysis for this batch"
+                            style={{
+                                display: 'flex', alignItems: 'center', gap: 4,
+                                padding: '4px 10px', borderRadius: 6,
+                                border: '1px solid var(--teal-300, #5eead4)',
+                                background: 'var(--teal-50, #f0fdfa)',
+                                color: 'var(--teal-700, #0f766e)',
+                                fontSize: 10, fontWeight: 600, cursor: 'pointer',
+                                whiteSpace: 'nowrap',
+                            }}
+                        >
+                            <Microscope size={11} /> FP Analysis
+                        </button>
+                    );
+                }
+                if (row.status === 'Failed') {
+                    return (
+                        <button
+                            onClick={(e) => { e.stopPropagation(); openNCRModal(row); }}
+                            title="Raise a Non-Conformance Report for this failure"
+                            style={{
+                                display: 'flex', alignItems: 'center', gap: 4,
+                                padding: '4px 10px', borderRadius: 6,
+                                border: '1px solid #fca5a5',
+                                background: '#fef2f2',
+                                color: '#b91c1c',
+                                fontSize: 10, fontWeight: 600, cursor: 'pointer',
+                                whiteSpace: 'nowrap',
+                            }}
+                        >
+                            <AlertTriangle size={11} /> Raise NCR
+                        </button>
+                    );
+                }
+                return null;
+            }
         }
     ];
 
@@ -332,6 +457,100 @@ export default function QAInProcessPage() {
                 onSave={handleSave}
                 record={selectedRecord}
             />
+
+            {/* ── Raise NCR Modal ──────────────────────────────────────── */}
+            <Modal
+                isOpen={isNCRModalOpen}
+                onClose={() => setIsNCRModalOpen(false)}
+                title="Raise Non-Conformance Report"
+                subtitle="Pre-filled from the failed IPC record — review and submit"
+                width={620}
+            >
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+
+                    {/* Red alert banner */}
+                    <div style={{
+                        display: 'flex', alignItems: 'center', gap: 10,
+                        padding: '10px 14px', borderRadius: 8,
+                        background: '#fef2f2', border: '1px solid #fca5a5',
+                        fontSize: 12, color: '#b91c1c', fontWeight: 600,
+                    }}>
+                        <AlertTriangle size={15} />
+                        This NCR will be tracked under Internal Audit → Non-Conformances
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                        {[
+                            { label: 'NCR Number', key: 'ncr_number', type: 'text' },
+                            { label: 'Department', key: 'department', type: 'text' },
+                            { label: 'Raised By', key: 'raised_by', type: 'text' },
+                            { label: 'Raised Date', key: 'raised_date', type: 'date' },
+                            { label: 'Due Date', key: 'due_date', type: 'date' },
+                        ].map(f => (
+                            <div key={f.key}>
+                                <label style={{ fontSize: 11, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>{f.label}</label>
+                                <input
+                                    type={f.type}
+                                    value={(ncrForm as any)[f.key]}
+                                    onChange={e => setNcrForm(p => ({ ...p, [f.key]: e.target.value }))}
+                                    style={{ width: '100%', padding: '8px 10px', borderRadius: 7, border: '1px solid #e2e8f0', fontSize: 11, outline: 'none', boxSizing: 'border-box' }}
+                                />
+                            </div>
+                        ))}
+                        <div>
+                            <label style={{ fontSize: 11, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>Severity</label>
+                            <select
+                                value={ncrForm.severity}
+                                onChange={e => setNcrForm(p => ({ ...p, severity: e.target.value }))}
+                                style={{ width: '100%', padding: '8px 10px', borderRadius: 7, border: '1px solid #e2e8f0', fontSize: 11, outline: 'none', background: 'var(--card-bg)' }}
+                            >
+                                <option>Minor</option>
+                                <option>Major</option>
+                                <option>Critical</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    {[
+                        { label: 'Description (auto-filled from IPC record)', key: 'description', rows: 4 },
+                        { label: 'Root Cause', key: 'root_cause', rows: 2 },
+                        { label: 'Corrective Action', key: 'corrective_action', rows: 2 },
+                    ].map(f => (
+                        <div key={f.key}>
+                            <label style={{ fontSize: 11, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>{f.label}</label>
+                            <textarea
+                                rows={f.rows}
+                                value={(ncrForm as any)[f.key]}
+                                onChange={e => setNcrForm(p => ({ ...p, [f.key]: e.target.value }))}
+                                style={{ width: '100%', padding: '8px 10px', borderRadius: 7, border: '1px solid #e2e8f0', fontSize: 11, outline: 'none', resize: 'vertical', boxSizing: 'border-box' }}
+                            />
+                        </div>
+                    ))}
+
+                    <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', paddingTop: 4, borderTop: '1px solid #e2e8f0' }}>
+                        <button
+                            onClick={() => setIsNCRModalOpen(false)}
+                            style={{ padding: '8px 18px', borderRadius: 7, border: '1px solid #e2e8f0', background: 'transparent', fontSize: 12, cursor: 'pointer', color: '#64748b' }}
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            onClick={handleRaiseNCR}
+                            disabled={ncrSaving}
+                            style={{
+                                display: 'flex', alignItems: 'center', gap: 6,
+                                padding: '8px 20px', borderRadius: 7, border: 'none',
+                                background: '#dc2626', color: 'white',
+                                fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                                opacity: ncrSaving ? 0.7 : 1,
+                            }}
+                        >
+                            <AlertTriangle size={13} />
+                            {ncrSaving ? 'Raising NCR…' : 'Raise NCR'}
+                        </button>
+                    </div>
+                </div>
+            </Modal>
         </div>
     );
 }

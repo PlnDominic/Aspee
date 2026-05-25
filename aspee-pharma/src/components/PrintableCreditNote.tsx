@@ -19,7 +19,7 @@ export default function PrintableCreditNote({ creditNote }: PrintableCreditNoteP
             left: '-9999px',
             width: '210mm',
             minHeight: '297mm',
-            background: 'var(--card-bg)',
+            background: '#ffffff',
             padding: '20mm',
             color: 'black',
             fontFamily: 'sans-serif',

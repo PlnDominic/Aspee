@@ -1,24 +1,37 @@
 -- Fix RLS policies for bom_items table
 -- Run this in your Supabase SQL editor
+-- This project performs inserts from the browser client, so `anon`
+-- must be allowed in addition to `authenticated`.
 
--- Allow authenticated users full access to bom_items
-CREATE POLICY "Allow authenticated insert on bom_items"
-    ON bom_items FOR INSERT
-    TO authenticated
-    WITH CHECK (true);
+ALTER TABLE IF EXISTS bom_items ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Allow authenticated select on bom_items"
+DROP POLICY IF EXISTS "Allow authenticated insert on bom_items" ON bom_items;
+DROP POLICY IF EXISTS "Allow authenticated select on bom_items" ON bom_items;
+DROP POLICY IF EXISTS "Allow authenticated update on bom_items" ON bom_items;
+DROP POLICY IF EXISTS "Allow authenticated delete on bom_items" ON bom_items;
+DROP POLICY IF EXISTS "Enable all for all on bom_items" ON bom_items;
+DROP POLICY IF EXISTS "Allow app insert on bom_items" ON bom_items;
+DROP POLICY IF EXISTS "Allow app select on bom_items" ON bom_items;
+DROP POLICY IF EXISTS "Allow app update on bom_items" ON bom_items;
+DROP POLICY IF EXISTS "Allow app delete on bom_items" ON bom_items;
+
+CREATE POLICY "Allow app select on bom_items"
     ON bom_items FOR SELECT
-    TO authenticated
+    TO anon, authenticated
     USING (true);
 
-CREATE POLICY "Allow authenticated update on bom_items"
+CREATE POLICY "Allow app insert on bom_items"
+    ON bom_items FOR INSERT
+    TO anon, authenticated
+    WITH CHECK (true);
+
+CREATE POLICY "Allow app update on bom_items"
     ON bom_items FOR UPDATE
-    TO authenticated
+    TO anon, authenticated
     USING (true)
     WITH CHECK (true);
 
-CREATE POLICY "Allow authenticated delete on bom_items"
+CREATE POLICY "Allow app delete on bom_items"
     ON bom_items FOR DELETE
-    TO authenticated
+    TO anon, authenticated
     USING (true);

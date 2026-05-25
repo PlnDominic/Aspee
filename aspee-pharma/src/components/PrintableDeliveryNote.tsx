@@ -38,7 +38,7 @@ export default function PrintableDeliveryNote({ dispatch }: PrintableDeliveryNot
                             </div>
                             <div className="meta-item">
                                 <span className="label">Van:</span>
-                                <span className="value">{dispatch.van?.name} ({dispatch.van?.license_plate})</span>
+                                <span className="value">{dispatch.van?.driver_name} · {dispatch.van?.van_id} ({dispatch.van?.plate_number})</span>
                             </div>
                         </div>
                     </div>

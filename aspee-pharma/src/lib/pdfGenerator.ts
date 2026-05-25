@@ -18,12 +18,11 @@ export const generatePDF = async (elementId: string, filename: string) => {
     // Capture the element as a canvas
     // scale: 2 improves resolution on high DPI screens
     try {
-        const canvas = await html2canvas(element, { 
+        const canvas = await html2canvas(element, {
             scale: 2,
-            useCORS: true, 
+            useCORS: true,
             logging: false,
-            // Ensure background is specifically white if transparent
-            backgroundColor: 'var(--card-bg)'
+            backgroundColor: '#ffffff'
         });
 
         const imgData = canvas.toDataURL('image/png');

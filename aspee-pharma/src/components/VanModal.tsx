@@ -4,12 +4,14 @@ import React, { useState, useEffect } from 'react';
 import Modal from './Modal';
 import { Truck, User, Phone, MapPin, Hash, Banknote, Activity, FileText } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { ensureVanStockLocation } from '@/lib/vanStock';
 
 interface VanModalProps {
     isOpen: boolean;
     onClose: () => void;
     onSuccess: () => void;
     record?: any;
+    readOnly?: boolean;
 }
 
 const initialForm = {
@@ -19,13 +21,17 @@ const initialForm = {
     driver_phone: '',
     route_area: '',
     loaded_value: 0,
+    customer_count: 0,
     status: 'At Depot',
     notes: '',
 };
 
-export default function VanModal({ isOpen, onClose, onSuccess, record }: VanModalProps) {
+export default function VanModal({ isOpen, onClose, onSuccess, record, readOnly }: VanModalProps) {
     const [formData, setFormData] = useState(initialForm);
     const [loading, setLoading] = useState(false);
+    const [customers, setCustomers] = useState<any[]>([]);
+    const [selectedCustomerIds, setSelectedCustomerIds] = useState<string[]>([]);
+    const [salesUsers, setSalesUsers] = useState<any[]>([]);
 
     const isEditing = !!record;
 
@@ -38,13 +44,34 @@ export default function VanModal({ isOpen, onClose, onSuccess, record }: VanModa
                 driver_phone: record.driver_phone || '',
                 route_area: record.route_area || '',
                 loaded_value: record.loaded_value || 0,
+                customer_count: record.customer_count || 0,
                 status: record.status || 'At Depot',
                 notes: record.notes || '',
             });
+            setSelectedCustomerIds(Array.isArray(record.assigned_customer_ids) ? record.assigned_customer_ids : []);
         } else {
             generateVanId();
+            setSelectedCustomerIds([]);
         }
     }, [record, isOpen]);
+
+    useEffect(() => {
+        supabase
+            .from('customers')
+            .select('id, name, route, status')
+            .eq('status', 'Active')
+            .order('name', { ascending: true })
+            .then(({ data }) => setCustomers(data || []));
+
+        supabase
+            .from('system_users')
+            .select('id, name')
+            .eq('status', 'Active')
+            .in('role', ['Van Sales Rep', 'Sales Manager'])
+            .not('name', 'is', null)
+            .order('name', { ascending: true })
+            .then(({ data }) => setSalesUsers((data || []).filter((u: any) => u.name?.trim())));
+    }, []);
 
     const generateVanId = async () => {
         try {
@@ -73,8 +100,13 @@ export default function VanModal({ isOpen, onClose, onSuccess, record }: VanModa
         e.preventDefault();
         setLoading(true);
         try {
+            const payload = {
+                ...formData,
+                assigned_customer_ids: selectedCustomerIds,
+                customer_count: selectedCustomerIds.length,
+            };
             if (isEditing) {
-                const { van_id, ...updateData } = formData;
+                const { van_id, ...updateData } = payload;
                 const { error } = await supabase
                     .from('vans')
                     .update(updateData)
@@ -83,9 +115,17 @@ export default function VanModal({ isOpen, onClose, onSuccess, record }: VanModa
             } else {
                 const { error } = await supabase
                     .from('vans')
-                    .insert([formData]);
+                    .insert([payload]);
                 if (error) throw error;
             }
+
+            await ensureVanStockLocation({
+                id: record?.id || crypto.randomUUID(),
+                van_id: payload.van_id,
+                driver_name: payload.driver_name,
+                route_area: payload.route_area,
+            });
+
             onSuccess();
             onClose();
         } catch (error) {
@@ -95,12 +135,22 @@ export default function VanModal({ isOpen, onClose, onSuccess, record }: VanModa
         }
     };
 
+    const routeMatchedCustomers = customers.filter(
+        (c) => c.route && formData.route_area && c.route.toLowerCase().trim() === formData.route_area.toLowerCase().trim()
+    );
+
+    const toggleCustomer = (customerId: string) => {
+        setSelectedCustomerIds((prev) =>
+            prev.includes(customerId) ? prev.filter((id) => id !== customerId) : [...prev, customerId]
+        );
+    };
+
     return (
         <Modal
             isOpen={isOpen}
             onClose={onClose}
-            title={isEditing ? 'Edit Van' : 'Add New Van'}
-            subtitle={isEditing ? 'Update the van and driver details below' : 'Register a new van for route operations'}
+            title={readOnly ? 'View Van' : isEditing ? 'Edit Van' : 'Add New Van'}
+            subtitle={readOnly ? 'Van and sales person details' : isEditing ? 'Update the van and sales person details below' : 'Register a new van for route operations'}
             width={640}
         >
             <form onSubmit={handleSubmit}>
@@ -142,39 +192,52 @@ export default function VanModal({ isOpen, onClose, onSuccess, record }: VanModa
                                     onChange={(e) => setFormData({ ...formData, plate_number: e.target.value })}
                                     placeholder="e.g. GR-1234-24"
                                     className="van-form-input has-icon"
+                                    readOnly={readOnly}
                                 />
                             </div>
                         </div>
                     </div>
                 </div>
 
-                {/* Driver Info */}
+                {/* Sales Person Info */}
                 <div className="van-form-section">
                     <div className="van-form-section-header">
                         <User size={15} />
-                        <span>Driver Information</span>
+                        <span>Sales Person Details</span>
                     </div>
 
                     <div className="van-form-row">
                         <div className="van-form-field">
                             <label className="van-form-label">
-                                Driver Name <span className="van-form-required">*</span>
+                                Sales Person Name <span className="van-form-required">*</span>
                             </label>
                             <div className="van-form-input-wrapper">
                                 <User size={16} className="van-form-input-icon" />
-                                <input
-                                    required
-                                    type="text"
-                                    value={formData.driver_name}
-                                    onChange={(e) => setFormData({ ...formData, driver_name: e.target.value })}
-                                    placeholder="e.g. Kwame Mensah"
-                                    className="van-form-input has-icon"
-                                />
+                                {readOnly ? (
+                                    <input
+                                        type="text"
+                                        value={formData.driver_name}
+                                        readOnly
+                                        className="van-form-input has-icon"
+                                    />
+                                ) : (
+                                    <select
+                                        required
+                                        value={formData.driver_name}
+                                        onChange={(e) => setFormData({ ...formData, driver_name: e.target.value })}
+                                        className="van-form-input has-icon"
+                                    >
+                                        <option value="">Select sales person</option>
+                                        {salesUsers.map((user) => (
+                                            <option key={user.id} value={user.name}>{user.name}</option>
+                                        ))}
+                                    </select>
+                                )}
                             </div>
                         </div>
 
                         <div className="van-form-field">
-                            <label className="van-form-label">Driver Phone</label>
+                            <label className="van-form-label">Sales Person Phone</label>
                             <div className="van-form-input-wrapper">
                                 <Phone size={16} className="van-form-input-icon" />
                                 <input
@@ -183,6 +246,7 @@ export default function VanModal({ isOpen, onClose, onSuccess, record }: VanModa
                                     onChange={(e) => setFormData({ ...formData, driver_phone: e.target.value })}
                                     placeholder="+233 XX XXX XXXX"
                                     className="van-form-input has-icon"
+                                    readOnly={readOnly}
                                 />
                             </div>
                         </div>
@@ -197,7 +261,7 @@ export default function VanModal({ isOpen, onClose, onSuccess, record }: VanModa
                     </div>
 
                     <div className="van-form-row">
-                        <div className="van-form-field">
+                        <div className={`van-form-field ${!(isEditing || readOnly) ? 'full-width' : ''}`}>
                             <label className="van-form-label">
                                 Route Area <span className="van-form-required">*</span>
                             </label>
@@ -210,47 +274,54 @@ export default function VanModal({ isOpen, onClose, onSuccess, record }: VanModa
                                     onChange={(e) => setFormData({ ...formData, route_area: e.target.value })}
                                     placeholder="e.g. Kumasi Central"
                                     className="van-form-input has-icon"
+                                    readOnly={readOnly}
                                 />
                             </div>
                         </div>
 
-                        <div className="van-form-field">
-                            <label className="van-form-label">Loaded Value (GH₵)</label>
-                            <div className="van-form-input-wrapper">
-                                <Banknote size={16} className="van-form-input-icon" />
-                                <input
-                                    type="number"
-                                    min="0"
-                                    step="0.01"
-                                    value={formData.loaded_value}
-                                    onChange={(e) => setFormData({ ...formData, loaded_value: parseFloat(e.target.value) || 0 })}
-                                    placeholder="0.00"
-                                    className="van-form-input has-icon"
-                                />
+                        {(isEditing || readOnly) && (
+                            <div className="van-form-field">
+                                <label className="van-form-label">Loaded Value (GH₵)</label>
+                                <div className="van-form-input-wrapper">
+                                    <Banknote size={16} className="van-form-input-icon" />
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        step="0.01"
+                                        value={formData.loaded_value}
+                                        onChange={(e) => setFormData({ ...formData, loaded_value: parseFloat(e.target.value) || 0 })}
+                                        placeholder="0.00"
+                                        className="van-form-input has-icon"
+                                        readOnly={readOnly}
+                                    />
+                                </div>
                             </div>
-                        </div>
+                        )}
                     </div>
 
                     <div className="van-form-row" style={{ marginTop: 14 }}>
-                        <div className="van-form-field">
-                            <label className="van-form-label">Status</label>
-                            <div className="van-form-input-wrapper">
-                                <Activity size={16} className="van-form-input-icon" />
-                                <select
-                                    value={formData.status}
-                                    onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-                                    className="van-form-input has-icon"
-                                >
-                                    <option value="At Depot">At Depot</option>
-                                    <option value="Loading">Loading</option>
-                                    <option value="On Route">On Route</option>
-                                    <option value="Returning">Returning</option>
-                                    <option value="Maintenance">Maintenance</option>
-                                </select>
+                        {(isEditing || readOnly) && (
+                            <div className="van-form-field">
+                                <label className="van-form-label">Status</label>
+                                <div className="van-form-input-wrapper">
+                                    <Activity size={16} className="van-form-input-icon" />
+                                    <select
+                                        value={formData.status}
+                                        onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+                                        className="van-form-input has-icon"
+                                        disabled={readOnly}
+                                    >
+                                        <option value="At Depot">At Depot</option>
+                                        <option value="Loading">Loading</option>
+                                        <option value="On Route">On Route</option>
+                                        <option value="Returning">Returning</option>
+                                        <option value="Maintenance">Maintenance</option>
+                                    </select>
+                                </div>
                             </div>
-                        </div>
+                        )}
 
-                        <div className="van-form-field">
+                        <div className={`van-form-field ${(isEditing || readOnly) ? '' : 'full-width'}`}>
                             <label className="van-form-label">Notes</label>
                             <div className="van-form-input-wrapper">
                                 <FileText size={16} className="van-form-input-icon" />
@@ -260,7 +331,56 @@ export default function VanModal({ isOpen, onClose, onSuccess, record }: VanModa
                                     onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                                     placeholder="Optional notes..."
                                     className="van-form-input has-icon"
+                                    readOnly={readOnly}
                                 />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="van-form-row" style={{ marginTop: 14, gridTemplateColumns: '1fr' }}>
+                        <div className="van-form-field">
+                            <label className="van-form-label">Assigned Customers (Route Matched)</label>
+                            <div
+                                style={{
+                                    maxHeight: 160,
+                                    overflowY: 'auto',
+                                    border: '1.5px solid var(--slate-200)',
+                                    borderRadius: 10,
+                                    padding: 8,
+                                    background: 'var(--card-bg)',
+                                }}
+                            >
+                                {routeMatchedCustomers.length === 0 ? (
+                                    <div style={{ fontSize: 11, color: 'var(--slate-500)', padding: 6 }}>
+                                        No active customers found for this route.
+                                    </div>
+                                ) : (
+                                    routeMatchedCustomers.map((customer) => (
+                                        <label
+                                            key={customer.id}
+                                            style={{
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: 8,
+                                                fontSize: 11,
+                                                color: 'var(--slate-700)',
+                                                padding: '6px 4px',
+                                                cursor: 'pointer',
+                                            }}
+                                        >
+                                            <input
+                                                type="checkbox"
+                                                checked={selectedCustomerIds.includes(customer.id)}
+                                                onChange={() => toggleCustomer(customer.id)}
+                                                disabled={readOnly}
+                                            />
+                                            <span>{customer.name}</span>
+                                        </label>
+                                    ))
+                                )}
+                            </div>
+                            <div style={{ fontSize: 10, color: 'var(--slate-500)', marginTop: 6 }}>
+                                Selected customers: {selectedCustomerIds.length}
                             </div>
                         </div>
                     </div>
@@ -273,20 +393,22 @@ export default function VanModal({ isOpen, onClose, onSuccess, record }: VanModa
                         onClick={onClose}
                         className="van-btn-cancel"
                     >
-                        Cancel
+                        {readOnly ? 'Close' : 'Cancel'}
                     </button>
-                    <button
-                        type="submit"
-                        disabled={loading}
-                        className="van-btn-submit"
-                    >
-                        {loading ? (
-                            <>
-                                <span className="van-btn-spinner" />
-                                Saving...
-                            </>
-                        ) : isEditing ? 'Update Van' : 'Add Van'}
-                    </button>
+                    {!readOnly && (
+                        <button
+                            type="submit"
+                            disabled={loading}
+                            className="van-btn-submit"
+                        >
+                            {loading ? (
+                                <>
+                                    <span className="van-btn-spinner" />
+                                    Saving...
+                                </>
+                            ) : isEditing ? 'Update Van' : 'Add Van'}
+                        </button>
+                    )}
                 </div>
             </form>
 

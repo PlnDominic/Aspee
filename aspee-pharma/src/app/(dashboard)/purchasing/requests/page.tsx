@@ -12,17 +12,23 @@ import {
     Eye,
     AlertCircle,
     ShoppingBag,
-    ArrowRight
+    FileText,
+    Edit2,
+    Trash2
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import PurchaseRequestViewModal from '@/components/PurchaseRequestViewModal';
+import PrintablePurchaseRequisition from '@/components/PrintablePurchaseRequisition';
+import PurchaseRequestModal from '@/components/PurchaseRequestModal';
 
 export default function PurchasingRequestsPage() {
     const [requests, setRequests] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [selectedRequest, setSelectedRequest] = useState<any>(null);
     const [isViewModalOpen, setIsViewModalOpen] = useState(false);
+    const [isPdfModalOpen, setIsPdfModalOpen] = useState(false);
+    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
     const fetchRequests = useCallback(async () => {
         setLoading(true);
@@ -53,6 +59,24 @@ export default function PurchasingRequestsPage() {
     const handleReject = (id: string) => {
         toast.warning(`Request ${id} rejected`);
         fetchRequests();
+    };
+
+    const handleDelete = async (row: any) => {
+        if (!confirm(`Delete request ${row.request_number}?`)) return;
+
+        try {
+            const { error } = await supabase
+                .from('purchase_requests')
+                .delete()
+                .eq('id', row.id);
+
+            if (error) throw error;
+
+            toast.success(`Request ${row.request_number} deleted`);
+            fetchRequests();
+        } catch (error: any) {
+            toast.error('Failed to delete request: ' + error.message);
+        }
     };
 
     const columns = [
@@ -92,18 +116,46 @@ export default function PurchasingRequestsPage() {
             label: 'Actions',
             render: (_: any, row: any) => (
                 <div style={{ display: 'flex', gap: 8 }}>
-                    <button 
-                        onClick={() => { setSelectedRequest(row); setIsViewModalOpen(true); }}
-                        style={{ padding: '6px 12px', borderRadius: 6, border: '1px solid var(--slate-200)', background: 'var(--card-bg)', color: 'var(--slate-600)', cursor: 'pointer', fontSize: 11, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}
+                    <button
+                        onClick={() => { setSelectedRequest(row); setIsPdfModalOpen(true); }}
+                        title="View"
+                        aria-label="View purchase requisition PDF"
+                        style={{ width: 32, height: 32, padding: 0, borderRadius: 6, border: '1px solid var(--slate-200)', background: 'var(--card-bg)', color: 'var(--slate-600)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                     >
-                        <Eye size={14} /> Review
+                        <Eye size={14} />
+                    </button>
+                    <button
+                        onClick={() => { setSelectedRequest(row); setIsViewModalOpen(true); }}
+                        title="Review"
+                        aria-label="Review purchase requisition"
+                        style={{ width: 32, height: 32, padding: 0, borderRadius: 6, border: '1px solid var(--primary-200)', background: 'var(--primary-50)', color: 'var(--primary-600)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                    >
+                        <FileText size={14} />
+                    </button>
+                    <button
+                        onClick={() => { setSelectedRequest(row); setIsEditModalOpen(true); }}
+                        title="Edit"
+                        aria-label="Edit purchase request"
+                        style={{ width: 32, height: 32, padding: 0, borderRadius: 6, border: '1px solid var(--amber-200, #fde68a)', background: 'var(--amber-50, #fffbeb)', color: 'var(--amber-700, #b45309)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                    >
+                        <Edit2 size={14} />
+                    </button>
+                    <button
+                        onClick={() => handleDelete(row)}
+                        title="Delete"
+                        aria-label="Delete purchase request"
+                        style={{ width: 32, height: 32, padding: 0, borderRadius: 6, border: '1px solid var(--danger-200, #fecaca)', background: 'var(--danger-50, #fef2f2)', color: 'var(--danger, #dc2626)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                    >
+                        <Trash2 size={14} />
                     </button>
                     {row.status === 'Approved' && (
-                        <button 
-                            style={{ padding: '6px 12px', borderRadius: 6, border: 'none', background: 'var(--primary-600)', color: 'white', cursor: 'pointer', fontSize: 11, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}
+                        <button
+                            title="Create PO"
+                            aria-label="Create purchase order"
+                            style={{ width: 32, height: 32, padding: 0, borderRadius: 6, border: 'none', background: 'var(--primary-600)', color: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                             onClick={() => window.location.href = `/purchasing/purchase-orders?request=${row.id}`}
                         >
-                            <ShoppingBag size={12} /> Create PO
+                            <ShoppingBag size={14} />
                         </button>
                     )}
                 </div>
@@ -138,13 +190,26 @@ export default function PurchasingRequestsPage() {
                 searchPlaceholder="Search requisition number..." 
             />
 
-            <PurchaseRequestViewModal 
+            <PurchaseRequestViewModal
                 isOpen={isViewModalOpen}
                 onClose={() => setIsViewModalOpen(false)}
                 request={selectedRequest}
                 isPurchasingView={true}
                 onApprove={handleApprove}
                 onReject={handleReject}
+            />
+
+            <PrintablePurchaseRequisition
+                isOpen={isPdfModalOpen}
+                onClose={() => setIsPdfModalOpen(false)}
+                request={selectedRequest}
+            />
+
+            <PurchaseRequestModal
+                isOpen={isEditModalOpen}
+                onClose={() => setIsEditModalOpen(false)}
+                onSuccess={fetchRequests}
+                editingRequest={selectedRequest}
             />
         </div>
     );

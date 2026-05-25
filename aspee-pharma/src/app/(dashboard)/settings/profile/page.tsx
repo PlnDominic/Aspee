@@ -130,16 +130,14 @@ export default function ProfilePage() {
                     .eq('auth_user_id', user.id)
                     .maybeSingle();
 
-                if (existing?.id) {
-                    await supabase
-                        .from('system_users')
-                        .update(updateData)
-                        .eq('id', existing.id);
-                } else {
-                    await supabase
-                        .from('system_users')
-                        .insert([{ auth_user_id: user.id, ...updateData }]);
+                if (!existing?.id) {
+                    throw new Error('Profile record not found. Contact an administrator.');
                 }
+
+                await supabase
+                    .from('system_users')
+                    .update(updateData)
+                    .eq('id', existing.id);
 
                 setPhotoUrl(publicUrl);
                 toast.success('Profile photo updated successfully');
@@ -188,18 +186,15 @@ export default function ProfilePage() {
 
             if (findError) throw findError;
 
-            if (existing?.id) {
-                const { error } = await supabase
-                    .from('system_users')
-                    .update(updateData)
-                    .eq('id', existing.id);
-                if (error) throw error;
-            } else {
-                const { error } = await supabase
-                    .from('system_users')
-                    .insert([{ auth_user_id: user.id, ...updateData }]);
-                if (error) throw error;
+            if (!existing?.id) {
+                throw new Error('Profile record not found. Contact an administrator.');
             }
+
+            const { error } = await supabase
+                .from('system_users')
+                .update(updateData)
+                .eq('id', existing.id);
+            if (error) throw error;
         },
         invalidateKeys: ['currentUser'],
         successMessage: 'Profile saved',
@@ -403,13 +398,16 @@ export default function ProfilePage() {
                                         type={field.type}
                                         value={(profile as any)[field.key] || ''}
                                         onChange={(e) => setProfile((p) => ({ ...p, [field.key]: e.target.value }))}
+                                        readOnly={field.key === 'email'}
                                         style={{
                                             width: '100%', padding: '10px 14px', borderRadius: 8,
                                             border: '1px solid var(--slate-200)', fontSize: 11,
                                             color: 'var(--slate-800)', outline: 'none',
                                             transition: 'border-color 0.15s',
                                         }}
-                                        onFocus={(e) => e.currentTarget.style.borderColor = 'var(--primary-500)'}
+                                        onFocus={(e) => {
+                                            if (field.key !== 'email') e.currentTarget.style.borderColor = 'var(--primary-500)';
+                                        }}
                                         onBlur={(e) => e.currentTarget.style.borderColor = 'var(--slate-200)'}
                                     />
                                 </div>

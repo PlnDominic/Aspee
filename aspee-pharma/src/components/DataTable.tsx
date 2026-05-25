@@ -21,6 +21,16 @@ interface DataTableProps {
     onRowClick?: (row: any) => void;
     emptyMessage?: string;
     actions?: React.ReactNode;
+    // Server-side props
+    serverSide?: boolean;
+    total?: number;
+    page?: number;
+    onPageChange?: (page: number) => void;
+    onSearchChange?: (query: string) => void;
+    onSortChange?: (key: string, dir: 'asc' | 'desc') => void;
+    currentSearch?: string;
+    currentSortKey?: string;
+    currentSortDir?: 'asc' | 'desc';
 }
 
 function DataTableInner({
@@ -32,44 +42,71 @@ function DataTableInner({
     onRowClick,
     emptyMessage = 'No records found',
     actions,
+    serverSide = false,
+    total,
+    page: externalPage,
+    onPageChange,
+    onSearchChange,
+    onSortChange,
+    currentSearch,
+    currentSortKey,
+    currentSortDir,
 }: DataTableProps) {
     const searchParams = useSearchParams();
-    const [search, setSearch] = useState('');
-    const [page, setPage] = useState(1);
-    const [sortKey, setSortKey] = useState<string | null>(null);
+    const [internalSearch, setInternalSearch] = useState('');
+    const [internalPage, setInternalPage] = useState(1);
+    const [internalSortKey, setInternalSortKey] = useState<string | null>(null);
+    const [internalSortDir, setInternalSortDir] = useState<'asc' | 'desc'>('asc');
+
+    // Use external or internal state
+    const search = serverSide ? (currentSearch ?? '') : internalSearch;
+    const page = serverSide ? (externalPage ?? 1) : internalPage;
+    const sortKey = serverSide ? currentSortKey : internalSortKey;
+    const sortDir = serverSide ? (currentSortDir ?? 'asc') : internalSortDir;
 
     // Pre-fill search from URL ?search= param (for cross-module linking)
     useEffect(() => {
         const q = searchParams.get('search');
-        if (q) setSearch(q);
-    }, [searchParams]);
-    const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+        if (q) {
+            if (serverSide) onSearchChange?.(q);
+            else setInternalSearch(q);
+        }
+    }, [searchParams, serverSide, onSearchChange]);
 
-    const filtered = data.filter((row) =>
-        columns.some((col) => {
-            const val = row[col.key];
-            return val?.toString().toLowerCase().includes(search.toLowerCase());
-        })
-    );
+    const filtered = serverSide 
+        ? data 
+        : data.filter((row) =>
+            columns.some((col) => {
+                const val = row[col.key];
+                return val?.toString().toLowerCase().includes(search.toLowerCase());
+            })
+        );
 
-    const sorted = sortKey
-        ? [...filtered].sort((a, b) => {
-            const aVal = a[sortKey] as string;
-            const bVal = b[sortKey] as string;
-            const cmp = aVal > bVal ? 1 : aVal < bVal ? -1 : 0;
-            return sortDir === 'asc' ? cmp : -cmp;
-        })
-        : filtered;
+    const sorted = serverSide 
+        ? filtered 
+        : sortKey
+            ? [...filtered].sort((a, b) => {
+                const aVal = a[sortKey] as string;
+                const bVal = b[sortKey] as string;
+                const cmp = aVal > bVal ? 1 : aVal < bVal ? -1 : 0;
+                return sortDir === 'asc' ? cmp : -cmp;
+            })
+            : filtered;
 
-    const totalPages = Math.ceil(sorted.length / pageSize);
-    const paged = sorted.slice((page - 1) * pageSize, page * pageSize);
+    const totalPages = serverSide ? Math.ceil((total ?? 0) / pageSize) : Math.ceil(sorted.length / pageSize);
+    const paged = serverSide ? sorted : sorted.slice((page - 1) * pageSize, page * pageSize);
 
     const handleSort = (key: string) => {
-        if (sortKey === key) {
-            setSortDir(sortDir === 'asc' ? 'desc' : 'asc');
+        const newDir = sortKey === key && sortDir === 'asc' ? 'desc' : 'asc';
+        if (serverSide) {
+            onSortChange?.(key, newDir);
         } else {
-            setSortKey(key);
-            setSortDir('asc');
+            if (internalSortKey === key) {
+                setInternalSortDir(newDir);
+            } else {
+                setInternalSortKey(key);
+                setInternalSortDir('asc');
+            }
         }
     };
 
@@ -110,10 +147,7 @@ function DataTableInner({
                         type="text"
                         placeholder={searchPlaceholder}
                         value={search}
-                        onChange={(e) => {
-                            setSearch(e.target.value);
-                            setPage(1);
-                        }}
+                        onChange={(e) => handleSearch(e.target.value)}
                         style={{
                             flex: 1,
                             border: 'none',
@@ -125,7 +159,7 @@ function DataTableInner({
                     />
                 </div>
                 <span style={{ fontSize: 11, color: 'var(--slate-400)' }}>
-                    {filtered.length} records
+                    {serverSide ? (total ?? 0) : filtered.length} records
                 </span>
                 {actions && <div style={{ marginLeft: 'auto' }}>{actions}</div>}
             </div>
@@ -254,7 +288,7 @@ function DataTableInner({
                     <div style={{ display: 'flex', gap: '4px' }}>
                         <button
                             disabled={page <= 1}
-                            onClick={() => setPage(page - 1)}
+                            onClick={() => handlePageChange(page - 1)}
                             style={{
                                 padding: '6px 10px',
                                 borderRadius: 6,
@@ -270,7 +304,7 @@ function DataTableInner({
                         </button>
                         <button
                             disabled={page >= totalPages}
-                            onClick={() => setPage(page + 1)}
+                            onClick={() => handlePageChange(page + 1)}
                             style={{
                                 padding: '6px 10px',
                                 borderRadius: 6,

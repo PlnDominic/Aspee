@@ -15,7 +15,7 @@ export default function PrintableReceipt({ receipt }: PrintableReceiptProps) {
             left: '-9999px',
             width: '210mm',
             minHeight: '297mm',
-            background: 'var(--card-bg)',
+            background: '#ffffff',
             padding: '20mm',
             color: 'black',
             fontFamily: 'sans-serif',
@@ -59,7 +59,7 @@ export default function PrintableReceipt({ receipt }: PrintableReceiptProps) {
                             {receipt.payment_reference && (
                                 <tr>
                                     <td style={{ padding: '1mm 0', color: '#475569' }}>Ref Number:</td>
-                                    <td style={{ padding: '1mm 0', fontWeight: 600, fontFamily: 'var(--font-mono)' }}>{receipt.payment_reference}</td>
+                                    <td style={{ padding: '1mm 0', fontWeight: 600, fontFamily: 'monospace' }}>{receipt.payment_reference}</td>
                                 </tr>
                             )}
                             <tr>

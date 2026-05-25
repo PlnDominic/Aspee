@@ -15,7 +15,7 @@ async function checkSchema() {
   const client = new Client({ connectionString: dbUrl });
   try {
     await client.connect();
-    const result = { invoices: [], receipts: [], po: [] };
+    const result = { invoices: [], receipts: [], po: [], products: [] };
     
     // Get columns for sales_invoices
     const invoicesRes = await client.query(`
@@ -32,6 +32,14 @@ async function checkSchema() {
       WHERE table_schema = 'public' AND table_name = 'sales_receipts'
     `);
     result.receipts = receiptsRes.rows;
+
+    // Get columns for products
+    const productsRes = await client.query(`
+      SELECT column_name, data_type 
+      FROM information_schema.columns 
+      WHERE table_schema = 'public' AND table_name = 'products'
+    `);
+    result.products = productsRes.rows;
 
     fs.writeFileSync('schema_output.json', JSON.stringify(result, null, 2));
   } catch (err) {

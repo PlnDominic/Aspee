@@ -18,7 +18,7 @@ export default function PrintablePO({ po }: PrintablePOProps) {
             left: '-9999px',
             width: '210mm',         // A4 width
             minHeight: '297mm',     // A4 height
-            background: 'var(--card-bg)',
+            background: '#ffffff',
             padding: '20mm',
             color: 'black',
             fontFamily: 'sans-serif',

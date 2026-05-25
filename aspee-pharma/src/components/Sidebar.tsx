@@ -43,6 +43,8 @@ import {
     CalendarDays,
     Eye,
     Scale,
+    Briefcase,
+    Clock,
 } from 'lucide-react';
 import clsx from 'clsx';
 import { useCurrentUser } from '@/lib/hooks';
@@ -52,7 +54,10 @@ import { useCurrentUser } from '@/lib/hooks';
 // Routes not listed are visible to every authenticated user.
 // 'Super Admin' always bypasses all checks.
 const ROUTE_ROLES: Record<string, string[]> = {
+    '/stores/sales-requests': ['Super Admin', 'Store Manager'],
+    '/sales/requests':      ['Super Admin', 'Sales Manager', 'Van Sales Rep', 'Store Manager'],
     '/sales':               ['Super Admin', 'Sales Manager', 'Van Sales Rep'],
+    '/accounting/collections': ['Super Admin', 'Accountant'],
     '/customers':           ['Super Admin', 'Sales Manager', 'Van Sales Rep'],
     '/purchasing/payments': ['Super Admin', 'Accountant', 'Purchasing Manager'],
     '/purchasing/grn':      ['Super Admin', 'Purchasing Manager', 'Quality Assurance'],
@@ -107,7 +112,7 @@ const navigation: NavItem[] = [
         icon: <LayoutDashboard size={20} />,
     },
     {
-        label: 'Purchasing',
+        label: 'Procurement',
         icon: <ShoppingCart size={20} />,
         children: [
             { label: 'Suppliers',       href: '/purchasing/suppliers',       icon: <Users size={18} /> },
@@ -131,12 +136,16 @@ const navigation: NavItem[] = [
         label: 'Stores',
         icon: <Warehouse size={20} />,
         children: [
-            { label: 'Products',        href: '/stores/products',  icon: <Pill size={18} /> },
-            { label: 'Stock Inventory', href: '/stores/stock',     icon: <Boxes size={18} /> },
-            { label: 'Stock Transfers', href: '/stores/transfers', icon: <ArrowLeftRight size={18} /> },
+            { label: 'Products',          href: '/stores/products',          icon: <Pill size={18} /> },
+            { label: 'Stock Inventory',   href: '/stores/stock',             icon: <Boxes size={18} /> },
+            { label: 'Internal Use',      href: '/stores/internal-use',      icon: <Briefcase size={18} /> },
+            { label: 'Material Defects',  href: '/stores/material-defects',  icon: <AlertTriangle size={18} /> },
+            { label: 'Material Expiry',   href: '/stores/material-expiry',   icon: <Clock size={18} /> },
+            { label: 'Sales Request',     href: '/stores/sales-requests',    icon: <ClipboardList size={18} /> },
+            { label: 'Stock Transfers',   href: '/stores/transfers',         icon: <ArrowLeftRight size={18} /> },
             { label: 'Material Requests', href: '/stores/material-requests', icon: <ClipboardList size={18} /> },
             { label: 'Purchase Requests', href: '/stores/purchase-requests', icon: <ShoppingCart size={18} /> },
-            { label: 'QA Reports',        href: '/stores/qa-reports',       icon: <Activity size={18} /> },
+            { label: 'QA Reports',        href: '/stores/qa-reports',        icon: <Activity size={18} /> },
         ],
     },
     {
@@ -152,21 +161,16 @@ const navigation: NavItem[] = [
         label: 'Sales',
         icon: <Receipt size={20} />,
         children: [
-            { label: 'Invoices',            href: '/sales/invoices',     icon: <FileText size={18} /> },
-            { label: 'Dispatch Management', href: '/sales/dispatch',     icon: <Truck size={18} /> },
+            { label: 'Customers',           href: '/sales/customers',    icon: <Users size={18} /> },
+            { label: 'Routes & Vans',       href: '/sales/routes',       icon: <Truck size={18} /> },
+            { label: 'Invoices',            href: '/sales/invoices',          icon: <FileText size={18} /> },
+            { label: 'Sales Request',       href: '/sales/requests',          icon: <ClipboardList size={18} /> },
+            { label: 'Dispatch Management', href: '/sales/dispatch',          icon: <Truck size={18} /> },
+            { label: 'Waybills',            href: '/sales/waybill',           icon: <FileText size={18} /> },
             { label: 'Receipts',            href: '/sales/receipts',     icon: <CreditCard size={18} /> },
             { label: 'Credit Notes',        href: '/sales/credit-notes', icon: <BookOpen size={18} /> },
+            { label: 'Sales Reports',        href: '/sales/reports',      icon: <BarChart3 size={18} /> },
         ],
-    },
-    {
-        label: 'Customers',
-        href: '/customers',
-        icon: <Users size={20} />,
-    },
-    {
-        label: 'Routes & Vans',
-        href: '/routes',
-        icon: <Truck size={20} />,
     },
     {
         label: 'Accounting',
@@ -180,6 +184,7 @@ const navigation: NavItem[] = [
             { label: 'Tax Periods',       href: '/accounting/tax',        icon: <Landmark size={18} /> },
             { label: 'Petty Cash',        href: '/accounting/petty-cash', icon: <Coins size={18} /> },
             { label: 'Supplier Payments', href: '/purchasing/payments',   icon: <CreditCard size={18} /> },
+            { label: 'Collections',       href: '/accounting/collections', icon: <Banknote size={18} /> },
             { label: 'A/R Aging',         href: '/accounting/ar-aging',   icon: <BarChart3 size={18} /> },
             { label: 'Financial Reports', href: '/accounting/reports',    icon: <PieChart size={18} /> },
             { label: 'Comprehensive Income', href: '/accounting/comprehensive-income', icon: <FileText size={18} /> },
@@ -213,6 +218,14 @@ const navigation: NavItem[] = [
         icon: <ShieldCheck size={20} />,
         children: [
             { label: 'Regulators & Renewals', href: '/compliance/regulators', icon: <FileCheck size={18} /> },
+        ],
+    },
+    {
+        label: 'Weekly Reports',
+        icon: <Send size={20} />,
+        children: [
+            { label: 'Department Report', href: '/weekly-reports', icon: <FileText size={18} /> },
+            { label: 'MD Review', href: '/weekly-reports/review', icon: <Eye size={18} /> },
         ],
     },
     {

@@ -163,12 +163,15 @@ export default function QAFinishedProductsModal({ isOpen, onClose, onSave, recor
                 
                 const qaQuarantine = locations?.find((l: any) => l.name === 'QA Quarantine') || 
                                      locations?.find((l: any) => l.name.toLowerCase().includes('quarantine'));
-                const mainStore = locations?.find((l: any) => l.name === 'Main Store') || 
-                                  locations?.find((l: any) => l.name.toLowerCase().includes('main')) || 
+                const finishedGoodsStore = locations?.find((l: any) => l.name === 'Finished Goods Store') ||
+                                           locations?.find((l: any) => l.name.toLowerCase().includes('finished'));
+                const mainStore = locations?.find((l: any) => l.name === 'Main Warehouse') ||
+                                  locations?.find((l: any) => l.name.toLowerCase().includes('main')) ||
                                   locations?.[0];
+                const releaseStore = finishedGoodsStore || mainStore;
 
-                if (!qaQuarantine || !mainStore) {
-                    throw new Error('Could not find required stock locations (Quarantine or Main Store)');
+                if (!qaQuarantine || !releaseStore) {
+                    throw new Error('Could not find required stock locations (Quarantine or Finished Goods Store)');
                 }
 
                 // 2a. Deduct from QA Quarantine
@@ -192,12 +195,12 @@ export default function QAFinishedProductsModal({ isOpen, onClose, onSave, recor
                         .match({ batch_number: batchNumber });
                 }
 
-                // 2b. Increment in Main Store
+                // 2b. Increment in Finished Goods Store
                 const { data: mStock } = await supabase
                     .from('stock_levels')
                     .select('qty_on_hand')
                     .eq('product_id', selectedProductId)
-                    .eq('location_id', mainStore.id)
+                    .eq('location_id', releaseStore.id)
                     .match({ batch_number: batchNumber })
                     .maybeSingle();
 
@@ -208,7 +211,7 @@ export default function QAFinishedProductsModal({ isOpen, onClose, onSave, recor
                     .from('stock_levels')
                     .upsert({
                         product_id: selectedProductId,
-                        location_id: mainStore.id,
+                        location_id: releaseStore.id,
                         batch_number: batchNumber,
                         qty_on_hand: newQty,
                         updated_at: new Date().toISOString()
@@ -225,10 +228,10 @@ export default function QAFinishedProductsModal({ isOpen, onClose, onSave, recor
                         quantity: Number(yieldQuantity),
                         reference_type: 'QA Release',
                         reference_id: recordId,
-                        notes: `Released from Quarantine to Main Store: Batch ${batchNumber}`
+                        notes: `Released from Quarantine to ${releaseStore.name}: Batch ${batchNumber}`
                     }]);
                     
-                toast.success('Batch released to Main Store inventory.');
+                toast.success(`Batch released to ${releaseStore.name} inventory.`);
             }
 
             onSave();

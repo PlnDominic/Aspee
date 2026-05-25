@@ -1,0 +1,13 @@
+UPDATE products SET units_per_carton = 60, unit_label = 'Bottles' WHERE name = 'Adult-Cof Syrup';
+UPDATE products SET units_per_carton = 60, unit_label = 'Bottles' WHERE name = 'Kinder-Cof Syrup';
+UPDATE products SET units_per_carton = 60, unit_label = 'Bottles' WHERE name = 'Asprolex-F Syrup';
+UPDATE products SET units_per_carton = 60, unit_label = 'Bottles' WHERE name = 'Coda-Cof Syrup';
+UPDATE products SET units_per_carton = 24, unit_label = 'Skellets' WHERE name = 'Ascold Tablets';
+UPDATE products SET units_per_carton = 24, unit_label = 'Skellets' WHERE name = 'Folic Acid Tablets';
+UPDATE products SET units_per_carton = 24, unit_label = 'Skellets' WHERE name = 'Aspimol Extra Tablets';
+UPDATE products SET units_per_carton = 24, unit_label = 'Skellets' WHERE name = 'Aspimol Plus Tablets';
+UPDATE products SET units_per_carton = 24, unit_label = 'Skellets' WHERE name = 'Multivite Tablets';
+UPDATE products SET units_per_carton = 24, unit_label = 'Skellets' WHERE name = 'B-Co Tablets';
+UPDATE products SET units_per_carton = 24, unit_label = 'Skellets' WHERE name = 'Diazepam 5mg Tablets';
+UPDATE products SET units_per_carton = 24, unit_label = 'Skellets' WHERE name = 'Diazepam 10mg Tablets';
+UPDATE products SET units_per_carton = 24, unit_label = 'Skellets' WHERE name = 'Astradol Tablets';

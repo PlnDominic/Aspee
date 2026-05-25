@@ -33,7 +33,7 @@ export default function PrintablePayslip({ payroll }: PrintablePayslipProps) {
             left: '-9999px',
             width: '210mm',
             minHeight: '297mm',
-            background: 'var(--card-bg)',
+            background: '#ffffff',
             padding: '20mm',
             color: 'black',
             fontFamily: 'sans-serif',
@@ -62,7 +62,7 @@ export default function PrintablePayslip({ payroll }: PrintablePayslipProps) {
                         <tbody>
                             <tr>
                                 <td style={{ padding: '1mm 0', color: '#475569' }}>Employee ID:</td>
-                                <td style={{ padding: '1mm 0', fontFamily: 'var(--font-mono)' }}>{payroll.employee_id_number || '-'}</td>
+                                <td style={{ padding: '1mm 0', fontFamily: 'monospace' }}>{payroll.employee_id_number || '-'}</td>
                             </tr>
                             <tr>
                                 <td style={{ padding: '1mm 0', color: '#475569' }}>Role:</td>

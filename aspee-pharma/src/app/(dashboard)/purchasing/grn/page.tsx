@@ -38,19 +38,66 @@ export default function GRNPage() {
         mutationFn: async (saveData: any) => {
             const { items, id, ...grnBase } = saveData;
 
-            // Look up the Main Store location UUID
+            // Look up the Main Warehouse location UUID
             const { data: locationData } = await supabase
                 .from('stock_locations')
                 .select('id')
-                .ilike('name', '%main%store%')
+                .eq('name', 'Main Warehouse')
                 .single();
 
             const mainStoreId = locationData?.id;
-            if (!mainStoreId) throw new Error('Main Store location not found in stock_locations');
+            if (!mainStoreId) throw new Error('Main Warehouse location not found in stock_locations');
 
             let grn;
+            let wasAlreadyApproved = false;
+
             if (id) {
-                // UPDATE MODE
+                // Capture previous state BEFORE any mutations to enable delta stock correction
+                const [{ data: previousGRN }, { data: previousItems }] = await Promise.all([
+                    supabase.from('grn').select('qa_status').eq('id', id).single(),
+                    supabase.from('grn_items')
+                        .select('product_id, quantity_received, batch_no, qa_status')
+                        .eq('grn_id', id)
+                ]);
+
+                wasAlreadyApproved = previousGRN?.qa_status === 'Approved';
+
+                // Reverse stock for every previously-approved item before we overwrite the items
+                for (const oldItem of (previousItems || [])) {
+                    const oldItemWasApproved =
+                        oldItem.qa_status === 'Approved' ||
+                        (wasAlreadyApproved && oldItem.qa_status !== 'Rejected' && oldItem.qa_status !== 'Quarantine');
+
+                    if (oldItemWasApproved) {
+                        const batchNo = oldItem.batch_no || 'N/A';
+                        const { data: stockData } = await supabase
+                            .from('stock_levels')
+                            .select('qty_on_hand')
+                            .eq('product_id', oldItem.product_id)
+                            .eq('location_id', mainStoreId)
+                            .eq('batch_number', batchNo)
+                            .maybeSingle();
+
+                        const reversedQty = Math.max(0, (stockData?.qty_on_hand || 0) - oldItem.quantity_received);
+                        await supabase
+                            .from('stock_levels')
+                            .upsert({
+                                product_id: oldItem.product_id,
+                                location_id: mainStoreId,
+                                batch_number: batchNo,
+                                qty_on_hand: reversedQty,
+                                updated_at: new Date().toISOString()
+                            }, { onConflict: 'product_id,location_id,batch_number' });
+                    }
+                }
+
+                // Delete old stock movements so they are re-recorded accurately below
+                await supabase
+                    .from('stock_movements')
+                    .delete()
+                    .eq('reference_type', 'GRN')
+                    .eq('reference_id', id);
+
                 const { data, error: grnError } = await supabase
                     .from('grn')
                     .update(grnBase)
@@ -61,7 +108,6 @@ export default function GRNPage() {
                 if (grnError) throw grnError;
                 grn = data;
 
-                // Refresh items (Delete old, insert new)
                 const { error: delError } = await supabase
                     .from('grn_items')
                     .delete()
@@ -80,14 +126,22 @@ export default function GRNPage() {
             }
 
             // 2. Create/Re-insert GRN items
-            const grnItems = items.map((item: any) => ({
+            const headerApproved = grnBase.qa_status === 'Approved';
+            const grnItems = items.map((item: any) => {
+                const itemStatus = headerApproved && item.qa_status !== 'Rejected' && item.qa_status !== 'Quarantine'
+                    ? 'Approved'
+                    : (item.qa_status || 'Pending');
+
+                return {
                 grn_id: grn.id,
                 product_id: item.product_id,
                 quantity_received: item.quantity_received,
                 batch_no: item.batch_no,
                 expiry_date: item.expiry_date,
-                po_item_id: item.po_item_id
-            }));
+                po_item_id: item.po_item_id,
+                    qa_status: itemStatus
+                };
+            });
 
             const { error: itemsError } = await supabase
                 .from('grn_items')
@@ -95,9 +149,18 @@ export default function GRNPage() {
 
             if (itemsError) throw itemsError;
 
-            // Notice: Stock levels are updated here ONLY if qa_status is 'Approved'.
+            // Update stock for every item that is explicitly Approved, OR when the
+            // header QA status is Approved and the item hasn't been rejected/quarantined.
             for (const item of items) {
-                if (item.qa_status === 'Approved') {
+                const effectiveItemStatus = headerApproved && item.qa_status !== 'Rejected' && item.qa_status !== 'Quarantine'
+                    ? 'Approved'
+                    : (item.qa_status || 'Pending');
+                const itemEffectivelyApproved =
+                    effectiveItemStatus === 'Approved';
+                if (itemEffectivelyApproved) {
+                    const approvedQty = Number(item.quantity_received || 0);
+                    if (approvedQty <= 0) continue;
+
                     // Get current stock level for this SPECIFIC BATCH
                     const batchNo = item.batch_no || 'N/A';
                     
@@ -110,7 +173,7 @@ export default function GRNPage() {
                         .maybeSingle();
 
                     const currentQty = stockData?.qty_on_hand || 0;
-                    const newQty = currentQty + item.quantity_received;
+                    const newQty = currentQty + approvedQty;
 
                     // Update or insert stock level (Batch aware)
                     const { error: stockError } = await supabase
@@ -132,12 +195,12 @@ export default function GRNPage() {
                         .insert([{
                             product_id: item.product_id,
                             movement_type: 'IN',
-                            quantity: item.quantity_received,
+                            quantity: approvedQty,
                             reference_type: 'GRN',
                             reference_id: grn.id,
                             batch_number: batchNo,
                             expiry_date: item.expiry_date || null,
-                            notes: `GRN QA Approved: ${grn.grn_number}${id ? ' (Updated)' : ''}`
+                            notes: `GRN QA Approved: ${grn.grn_number}${id ? ' (Updated)' : ''}${item.qa_status !== 'Approved' ? ' (via header approval)' : ''}`
                         }]);
                 }
             }
@@ -177,8 +240,8 @@ export default function GRNPage() {
                     .eq('id', saveData.po_id);
             }
 
-            // Auto-post GL entry when QA approves goods: DR Inventory / CR Accounts Payable
-            if (grnBase.qa_status === 'Approved' && saveData.po_id) {
+            // Auto-post GL entry only on the first transition to Approved, not on re-saves
+            if (grnBase.qa_status === 'Approved' && !wasAlreadyApproved && saveData.po_id) {
                 const { data: poForGL } = await supabase
                     .from('purchase_orders')
                     .select('po_number, total_amount, suppliers:supplier_id(name)')
@@ -213,7 +276,7 @@ export default function GRNPage() {
                 notifyGRNPendingQA(grnBase.grn_number, supplierName);
             }
         },
-        invalidateKeys: ['grn', 'purchase_orders'],
+        invalidateKeys: ['grn', 'purchase_orders', 'stock_levels', 'stock-levels-matrix', 'stock_movements'],
         successMessage: 'GRN saved successfully!',
     });
 

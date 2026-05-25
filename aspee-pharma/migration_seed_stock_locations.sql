@@ -8,7 +8,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_stock_locations_name ON stock_locations (n
 -- 2. Insert default locations
 INSERT INTO stock_locations (name, type)
 VALUES
-  ('Main Store',          'Warehouse'),
+  ('Main Warehouse',      'Warehouse'),
   ('Finished Goods Store','Warehouse'),
   ('Packaging Store',     'Warehouse'),
   ('Quarantine Store',    'Quarantine')

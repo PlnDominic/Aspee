@@ -7,6 +7,7 @@ import StatCard from '@/components/StatCard';
 import ProductModal from '@/components/ProductModal';
 import MaterialRequestModal from '@/components/MaterialRequestModal';
 import { Plus, Package, Clock, Boxes, Edit2, Trash2, ClipboardList, Beaker, Factory, PencilRuler, Layers3 } from 'lucide-react';
+import { bulkConversionLabel } from '@/lib/unitConversions';
 import { supabase } from '@/lib/supabase';
 import { useSupabaseQuery, useFetch } from '@/lib/hooks';
 import { useQueryClient } from '@tanstack/react-query';
@@ -170,13 +171,39 @@ export default function ProductsPage() {
 
     const handleDeleteProduct = async (id: string) => {
         if (!confirm('Are you sure you want to delete this product?')) return;
+        const productToDelete = products.find((p) => p.id === id);
         try {
-            const productToDelete = products.find((p) => p.id === id);
+            // Check all tables that hold a FK reference to this product
+            const [movementsRes, invoiceItemsRes, grnItemsRes, bomItemsRes] = await Promise.all([
+                supabase.from('stock_movements').select('id', { count: 'exact', head: true }).eq('product_id', id),
+                supabase.from('sales_invoice_items').select('id', { count: 'exact', head: true }).eq('product_id', id),
+                supabase.from('grn_items').select('id', { count: 'exact', head: true }).eq('product_id', id),
+                supabase.from('bom_items').select('id', { count: 'exact', head: true }).eq('product_id', id),
+            ]);
+
+            const blockers: string[] = [];
+            if ((movementsRes.count ?? 0) > 0)   blockers.push(`${movementsRes.count} stock movement(s)`);
+            if ((invoiceItemsRes.count ?? 0) > 0) blockers.push(`${invoiceItemsRes.count} sales invoice line(s)`);
+            if ((grnItemsRes.count ?? 0) > 0)     blockers.push(`${grnItemsRes.count} GRN receipt(s)`);
+            if ((bomItemsRes.count ?? 0) > 0)     blockers.push(`${bomItemsRes.count} BOM component(s)`);
+
+            if (blockers.length > 0) {
+                toast.error(
+                    `Cannot delete "${productToDelete?.name}": it is referenced in ${blockers.join(', ')}. ` +
+                    `Remove those records first, or archive this product instead.`
+                );
+                return;
+            }
+
+            // No blocking references — clean up stock_levels (non-transactional), then delete
+            await supabase.from('stock_levels').delete().eq('product_id', id);
+
             const { data: deleted, error } = await supabase.from('products').delete().eq('id', id).select();
             if (error) throw error;
             if (!deleted || deleted.length === 0) {
-                throw new Error('Delete was blocked by a database policy. Check Supabase RLS rules for the products table.');
+                throw new Error('Delete was blocked by a database policy. Check RLS rules for the products table.');
             }
+
             await logAudit({
                 action: 'DELETE',
                 module: 'Products',
@@ -186,7 +213,7 @@ export default function ProductsPage() {
                 old_values: productToDelete,
             });
             toast.success('Product deleted successfully');
-            queryClient.invalidateQueries({ queryKey: ['products'] });
+            queryClient.invalidateQueries({ queryKey: ['products-with-qa'] });
         } catch (error: any) {
             toast.error('Error deleting product: ' + error.message);
         }
@@ -222,21 +249,79 @@ export default function ProductsPage() {
         {
             key: 'unit',
             label: 'Unit',
-            render: (v: unknown) => (
-                <span
-                    style={{
+            render: (v: unknown, row: any) => {
+                const purchaseUnit = row.purchase_unit as string | null | undefined;
+                return (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                        <span
+                            style={{
+                                fontSize: 11,
+                                fontWeight: 600,
+                                color: 'var(--slate-700)',
+                                background: 'var(--slate-50)',
+                                padding: '4px 8px',
+                                borderRadius: 8,
+                                border: '1px solid var(--slate-200)',
+                                width: 'fit-content',
+                            }}
+                        >
+                            {v as string}
+                        </span>
+                        {purchaseUnit && purchaseUnit !== v && (
+                            <span style={{ fontSize: 10, color: 'var(--primary-700)', fontWeight: 600 }}>
+                                PO/GRN: {purchaseUnit}
+                            </span>
+                        )}
+                    </div>
+                );
+            },
+        },
+        {
+            key: 'bulk_unit',
+            label: 'Bulk Conversion',
+            render: (_v: unknown, row: any) => {
+                const label = bulkConversionLabel(row.unit, row.bulk_unit, row.bulk_to_base_ratio);
+                if (!label) return <span style={{ color: 'var(--slate-400)', fontSize: 11 }}>—</span>;
+                return (
+                    <span style={{
                         fontSize: 11,
                         fontWeight: 600,
-                        color: 'var(--slate-700)',
-                        background: 'var(--slate-50)',
-                        padding: '4px 8px',
+                        color: 'var(--primary-700)',
+                        background: 'rgba(6,182,212,0.07)',
+                        padding: '3px 8px',
                         borderRadius: 8,
-                        border: '1px solid var(--slate-200)',
-                    }}
-                >
-                    {v as string}
-                </span>
-            ),
+                        border: '1px solid rgba(6,182,212,0.2)',
+                        whiteSpace: 'nowrap',
+                    }}>
+                        {label}
+                    </span>
+                );
+            },
+        },
+        {
+            key: 'cash_price',
+            label: 'Official Prices',
+            render: (_v: unknown, row: any) => {
+                const cashPrice = row.cash_price;
+                const creditPrice = row.credit_price;
+                if (cashPrice == null && creditPrice == null) {
+                    return <span style={{ color: 'var(--slate-400)', fontSize: 11 }}>—</span>;
+                }
+                return (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                        {cashPrice != null && (
+                            <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--success-700)' }}>
+                                Cash: GH₵ {Number(cashPrice).toFixed(2)}
+                            </span>
+                        )}
+                        {creditPrice != null && (
+                            <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--warning-dark, #b45309)' }}>
+                                Credit: GH₵ {Number(creditPrice).toFixed(2)}
+                            </span>
+                        )}
+                    </div>
+                );
+            },
         },
         {
             key: 'approved_qty',
@@ -437,14 +522,16 @@ export default function ProductsPage() {
 
 
                 .products-grid {
-                    display: grid;
-                    grid-template-columns: repeat(2, minmax(0, 1fr));
+                    display: flex;
+                    flex-direction: column;
                     gap: 24px;
                 }
 
                 .products-section {
                     display: flex;
                     flex-direction: column;
+                    width: 100%;
+                    min-width: 0;
                 }
 
                 .products-section-full {
@@ -513,16 +600,11 @@ export default function ProductsPage() {
                 .section-table-wrap {
                     padding: 18px;
                     background: var(--card-bg);
+                    flex: 1;
                 }
 
                 .products-section :global(table) {
                     color: var(--slate-800);
-                }
-
-                @media (max-width: 1400px) {
-                    .products-grid {
-                        grid-template-columns: 1fr;
-                    }
                 }
 
                 @media (max-width: 900px) {
@@ -535,6 +617,7 @@ export default function ProductsPage() {
                         width: 100%;
                         text-align: left;
                     }
+
                 }
 
                 @media (max-width: 640px) {
@@ -548,6 +631,10 @@ export default function ProductsPage() {
 
                     .section-table-wrap {
                         padding: 12px;
+                    }
+
+                    .products-grid {
+                        gap: 18px;
                     }
                 }
             `}</style>

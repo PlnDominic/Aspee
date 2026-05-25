@@ -51,12 +51,32 @@ CREATE TABLE IF NOT EXISTS bom_items (
 ALTER TABLE bom_items ENABLE ROW LEVEL SECURITY;
 
 -- 4. Create policies for bom_items
-DO $$
-BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_policy WHERE polname = 'Enable all for all on bom_items') THEN
-        CREATE POLICY "Enable all for all on bom_items" ON bom_items FOR ALL USING (true);
-    END IF;
-END $$;
+DROP POLICY IF EXISTS "Enable all for all on bom_items" ON bom_items;
+DROP POLICY IF EXISTS "Allow app select on bom_items" ON bom_items;
+DROP POLICY IF EXISTS "Allow app insert on bom_items" ON bom_items;
+DROP POLICY IF EXISTS "Allow app update on bom_items" ON bom_items;
+DROP POLICY IF EXISTS "Allow app delete on bom_items" ON bom_items;
+
+CREATE POLICY "Allow app select on bom_items"
+    ON bom_items FOR SELECT
+    TO anon, authenticated
+    USING (true);
+
+CREATE POLICY "Allow app insert on bom_items"
+    ON bom_items FOR INSERT
+    TO anon, authenticated
+    WITH CHECK (true);
+
+CREATE POLICY "Allow app update on bom_items"
+    ON bom_items FOR UPDATE
+    TO anon, authenticated
+    USING (true)
+    WITH CHECK (true);
+
+CREATE POLICY "Allow app delete on bom_items"
+    ON bom_items FOR DELETE
+    TO anon, authenticated
+    USING (true);
 
 -- 5. Create index for faster queries
 CREATE INDEX IF NOT EXISTS idx_bom_items_bom_id ON bom_items(bom_id);

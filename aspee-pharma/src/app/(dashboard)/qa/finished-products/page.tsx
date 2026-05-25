@@ -7,9 +7,12 @@ import PageHeader from '@/components/PageHeader';
 import DataTable from '@/components/DataTable';
 import StatusBadge from '@/components/StatusBadge';
 import QAFinishedProductsModal from '@/components/QAFinishedProductsModal';
-import { Plus, ShieldCheck, Download, Factory } from 'lucide-react';
+import QAFinishedProductsViewModal from '@/components/QAFinishedProductsViewModal';
+import { Plus, ShieldCheck, Download, Factory, Eye, Pencil, Trash2, FlaskConical } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
+import EntityLink from '@/components/EntityLink';
+import { useRouter } from 'next/navigation';
 
 export default function QAFinishedProductsPage() {
     const { data, isLoading } = useSupabaseQuery<any>('qa_finished_products', {
@@ -18,7 +21,9 @@ export default function QAFinishedProductsPage() {
     const records = data ?? [];
     const queryClient = useQueryClient();
 
+    const router = useRouter();
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [isViewModalOpen, setIsViewModalOpen] = useState(false);
     const [selectedRecord, setSelectedRecord] = useState<any | null>(null);
 
     const handleSave = async () => {
@@ -79,6 +84,39 @@ export default function QAFinishedProductsPage() {
         }
     };
 
+    // Handle View
+    const handleView = (row: any, e: React.MouseEvent) => {
+        e.stopPropagation();
+        setSelectedRecord(row);
+        setIsViewModalOpen(true);
+    };
+
+    // Handle Edit
+    const handleEdit = (row: any, e: React.MouseEvent) => {
+        e.stopPropagation();
+        setSelectedRecord(row);
+        setIsModalOpen(true);
+    };
+
+    // Handle Delete
+    const handleDelete = async (row: any, e: React.MouseEvent) => {
+        e.stopPropagation();
+        if (!confirm(`Are you sure you want to delete the analysis record for batch ${row.batch_number}?`)) return;
+        
+        try {
+            const { error } = await supabase
+                .from('qa_finished_products')
+                .delete()
+                .eq('id', row.id);
+            
+            if (error) throw error;
+            toast.success('Analysis record deleted successfully');
+            queryClient.invalidateQueries({ queryKey: ['qa_finished_products'] });
+        } catch (err: any) {
+            toast.error('Delete failed: ' + err.message);
+        }
+    };
+
     const columns = [
         {
             key: 'product_name',
@@ -117,8 +155,8 @@ export default function QAFinishedProductsPage() {
         {
             key: 'production_order',
             label: 'Job Order',
-            render: (value: any, row: any) => value?.order_number 
-                ? <span style={{ display:'inline-flex', alignItems:'center', gap:4, fontSize:11, color:'var(--primary-600)', fontWeight:600 }}><Factory size={13} /> {value.order_number}</span>
+            render: (value: any) => value?.order_number
+                ? <span style={{ display:'inline-flex', alignItems:'center', gap:4, fontSize:11 }}><Factory size={12} style={{ color: 'var(--slate-400)' }} /><EntityLink href={`/production?search=${encodeURIComponent(value.order_number)}`} mono>{value.order_number}</EntityLink></span>
                 : <span style={{ fontSize:10, color:'var(--slate-400)' }}>-</span>
         },
         {
@@ -137,6 +175,64 @@ export default function QAFinishedProductsPage() {
                     <ShieldCheck size={12} /> Approve & Release
                 </button>
             ) : null
+        },
+        {
+            key: 'actions',
+            label: 'Actions',
+            render: (_: any, row: any) => (
+                <div style={{ display: 'flex', gap: 4 }}>
+                    {row.batch_number && (
+                        <button
+                            onClick={(e) => { e.stopPropagation(); router.push(`/qa/in-process?search=${encodeURIComponent(row.batch_number)}`); }}
+                            title="View In Process Control records for this batch"
+                            style={{
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                width: 28, height: 28, borderRadius: 6,
+                                border: '1px solid var(--violet-200, #ddd6fe)', background: 'var(--violet-50, #f5f3ff)',
+                                color: 'var(--violet-600, #7c3aed)', fontSize: 12, cursor: 'pointer'
+                            }}
+                        >
+                            <FlaskConical size={13} />
+                        </button>
+                    )}
+                    <button
+                        onClick={(e) => handleView(row, e)}
+                        title="View Details"
+                        style={{
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            width: 28, height: 28, borderRadius: 6,
+                            border: '1px solid var(--slate-200)', background: 'white',
+                            color: 'var(--slate-600)', fontSize: 12, cursor: 'pointer'
+                        }}
+                    >
+                        <Eye size={14} />
+                    </button>
+                    <button
+                        onClick={(e) => handleEdit(row, e)}
+                        title="Edit"
+                        style={{
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            width: 28, height: 28, borderRadius: 6,
+                            border: '1px solid var(--slate-200)', background: 'white',
+                            color: 'var(--primary-600)', fontSize: 12, cursor: 'pointer'
+                        }}
+                    >
+                        <Pencil size={14} />
+                    </button>
+                    <button
+                        onClick={(e) => handleDelete(row, e)}
+                        title="Delete"
+                        style={{
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            width: 28, height: 28, borderRadius: 6,
+                            border: '1px solid var(--slate-200)', background: 'white',
+                            color: 'var(--red-600)', fontSize: 12, cursor: 'pointer'
+                        }}
+                    >
+                        <Trash2 size={14} />
+                    </button>
+                </div>
+            )
         }
     ];
 
@@ -201,7 +297,7 @@ export default function QAFinishedProductsPage() {
                 searchPlaceholder="Search by product or batch..."
                 onRowClick={(record) => {
                     setSelectedRecord(record);
-                    setIsModalOpen(true);
+                    setIsViewModalOpen(true);
                 }}
                 emptyMessage="No Finished Products Analysis records found"
             />
@@ -214,6 +310,16 @@ export default function QAFinishedProductsPage() {
                 }}
                 onSave={handleSave}
                 record={selectedRecord}
+            />
+
+            <QAFinishedProductsViewModal
+                isOpen={isViewModalOpen}
+                onClose={() => {
+                    setIsViewModalOpen(false);
+                    setSelectedRecord(null);
+                }}
+                record={selectedRecord}
+                onSuccess={handleSave}
             />
         </div>
     );

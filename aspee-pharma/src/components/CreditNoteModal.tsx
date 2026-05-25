@@ -31,9 +31,10 @@ interface CreditNoteModalProps {
     onClose: () => void;
     onSuccess?: () => void;
     record?: any;
+    readOnly?: boolean;
 }
 
-export default function CreditNoteModal({ isOpen, onClose, onSuccess, record }: CreditNoteModalProps) {
+export default function CreditNoteModal({ isOpen, onClose, onSuccess, record, readOnly }: CreditNoteModalProps) {
     const [loading, setLoading] = useState(false);
     const [invoices, setInvoices] = useState<Invoice[]>([]);
     const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
@@ -229,7 +230,7 @@ export default function CreditNoteModal({ isOpen, onClose, onSuccess, record }: 
         <Modal
             isOpen={isOpen}
             onClose={onClose}
-            title={record ? 'Edit Credit Note' : 'New Credit Note'}
+            title={readOnly ? 'View Credit Note' : record ? 'Edit Credit Note' : 'New Credit Note'}
             subtitle={record ? `Credit Note ${record.cn_number}` : 'Issue a credit note against a sales invoice'}
             width={640}
         >
@@ -254,6 +255,7 @@ export default function CreditNoteModal({ isOpen, onClose, onSuccess, record }: 
                                 value={date}
                                 onChange={(e) => setDate(e.target.value)}
                                 required
+                                readOnly={readOnly}
                             />
                         </div>
                     </div>
@@ -268,6 +270,7 @@ export default function CreditNoteModal({ isOpen, onClose, onSuccess, record }: 
                                 placeholder="Search by invoice number or customer..."
                                 value={searchTerm}
                                 onChange={(e) => {
+                                    if (readOnly) return;
                                     setSearchTerm(e.target.value);
                                     setShowDropdown(true);
                                     if (!e.target.value) {
@@ -275,7 +278,8 @@ export default function CreditNoteModal({ isOpen, onClose, onSuccess, record }: 
                                         setMaxAmount(0);
                                     }
                                 }}
-                                onFocus={() => setShowDropdown(true)}
+                                onFocus={() => !readOnly && setShowDropdown(true)}
+                                readOnly={readOnly}
                             />
                         </div>
                         {showDropdown && (
@@ -332,6 +336,7 @@ export default function CreditNoteModal({ isOpen, onClose, onSuccess, record }: 
                                 value={customerName}
                                 onChange={(e) => setCustomerName(e.target.value)}
                                 required
+                                readOnly={readOnly}
                             />
                         </div>
                     </div>
@@ -345,6 +350,7 @@ export default function CreditNoteModal({ isOpen, onClose, onSuccess, record }: 
                                 value={reason}
                                 onChange={(e) => setReason(e.target.value)}
                                 required
+                                disabled={readOnly}
                             >
                                 <option value="">Select reason...</option>
                                 {reasons.map(r => (
@@ -367,6 +373,7 @@ export default function CreditNoteModal({ isOpen, onClose, onSuccess, record }: 
                                 max={maxAmount > 0 ? maxAmount : undefined}
                                 step="0.01"
                                 required
+                                readOnly={readOnly}
                             />
                         </div>
                         {maxAmount > 0 && (
@@ -374,7 +381,7 @@ export default function CreditNoteModal({ isOpen, onClose, onSuccess, record }: 
                         )}
                     </div>
 
-                    {/* Status (only for editing) */}
+                    {/* Status (only for editing or viewing) */}
                     {record && (
                         <div className="cn-field full-width">
                             <label>Status</label>
@@ -383,6 +390,7 @@ export default function CreditNoteModal({ isOpen, onClose, onSuccess, record }: 
                                 <select
                                     value={status}
                                     onChange={(e) => setStatus(e.target.value)}
+                                    disabled={readOnly}
                                 >
                                     <option value="Draft">Draft</option>
                                     <option value="Approved">Approved</option>
@@ -401,17 +409,20 @@ export default function CreditNoteModal({ isOpen, onClose, onSuccess, record }: 
                                 onChange={(e) => setNotes(e.target.value)}
                                 placeholder="Additional notes or details..."
                                 rows={2}
+                                readOnly={readOnly}
                             />
                         </div>
                     </div>
                 </div>
 
                 <div className="cn-actions">
-                    <button type="button" onClick={onClose} className="cn-btn-secondary">Cancel</button>
-                    <button type="submit" disabled={loading} className="cn-btn-primary">
-                        <Save size={16} />
-                        {loading ? 'Saving...' : record ? 'Update Credit Note' : 'Create Credit Note'}
-                    </button>
+                    <button type="button" onClick={onClose} className="cn-btn-secondary">{readOnly ? 'Close' : 'Cancel'}</button>
+                    {!readOnly && (
+                        <button type="submit" disabled={loading} className="cn-btn-primary">
+                            <Save size={16} />
+                            {loading ? 'Saving...' : record ? 'Update Credit Note' : 'Create Credit Note'}
+                        </button>
+                    )}
                 </div>
             </form>
 

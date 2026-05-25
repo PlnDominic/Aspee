@@ -2,13 +2,15 @@
 
 import React, { useEffect, useState } from 'react';
 import PageHeader from '@/components/PageHeader';
-import { Save, Send, Mail, Users, Info, CheckCircle2, Server } from 'lucide-react';
+import { Save, Send, Mail, Users, Info, CheckCircle2, Server, Percent, Lock } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 
 export default function ReportSettingsPage() {
     const [mdEmail, setMdEmail] = useState('');
     const [ccEmails, setCcEmails] = useState('');
+    const [maxDiscountPct, setMaxDiscountPct] = useState('0');
+    const [savingPolicy, setSavingPolicy] = useState(false);
     const [saving, setSaving] = useState(false);
     const [sending, setSending] = useState(false);
     const [loading, setLoading] = useState(true);
@@ -18,11 +20,12 @@ export default function ReportSettingsPage() {
             const { data } = await supabase
                 .from('system_settings')
                 .select('key, value')
-                .in('key', ['report_md_email', 'report_cc_emails']);
+                .in('key', ['report_md_email', 'report_cc_emails', 'max_discount_pct']);
             if (data) {
                 data.forEach((row: any) => {
                     if (row.key === 'report_md_email') setMdEmail(row.value || '');
                     if (row.key === 'report_cc_emails') setCcEmails(row.value || '');
+                    if (row.key === 'max_discount_pct') setMaxDiscountPct(row.value || '0');
                 });
             }
             setLoading(false);
@@ -51,6 +54,29 @@ export default function ReportSettingsPage() {
             toast.error('Failed to save: ' + err.message);
         } finally {
             setSaving(false);
+        }
+    };
+
+    const handleSavePolicy = async () => {
+        setSavingPolicy(true);
+        try {
+            const val = parseFloat(maxDiscountPct);
+            if (isNaN(val) || val < 0 || val > 100) {
+                toast.error('Discount ceiling must be between 0 and 100');
+                return;
+            }
+            const { error } = await supabase
+                .from('system_settings')
+                .upsert(
+                    [{ key: 'max_discount_pct', value: String(val), updated_at: new Date().toISOString() }],
+                    { onConflict: 'key' }
+                );
+            if (error) throw error;
+            toast.success('Sales policy saved');
+        } catch (err: any) {
+            toast.error('Failed to save: ' + err.message);
+        } finally {
+            setSavingPolicy(false);
         }
     };
 
@@ -204,6 +230,67 @@ export default function ReportSettingsPage() {
                                 </div>
                             </div>
                         ))}
+                    </div>
+                </div>
+
+                {/* ── Sales Policy ── */}
+                <div style={{ gridColumn: '1 / -1', background: 'var(--card-bg)', borderRadius: 12, border: '1px solid var(--slate-200)', padding: 28 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+                        <Lock size={18} color="var(--primary-600)" />
+                        <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: 'var(--slate-900)' }}>Sales Policy — Back Office Controls</h3>
+                    </div>
+                    <p style={{ fontSize: 13, color: 'var(--slate-500)', marginBottom: 20, marginTop: 4 }}>
+                        Set company-wide rules that apply to all sales reps when creating invoices. Product-level price locking is set per product in <strong>Stores → Products</strong>.
+                    </p>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, alignItems: 'end' }}>
+                        <div>
+                            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--slate-700)', marginBottom: 6 }}>
+                                Maximum Discount Ceiling (%)
+                            </label>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <div style={{ position: 'relative', flex: 1 }}>
+                                    <Percent size={15} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--slate-400)' }} />
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        max="100"
+                                        step="0.5"
+                                        value={maxDiscountPct}
+                                        onChange={e => setMaxDiscountPct(e.target.value)}
+                                        style={{ ...inputStyle, paddingLeft: 36 }}
+                                        onFocus={e => (e.currentTarget.style.borderColor = 'var(--primary-500)')}
+                                        onBlur={e => (e.currentTarget.style.borderColor = 'var(--slate-200)')}
+                                    />
+                                </div>
+                                <button
+                                    onClick={handleSavePolicy}
+                                    disabled={savingPolicy}
+                                    style={{
+                                        display: 'flex', alignItems: 'center', gap: 8,
+                                        padding: '10px 20px', borderRadius: 8, border: 'none',
+                                        background: 'linear-gradient(135deg, var(--primary-600), var(--primary-500))',
+                                        fontSize: 13, fontWeight: 600, color: 'white',
+                                        cursor: savingPolicy ? 'not-allowed' : 'pointer',
+                                        opacity: savingPolicy ? 0.7 : 1, whiteSpace: 'nowrap',
+                                    }}
+                                >
+                                    <Save size={15} />
+                                    {savingPolicy ? 'Saving...' : 'Save Policy'}
+                                </button>
+                            </div>
+                            <p style={{ fontSize: 11, color: 'var(--slate-400)', marginTop: 5 }}>
+                                Set to <strong>0</strong> to disable discounts entirely. Sales reps will be blocked from entering a discount above this percentage on any invoice.
+                            </p>
+                        </div>
+                        <div style={{ padding: '14px 18px', borderRadius: 10, background: 'var(--primary-50, #eff6ff)', border: '1px solid var(--primary-100, #dbeafe)' }}>
+                            <p style={{ margin: '0 0 6px', fontSize: 13, fontWeight: 600, color: 'var(--primary-800, #1e40af)' }}>How price locking works</p>
+                            <ul style={{ margin: 0, paddingLeft: 16, fontSize: 12, color: 'var(--primary-700, #1d4ed8)', lineHeight: 1.7 }}>
+                                <li>Go to <strong>Stores → Products</strong> → Edit any product</li>
+                                <li>Set the <strong>Selling Price</strong> — this auto-fills on invoices</li>
+                                <li>Tick <strong>"Lock price"</strong> to prevent reps from changing it</li>
+                                <li>Unlocked prices can still be edited by the rep</li>
+                            </ul>
+                        </div>
                     </div>
                 </div>
 

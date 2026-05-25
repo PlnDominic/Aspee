@@ -135,6 +135,11 @@ export function useAction<TInput = void, TOutput = void>(options: {
             options.onSuccess?.(data);
         },
         onError: (error) => {
+            // Also invalidate on error — partial writes (non-transactional)
+            // may have changed data even though the overall operation failed
+            options.invalidateKeys?.forEach(key =>
+                queryClient.invalidateQueries({ queryKey: [key] })
+            );
             toast.error(error.message);
             options.onError?.(error);
         },
@@ -370,16 +375,7 @@ export function useCurrentUser() {
                 return byEmail;
             }
 
-            // Fallback 2: return minimal user info from auth session if no record exists
-            return {
-                id: 'new',
-                email: user.email,
-                name: user.user_metadata?.full_name || user.user_metadata?.name || '',
-                phone: user.phone || '',
-                role: 'User',
-                department: 'Administration',
-                auth_user_id: user.id
-            };
+            return null;
         },
     });
 }
@@ -457,10 +453,16 @@ export function useNotifications() {
 
     const markAllAsRead = useMutation({
         mutationFn: async () => {
+            const visibleNotificationIds = notifications
+                .filter((notification: any) => !notification.is_read)
+                .map((notification: any) => notification.id);
+
+            if (visibleNotificationIds.length === 0) return;
+
             const { error } = await supabase
                 .from('notifications')
                 .update({ is_read: true })
-                .eq('is_read', false);
+                .in('id', visibleNotificationIds);
             if (error) throw error;
         },
         onSuccess: () => {

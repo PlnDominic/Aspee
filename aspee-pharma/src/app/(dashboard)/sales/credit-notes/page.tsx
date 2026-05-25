@@ -7,7 +7,7 @@ import StatCard from '@/components/StatCard';
 import StatusBadge from '@/components/StatusBadge';
 import CreditNoteModal from '@/components/CreditNoteModal';
 import EntityLink from '@/components/EntityLink';
-import { Plus, FileText, Banknote, Clock, CheckCircle, Edit2 } from 'lucide-react';
+import { Plus, FileText, Banknote, Clock, CheckCircle, Edit2, Eye, Trash2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { formatCurrency } from '@/lib/currency';
@@ -17,41 +17,79 @@ import { useQueryClient } from '@tanstack/react-query';
 export default function CreditNotesPage() {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingRecord, setEditingRecord] = useState<any>(null);
+    const [viewOnly, setViewOnly] = useState(false);
     const queryClient = useQueryClient();
 
-    const { data: creditNotesList, isLoading: loading } = useFetch<any[]>(
-        ['credit_notes', '*, invoice:sales_invoices(invoice_number, total_amount, status)'],
+    const { data: creditNotesList, isLoading: loading, error } = useFetch<any[]>(
+        ['credit_notes'],
         async () => {
-            const result = await supabase
+            // Try with invoice join first; fall back to plain select if FK not yet in schema cache
+            let result = await supabase
                 .from('credit_notes')
                 .select(`
                     *,
                     invoice:sales_invoices(invoice_number, total_amount, status)
                 `)
                 .order('created_at', { ascending: false });
+
+            if (result.error?.message?.includes('relationship')) {
+                result = await supabase
+                    .from('credit_notes')
+                    .select('*')
+                    .order('created_at', { ascending: false });
+            }
+
+            if (result.error) {
+                console.error('Error fetching credit notes:', result.error);
+            }
             return { data: result.data, error: result.error };
         },
     );
 
     const creditNotes = creditNotesList ?? [];
 
+    const handleView = (row: any) => {
+        setEditingRecord(row);
+        setViewOnly(true);
+        setIsModalOpen(true);
+    };
+
     const handleEdit = (row: any) => {
         setEditingRecord(row);
+        setViewOnly(false);
         setIsModalOpen(true);
     };
 
     const handleNewCreditNote = () => {
         setEditingRecord(null);
+        setViewOnly(false);
         setIsModalOpen(true);
     };
 
     const handleModalClose = () => {
         setIsModalOpen(false);
         setEditingRecord(null);
+        setViewOnly(false);
     };
 
     const handleSuccess = () => {
         queryClient.invalidateQueries({ queryKey: ['credit_notes'] });
+    };
+
+    const handleDelete = async (row: any) => {
+        if (row.status !== 'Draft') {
+            toast.error('Only draft credit notes can be deleted.');
+            return;
+        }
+        if (!confirm(`Delete credit note ${row.cn_number}? This cannot be undone.`)) return;
+        try {
+            const { error } = await supabase.from('credit_notes').delete().eq('id', row.id);
+            if (error) throw error;
+            toast.success('Credit note deleted');
+            queryClient.invalidateQueries({ queryKey: ['credit_notes'] });
+        } catch (err: any) {
+            toast.error('Failed to delete: ' + err.message);
+        }
     };
 
     const columns = [
@@ -116,36 +154,31 @@ export default function CreditNotesPage() {
             key: 'id',
             label: 'Actions',
             render: (_v: string, row: any) => (
-                <button
-                    onClick={(e) => {
-                        e.stopPropagation();
-                        handleEdit(row);
-                    }}
-                    style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 4,
-                        padding: '4px 10px',
-                        borderRadius: 6,
-                        border: '1px solid var(--slate-200)',
-                        background: 'var(--card-bg)',
-                        fontSize: 11,
-                        fontWeight: 500,
-                        color: 'var(--slate-600)',
-                        cursor: 'pointer',
-                        transition: 'all 0.15s'
-                    }}
-                    onMouseEnter={(e) => {
-                        e.currentTarget.style.borderColor = 'var(--primary-300)';
-                        e.currentTarget.style.color = 'var(--primary-600)';
-                    }}
-                    onMouseLeave={(e) => {
-                        e.currentTarget.style.borderColor = 'var(--slate-200)';
-                        e.currentTarget.style.color = 'var(--slate-600)';
-                    }}
-                >
-                    <Edit2 size={13} /> Edit
-                </button>
+                <div style={{ display: 'flex', gap: 6 }}>
+                    <button
+                        onClick={(e) => { e.stopPropagation(); handleView(row); }}
+                        title="View"
+                        style={{ padding: 6, borderRadius: 6, border: '1px solid var(--slate-200)', background: 'var(--card-bg)', color: 'var(--slate-600)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                    >
+                        <Eye size={14} />
+                    </button>
+                    <button
+                        onClick={(e) => { e.stopPropagation(); handleEdit(row); }}
+                        title="Edit"
+                        style={{ padding: 6, borderRadius: 6, border: '1px solid var(--slate-200)', background: 'var(--card-bg)', color: 'var(--primary-600)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                    >
+                        <Edit2 size={14} />
+                    </button>
+                    {row.status === 'Draft' && (
+                        <button
+                            onClick={(e) => { e.stopPropagation(); handleDelete(row); }}
+                            title="Delete"
+                            style={{ padding: 6, borderRadius: 6, border: '1px solid var(--slate-200)', background: 'var(--card-bg)', color: 'var(--danger)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                        >
+                            <Trash2 size={14} />
+                        </button>
+                    )}
+                </div>
             )
         },
     ];
@@ -185,6 +218,21 @@ export default function CreditNotesPage() {
                 }
             />
 
+            {/* Error Display */}
+            {error && (
+                <div style={{
+                    padding: '12px 16px',
+                    marginBottom: 16,
+                    borderRadius: 8,
+                    background: '#fef2f2',
+                    border: '1px solid #fecaca',
+                    color: '#dc2626',
+                    fontSize: 13,
+                }}>
+                    <strong>Error loading credit notes:</strong> {error.message || 'Unknown error'}
+                </div>
+            )}
+
             <div className="animate-stagger" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 24 }}>
                 <StatCard title="Total Credit Notes" value={stats.total} icon={<FileText size={20} />} color="blue" />
                 <StatCard title="Total Value" value={formatCurrency(stats.totalValue)} icon={<Banknote size={20} />} color="red" />
@@ -205,6 +253,7 @@ export default function CreditNotesPage() {
                 onClose={handleModalClose}
                 onSuccess={handleSuccess}
                 record={editingRecord}
+                readOnly={viewOnly}
             />
         </div>
     );

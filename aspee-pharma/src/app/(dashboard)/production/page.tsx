@@ -8,16 +8,17 @@ import StatusBadge from '@/components/StatusBadge';
 import ProductionOrderModal from '@/components/ProductionOrderModal';
 import MaterialRequestModal from '@/components/MaterialRequestModal';
 import EntityLink from '@/components/EntityLink';
-import { Plus, Factory, Package, AlertTriangle, CheckCircle, Eye, Pencil, Trash2, ClipboardList, CheckSquare } from 'lucide-react';
+import { Plus, Factory, Package, AlertTriangle, CheckCircle, Eye, Pencil, Trash2, ClipboardList, CheckSquare, FlaskConical, Microscope, Send } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { useFetch, useAction } from '@/lib/hooks';
 import { useQueryClient } from '@tanstack/react-query';
 import ProductionCompletionModal from '@/components/ProductionCompletionModal';
 import SendToMDModal from '@/components/SendToMDModal';
-import { Send } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 
 export default function ProductionPage() {
+    const router = useRouter();
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
     const [materialRequestType, setMaterialRequestType] = useState<'Raw Material' | 'Packaging Material'>('Raw Material');
@@ -168,6 +169,20 @@ export default function ProductionPage() {
             label: 'Actions',
             render: (_: any, row: any) => (
                 <div style={{ display: 'flex', gap: 8 }}>
+                    <button
+                        onClick={() => router.push(`/qa/in-process?search=${encodeURIComponent(row.order_number)}`)}
+                        style={{ padding: 6, borderRadius: 6, border: '1px solid var(--slate-200)', background: 'var(--card-bg)', color: 'var(--violet-600, #7c3aed)', cursor: 'pointer' }}
+                        title="View In Process Control Records"
+                    >
+                        <FlaskConical size={14} />
+                    </button>
+                    <button
+                        onClick={() => router.push(`/qa/finished-products?search=${encodeURIComponent(row.order_number)}`)}
+                        style={{ padding: 6, borderRadius: 6, border: '1px solid var(--slate-200)', background: 'var(--card-bg)', color: 'var(--teal-600, #0d9488)', cursor: 'pointer' }}
+                        title="View Finished Products Analysis"
+                    >
+                        <Microscope size={14} />
+                    </button>
                     <button
                         onClick={() => { setSelectedOrder(row); setMaterialRequestType('Raw Material'); setIsRequestModalOpen(true); }}
                         style={{ padding: 6, borderRadius: 6, border: '1px solid var(--slate-200)', background: 'var(--card-bg)', color: 'var(--amber-600)', cursor: 'pointer' }}

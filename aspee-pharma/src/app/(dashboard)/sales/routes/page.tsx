@@ -6,7 +6,7 @@ import DataTable from '@/components/DataTable';
 import StatCard from '@/components/StatCard';
 import StatusBadge from '@/components/StatusBadge';
 import VanModal from '@/components/VanModal';
-import { Plus, Truck, Banknote, MapPin, Users, Edit2, Trash2 } from 'lucide-react';
+import { Plus, Truck, Banknote, MapPin, Users, Edit2, Trash2, Eye } from 'lucide-react';
 import { useSupabaseQuery, useDelete } from '@/lib/hooks';
 import { useQueryClient } from '@tanstack/react-query';
 import { formatCurrency } from '@/lib/currency';
@@ -19,6 +19,7 @@ export default function RoutesPage() {
 
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedVan, setSelectedVan] = useState<any>(null);
+    const [viewOnly, setViewOnly] = useState(false);
 
     const deleteMutation = useDelete('vans');
 
@@ -54,7 +55,7 @@ export default function RoutesPage() {
             label: 'Plate No.',
             render: (v: unknown) => <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>{v as string}</span>
         },
-        { key: 'driver_name', label: 'Driver' },
+        { key: 'driver_name', label: 'Sales Person' },
         { key: 'route_area', label: 'Route Area' },
         {
             key: 'loaded_value',
@@ -78,19 +79,26 @@ export default function RoutesPage() {
         {
             key: 'actions',
             label: 'Actions',
-            width: '100px',
+            width: '140px',
             render: (_: any, row: any) => (
                 <div style={{ display: 'flex', gap: '8px' }}>
                     <button
-                        onClick={() => { setSelectedVan(row); setIsModalOpen(true); }}
-                        style={{ border: 'none', background: 'var(--primary-50)', color: 'var(--primary-600)', width: '30px', height: '30px', borderRadius: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                        onClick={() => { setSelectedVan(row); setViewOnly(true); setIsModalOpen(true); }}
+                        style={{ padding: 6, borderRadius: 6, border: '1px solid var(--slate-200)', background: 'var(--card-bg)', color: 'var(--slate-600)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                        title="View Van"
+                    >
+                        <Eye size={14} />
+                    </button>
+                    <button
+                        onClick={() => { setSelectedVan(row); setViewOnly(false); setIsModalOpen(true); }}
+                        style={{ padding: 6, borderRadius: 6, border: '1px solid var(--slate-200)', background: 'var(--card-bg)', color: 'var(--primary-600)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                         title="Edit Van"
                     >
                         <Edit2 size={14} />
                     </button>
                     <button
                         onClick={() => handleDelete(row.id)}
-                        style={{ border: 'none', background: 'var(--danger-50)', color: 'var(--danger)', width: '30px', height: '30px', borderRadius: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                        style={{ padding: 6, borderRadius: 6, border: '1px solid var(--slate-200)', background: 'var(--card-bg)', color: 'var(--danger)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                         title="Delete Van"
                     >
                         <Trash2 size={14} />
@@ -108,7 +116,7 @@ export default function RoutesPage() {
                 breadcrumbs={[{ label: 'Routes & Vans' }]}
                 actions={
                     <button
-                        onClick={() => { setSelectedVan(null); setIsModalOpen(true); }}
+                        onClick={() => { setSelectedVan(null); setViewOnly(false); setIsModalOpen(true); }}
                         style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 18px', borderRadius: 8, border: 'none', background: 'linear-gradient(135deg, var(--primary-600), var(--primary-500))', fontSize: 11, fontWeight: 600, color: 'white', cursor: 'pointer' }}
                     >
                         <Plus size={16} /> Add Van
@@ -132,9 +140,10 @@ export default function RoutesPage() {
 
             <VanModal
                 isOpen={isModalOpen}
-                onClose={() => setIsModalOpen(false)}
+                onClose={() => { setIsModalOpen(false); setViewOnly(false); }}
                 onSuccess={() => { toast.success(selectedVan ? 'Van updated successfully' : 'Van added successfully'); queryClient.invalidateQueries({ queryKey: ['vans'] }); }}
                 record={selectedVan}
+                readOnly={viewOnly}
             />
         </div>
     );

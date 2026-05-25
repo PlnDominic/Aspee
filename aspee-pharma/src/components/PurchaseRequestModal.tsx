@@ -6,9 +6,8 @@ import {
     ClipboardList,
     Save,
     Search,
-    Plus,
+    Package,
     Trash2,
-    History,
     Calendar,
     DollarSign
 } from 'lucide-react';
@@ -20,6 +19,7 @@ interface Product {
     name: string;
     sku: string;
     unit: string;
+    material_type: string;
 }
 
 interface RequestItem {
@@ -49,6 +49,7 @@ export default function PurchaseRequestModal({ isOpen, onClose, onSuccess, editi
 
     const [allProducts, setAllProducts] = useState<Product[]>([]);
     const [searchTerm, setSearchTerm] = useState('');
+    const [selectedCategory, setSelectedCategory] = useState('All Categories');
     const [showDropdown, setShowDropdown] = useState(false);
     const searchRef = useRef<HTMLDivElement>(null);
 
@@ -66,6 +67,7 @@ export default function PurchaseRequestModal({ isOpen, onClose, onSuccess, editi
                 setPriority('Normal');
             }
             setSearchTerm('');
+            setSelectedCategory('All Categories');
             fetchProducts();
         }
     }, [isOpen, editingRequest]);
@@ -84,7 +86,8 @@ export default function PurchaseRequestModal({ isOpen, onClose, onSuccess, editi
         try {
             const { data, error } = await supabase
                 .from('products')
-                .select('id, name, sku, unit')
+                .select('id, name, sku, unit, material_type')
+                .neq('material_type', 'Finished Good')
                 .order('name');
             if (error) throw error;
             setAllProducts(data || []);
@@ -254,12 +257,16 @@ export default function PurchaseRequestModal({ isOpen, onClose, onSuccess, editi
         }
     };
 
+    const categoryOptions = ['All Categories', ...Array.from(new Set(allProducts.map((p) => p.material_type))).sort()];
+
     const filteredProducts = allProducts.filter(p => {
         const alreadyAdded = items.some(i => i.product_id === p.id);
         if (alreadyAdded) return false;
+        if (selectedCategory !== 'All Categories' && p.material_type !== selectedCategory) return false;
         if (!searchTerm) return true;
         return p.name.toLowerCase().includes(searchTerm.toLowerCase()) || p.sku.toLowerCase().includes(searchTerm.toLowerCase());
     });
+    const totalRequestedQuantity = items.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
 
     return (
         <Modal
@@ -270,71 +277,123 @@ export default function PurchaseRequestModal({ isOpen, onClose, onSuccess, editi
             width={900}
         >
             <form onSubmit={handleSubmit} className="pr-form">
-                <div className="form-grid">
-                    <div className="form-field">
-                        <label>Request #</label>
-                        <div className="input-field disabled">
-                            <ClipboardList size={16} className="icon" />
-                            <input value={requestNumber} readOnly />
-                        </div>
-                    </div>
+                <div className="form-section">
+                    <h4 className="section-title">
+                        <ClipboardList size={16} />
+                        Request Details
+                    </h4>
 
-                    <div className="form-field">
-                        <label>Priority</label>
-                        <div className="input-field">
-                            <select value={priority} onChange={(e) => setPriority(e.target.value)}>
-                                <option value="Low">Low</option>
-                                <option value="Normal">Normal</option>
-                                <option value="High">High</option>
-                                <option value="Urgent">Urgent</option>
-                            </select>
+                    <div className="form-grid">
+                        <div className="form-field">
+                            <label>Request #</label>
+                            <div className="input-field disabled">
+                                <ClipboardList size={16} className="icon" />
+                                <input value={requestNumber} readOnly />
+                            </div>
                         </div>
-                    </div>
 
-                    <div className="form-field full-width" ref={searchRef}>
-                        <label>Add Material/Component</label>
-                        <div className="input-field">
-                            <Search size={16} className="icon" />
-                            <input
-                                type="text"
-                                placeholder="Search by name or SKU..."
-                                value={searchTerm}
-                                onChange={(e) => { setSearchTerm(e.target.value); setShowDropdown(true); }}
-                                onFocus={() => setShowDropdown(true)}
+                        <div className="form-field">
+                            <label>Priority</label>
+                            <div className="input-field">
+                                <select value={priority} onChange={(e) => setPriority(e.target.value)}>
+                                    <option value="Low">Low</option>
+                                    <option value="Normal">Normal</option>
+                                    <option value="High">High</option>
+                                    <option value="Urgent">Urgent</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div className="form-field full-width">
+                            <label>Overall Notes</label>
+                            <textarea
+                                value={notes}
+                                onChange={(e) => setNotes(e.target.value)}
+                                rows={3}
+                                placeholder="Reason for request, vendor preference, etc."
                             />
                         </div>
-                        {showDropdown && (
-                            <div className="dropdown">
-                                {filteredProducts.length > 0 ? (
-                                    filteredProducts.slice(0, 10).map(p => (
-                                        <div key={p.id} className="dropdown-item" onClick={() => addProduct(p)}>
-                                            <div className="name">{p.name}</div>
-                                            <div className="sku">{p.sku}</div>
+                    </div>
+                </div>
+
+                <div className="form-section">
+                    <h4 className="section-title">
+                        <Package size={16} />
+                        Requested Items
+                    </h4>
+
+                    <div className="po-table-actions-bar">
+                        <div className="quick-add-utility request-add-utility" ref={searchRef}>
+                            <span className="util-label">Add Material/Component</span>
+                            <div className="util-fields request-util-fields">
+                                <select
+                                    value={selectedCategory}
+                                    onChange={(e) => {
+                                        setSelectedCategory(e.target.value);
+                                        setShowDropdown(true);
+                                    }}
+                                    className="util-select request-category-select"
+                                >
+                                    {categoryOptions.map((category) => (
+                                        <option key={category} value={category}>
+                                            {category}
+                                        </option>
+                                    ))}
+                                </select>
+                                <div className="request-search-field">
+                                    <Search size={16} className="search-icon" />
+                                    <input
+                                        type="text"
+                                        placeholder="Search by name or SKU..."
+                                        value={searchTerm}
+                                        onChange={(e) => {
+                                            setSearchTerm(e.target.value);
+                                            setShowDropdown(true);
+                                        }}
+                                        onFocus={() => setShowDropdown(true)}
+                                    />
+                                    {showDropdown && (
+                                        <div className="dropdown">
+                                            {filteredProducts.length > 0 ? (
+                                                filteredProducts.slice(0, 10).map(p => (
+                                                    <div key={p.id} className="dropdown-item" onClick={() => addProduct(p)}>
+                                                        <div className="name">{p.name}</div>
+                                                        <div className="sku">{p.sku} • {p.material_type}</div>
+                                                    </div>
+                                                ))
+                                            ) : (
+                                                <div className="no-results">No products found</div>
+                                            )}
                                         </div>
-                                    ))
-                                ) : (
-                                    <div className="no-results">No products found</div>
-                                )}
+                                    )}
+                                </div>
                             </div>
-                        )}
+                        </div>
+
+                        <div className="request-count-chip">
+                            <span className="request-count-value">{items.length}</span>
+                            <span className="request-count-label">{items.length === 1 ? 'line item' : 'line items'}</span>
+                        </div>
                     </div>
 
-                    <div className="items-table-container full-width">
+                    <div className="items-table-wrapper">
                         {items.length > 0 ? (
                             <table className="items-table">
                                 <thead>
                                     <tr>
+                                        <th style={{ width: 44 }}>#</th>
                                         <th>Material</th>
                                         <th style={{ width: 100 }}>Qty</th>
                                         <th style={{ width: 120 }}>Unit</th>
                                         <th style={{ width: 220 }}>Purchase History</th>
                                         <th>Purpose</th>
-                                        <th style={{ width: 50 }}></th>
+                                        <th style={{ width: 45 }}></th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {items.map((item, index) => (
                                         <tr key={index}>
+                                            <td className="row-index">{index + 1}</td>
                                             <td>
                                                 <div className="name">{item.product?.name}</div>
                                                 <div className="sku">{item.product?.sku}</div>
@@ -345,10 +404,11 @@ export default function PurchaseRequestModal({ isOpen, onClose, onSuccess, editi
                                                     value={item.quantity}
                                                     onChange={(e) => updateItem(index, { quantity: parseFloat(e.target.value) || 0 })}
                                                     className="qty-input"
+                                                    min="0"
                                                 />
                                             </td>
                                             <td>
-                                                <div className="unit">{item.unit || item.product?.unit}</div>
+                                                <span className="unit-chip">{item.unit || item.product?.unit}</span>
                                             </td>
                                             <td>
                                                 <div className="history-box">
@@ -372,7 +432,7 @@ export default function PurchaseRequestModal({ isOpen, onClose, onSuccess, editi
                                                 />
                                             </td>
                                             <td>
-                                                <button type="button" onClick={() => removeItem(index)} className="remove-btn">
+                                                <button type="button" onClick={() => removeItem(index)} className="btn-remove-row">
                                                     <Trash2 size={14} />
                                                 </button>
                                             </td>
@@ -381,18 +441,21 @@ export default function PurchaseRequestModal({ isOpen, onClose, onSuccess, editi
                                 </tbody>
                             </table>
                         ) : (
-                            <div className="no-items">No items added. Use the search bar above to add materials.</div>
+                            <div className="no-items">
+                                No materials selected yet. Use the search field above to add a request line.
+                            </div>
                         )}
                     </div>
 
-                    <div className="form-field full-width">
-                        <label>Overall Notes</label>
-                        <textarea
-                            value={notes}
-                            onChange={(e) => setNotes(e.target.value)}
-                            rows={3}
-                            placeholder="Reason for request, vendor preference, etc."
-                        />
+                    <div className="summary-row">
+                        <div className="summary-item">
+                            <span className="summary-label">Items Added:</span>
+                            <span className="summary-value">{items.length}</span>
+                        </div>
+                        <div className="summary-item">
+                            <span className="summary-label">Total Quantity:</span>
+                            <span className="summary-value">{totalRequestedQuantity.toLocaleString()}</span>
+                        </div>
                     </div>
                 </div>
 
@@ -406,55 +469,308 @@ export default function PurchaseRequestModal({ isOpen, onClose, onSuccess, editi
             </form>
 
             <style>{`
-                .pr-form { margin-top: 10px; }
+                .pr-form {
+                    margin-top: 10px;
+                    display: flex;
+                    flex-direction: column;
+                    gap: 24px;
+                }
+                .form-section {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 16px;
+                }
+                .section-title {
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    font-size: 11px;
+                    font-weight: 700;
+                    color: var(--slate-700);
+                    margin: 0;
+                    padding-bottom: 8px;
+                    border-bottom: 1px solid var(--slate-100);
+                }
                 .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
                 .full-width { grid-column: span 2; }
-                .form-field label { display: block; font-size: 12px; font-weight: 600; color: var(--slate-700); margin-bottom: 8px; }
+                .form-field { display: flex; flex-direction: column; gap: 8px; }
+                .form-field label { display: block; font-size: 11px; font-weight: 600; color: var(--slate-600); }
                 .input-field { position: relative; display: flex; align-items: center; }
                 .input-field .icon { position: absolute; left: 12px; color: var(--slate-400); }
                 .input-field input, .input-field select, textarea {
-                    width: 100%; padding: 10px 12px 10px 40px; border: 1.5px solid var(--slate-200);
-                    border-radius: 10px; font-size: 13px; background: white; color: var(--slate-900); outline: none;
-                    transition: border-color 0.2s;
+                    width: 100%; padding: 10px 12px 10px 40px; border: 1px solid var(--slate-200);
+                    border-radius: 8px; font-size: 11px; background: var(--card-bg); color: var(--slate-900); outline: none;
+                    transition: all 0.2s;
                 }
-                textarea { padding-left: 12px; }
-                .input-field input:focus { border-color: var(--primary-500); }
+                textarea { padding: 10px 12px; resize: vertical; min-height: 88px; }
+                .input-field input:focus,
+                .input-field select:focus,
+                textarea:focus {
+                    border-color: var(--primary-500);
+                    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+                }
                 .disabled input { background: var(--slate-50); color: var(--slate-500); }
+                .po-table-actions-bar {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    gap: 16px;
+                    margin-bottom: 12px;
+                }
+                .quick-add-utility {
+                    display: flex;
+                    align-items: center;
+                    gap: 12px;
+                    padding: 8px 16px;
+                    background: var(--slate-50);
+                    border-radius: 12px;
+                    border: 1px solid var(--slate-100);
+                }
+                .request-add-utility {
+                    flex: 1;
+                    align-items: flex-start;
+                }
+                .util-label {
+                    font-size: 10px;
+                    font-weight: 700;
+                    color: var(--slate-500);
+                    text-transform: uppercase;
+                    white-space: nowrap;
+                    padding-top: 7px;
+                }
+                .util-fields {
+                    display: flex;
+                    gap: 8px;
+                }
+                .request-util-fields {
+                    flex: 1;
+                    align-items: stretch;
+                }
+                .util-select {
+                    padding: 10px 12px;
+                    border: 1px solid var(--slate-200);
+                    border-radius: 8px;
+                    font-size: 11px;
+                    background: var(--card-bg);
+                    color: var(--slate-900);
+                    outline: none;
+                    min-width: 190px;
+                    transition: all 0.2s;
+                }
+                .util-select:focus {
+                    border-color: var(--primary-500);
+                    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+                }
+                .request-category-select {
+                    flex: 0 0 220px;
+                }
+                .request-search-field {
+                    position: relative;
+                    flex: 1;
+                }
+                .request-search-field .search-icon {
+                    position: absolute;
+                    left: 12px;
+                    top: 50%;
+                    transform: translateY(-50%);
+                    color: var(--slate-400);
+                    pointer-events: none;
+                }
+                .request-search-field input {
+                    width: 100%;
+                    padding: 10px 12px 10px 38px;
+                    border: 1px solid var(--slate-200);
+                    border-radius: 8px;
+                    font-size: 11px;
+                    background: var(--card-bg);
+                    color: var(--slate-900);
+                    outline: none;
+                    transition: all 0.2s;
+                }
+                .request-search-field input:focus {
+                    border-color: var(--primary-500);
+                    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+                }
                 .dropdown {
-                    position: absolute; width: 100%; background: white; border: 1px solid var(--slate-200);
-                    border-radius: 10px; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); z-index: 50;
-                    margin-top: 4px; max-height: 250px; overflow-y: auto;
+                    position: absolute;
+                    top: calc(100% + 8px);
+                    left: 0;
+                    width: 100%;
+                    background: white;
+                    border: 1px solid var(--slate-200);
+                    border-radius: 10px;
+                    box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1);
+                    z-index: 50;
+                    max-height: 250px;
+                    overflow-y: auto;
                 }
                 .dropdown-item { padding: 10px 15px; cursor: pointer; border-bottom: 1px solid var(--slate-50); }
                 .dropdown-item:hover { background: var(--slate-50); }
                 .dropdown-item .name { font-weight: 600; font-size: 13px; color: var(--slate-800); }
                 .dropdown-item .sku { font-size: 11px; color: var(--slate-500); }
-                .items-table-container { 
-                    border: 1px solid var(--slate-200); border-radius: 12px; overflow: hidden;
-                    background: var(--slate-50); margin-top: 10px;
+                .request-count-chip {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 10px;
+                    padding: 10px 14px;
+                    border-radius: 12px;
+                    border: 1px solid var(--slate-200);
+                    background: var(--card-bg);
+                    white-space: nowrap;
                 }
-                .items-table { width: 100%; border-collapse: collapse; }
-                .items-table th { background: #f8fafc; padding: 12px; text-align: left; font-size: 11px; font-weight: 700; color: var(--slate-500); text-transform: uppercase; }
-                .items-table td { padding: 12px; background: white; border-top: 1px solid #f1f5f9; font-size: 13px; }
+                .request-count-value {
+                    font-size: 16px;
+                    font-weight: 700;
+                    color: var(--primary-600);
+                }
+                .request-count-label {
+                    font-size: 11px;
+                    color: var(--slate-500);
+                    font-weight: 600;
+                }
+                .items-table-wrapper {
+                    overflow-x: auto;
+                    border: 1px solid var(--slate-200);
+                    border-radius: 12px;
+                    background: var(--card-bg);
+                }
+                .items-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+                .items-table th {
+                    background: var(--slate-50);
+                    padding: 12px 10px;
+                    text-align: left;
+                    font-size: 10px;
+                    font-weight: 700;
+                    color: var(--slate-500);
+                    text-transform: uppercase;
+                    border-bottom: 1px solid var(--slate-200);
+                    white-space: nowrap;
+                }
+                .items-table td {
+                    padding: 10px;
+                    background: white;
+                    border-bottom: 1px solid var(--slate-100);
+                    font-size: 11px;
+                    vertical-align: middle;
+                }
+                .row-index {
+                    color: var(--slate-400);
+                    font-family: var(--font-mono);
+                    font-size: 10px;
+                }
                 .items-table .name { font-weight: 600; color: var(--slate-900); }
                 .items-table .sku { font-size: 11px; color: var(--slate-500); }
-                .qty-input { width: 100%; padding: 8px; border: 1.5px solid var(--slate-100); border-radius: 6px; outline: none; }
-                .purpose-input { width: 100%; padding: 8px; border: 1.5px solid var(--slate-100); border-radius: 6px; outline: none; font-size: 12px; }
+                .qty-input, .purpose-input {
+                    width: 100%;
+                    padding: 8px 10px;
+                    border: 1px solid var(--slate-200);
+                    border-radius: 6px;
+                    outline: none;
+                    font-size: 11px;
+                    background: var(--card-bg);
+                }
+                .qty-input:focus, .purpose-input:focus {
+                    border-color: var(--primary-500);
+                    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.08);
+                }
+                .unit-chip {
+                    display: inline-flex;
+                    align-items: center;
+                    padding: 6px 10px;
+                    border-radius: 999px;
+                    background: var(--slate-50);
+                    color: var(--slate-700);
+                    font-size: 10px;
+                    font-weight: 700;
+                    border: 1px solid var(--slate-200);
+                }
                 .history-box { display: flex; flex-direction: column; gap: 4px; }
                 .history-item { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--slate-600); }
                 .history-item b { color: var(--primary-600); }
-                .remove-btn { color: var(--danger); border: none; background: none; cursor: pointer; padding: 5px; border-radius: 4px; }
-                .remove-btn:hover { background: #fee2e2; }
-                .no-items { padding: 30px; text-align: center; color: var(--slate-400); font-style: italic; }
-                .modal-actions { display: flex; justify-content: flex-end; gap: 12px; margin-top: 30px; }
-                .btn-cancel { padding: 10px 24px; border-radius: 10px; border: 1.5px solid var(--slate-200); background: white; color: var(--slate-600); font-weight: 600; cursor: pointer; }
+                .btn-remove-row {
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    width: 28px;
+                    height: 28px;
+                    border-radius: 6px;
+                    border: none;
+                    background: #FEF2F2;
+                    color: #EF4444;
+                    cursor: pointer;
+                    transition: all 0.2s;
+                }
+                .btn-remove-row:hover {
+                    background: #FEE2E2;
+                    transform: scale(1.1);
+                }
+                .no-items {
+                    padding: 32px 20px;
+                    text-align: center;
+                    color: var(--slate-400);
+                    font-size: 11px;
+                }
+                .summary-row {
+                    display: flex;
+                    justify-content: flex-end;
+                    gap: 32px;
+                    padding: 16px 24px;
+                    background: var(--slate-50);
+                    border-radius: 12px;
+                    margin-top: 12px;
+                }
+                .summary-item {
+                    display: flex;
+                    align-items: center;
+                    gap: 12px;
+                }
+                .summary-label {
+                    font-size: 12px;
+                    font-weight: 600;
+                    color: var(--slate-500);
+                }
+                .summary-value {
+                    font-size: 18px;
+                    font-weight: 700;
+                    color: var(--primary-600);
+                }
+                .modal-actions {
+                    display: flex;
+                    justify-content: flex-end;
+                    gap: 12px;
+                    margin-top: 8px;
+                    padding-top: 24px;
+                    border-top: 1px solid var(--slate-100);
+                }
+                .btn-cancel { padding: 10px 20px; border-radius: 8px; border: 1px solid var(--slate-200); background: white; color: var(--slate-600); font-weight: 600; cursor: pointer; }
                 .btn-save {
-                    display: flex; align-items: center; gap: 8px; padding: 10px 28px; border-radius: 10px;
+                    display: flex; align-items: center; gap: 8px; padding: 10px 20px; border-radius: 8px;
                     background: linear-gradient(135deg, var(--primary-600), var(--primary-500)); color: white;
                     font-weight: 600; border: none; cursor: pointer; transition: transform 0.2s;
                 }
                 .btn-save:hover:not(:disabled) { transform: translateY(-1px); filter: brightness(1.1); }
                 .btn-save:disabled { opacity: 0.7; cursor: not-allowed; }
+                @media (max-width: 900px) {
+                    .form-grid {
+                        grid-template-columns: 1fr;
+                    }
+                    .full-width {
+                        grid-column: span 1;
+                    }
+                    .po-table-actions-bar,
+                    .quick-add-utility,
+                    .summary-row,
+                    .modal-actions {
+                        flex-direction: column;
+                        align-items: stretch;
+                    }
+                    .util-label {
+                        padding-top: 0;
+                    }
+                    .request-category-select {
+                        flex-basis: auto;
+                    }
+                }
             `}</style>
         </Modal>
     );

@@ -70,8 +70,19 @@ export default function MaterialRequestsPage() {
                 return;
             }
 
-            // Assume Main Store location ID is 1 for now
-            const mainStoreId = '1';
+            const { data: mainStore, error: mainStoreError } = await supabase
+                .from('stock_locations')
+                .select('id, name')
+                .eq('name', 'Main Warehouse')
+                .single();
+
+            if (mainStoreError) throw mainStoreError;
+            if (!mainStore?.id) {
+                toast.error('Main Warehouse location was not found in stock_locations.');
+                return;
+            }
+
+            const mainStoreId = mainStore.id;
 
             // 2. Pre-flight Check: Validate Total Stock Availability
             for (const item of requestItems) {

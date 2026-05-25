@@ -14,29 +14,55 @@ export type AuditAction =
 
 export interface AuditEntry {
     action: AuditAction;
-    module: string;          // e.g. 'Sales Invoices', 'Purchase Orders', 'Stock'
-    description: string;     // Human-readable description
-    record_id?: string;      // ID of the affected record
-    record_type?: string;    // Table name or entity type
-    old_values?: any;        // Previous values (for updates)
-    new_values?: any;        // New values (for creates/updates)
-    user_name?: string;      // Display name of the user
+    module: string;
+    description: string;
+    record_id?: string;
+    record_type?: string;
+    old_values?: any;
+    new_values?: any;
+    user_name?: string;
 }
 
-/**
- * Logs an action to the audit_log table in Supabase.
- * Fails silently to avoid blocking the main operation.
- */
 export async function logAudit(entry: AuditEntry): Promise<void> {
     try {
         const { data: authData } = await supabase.auth.getUser();
         const userId = authData?.user?.id || null;
         const userEmail = authData?.user?.email || 'system';
+        const userName = entry.user_name || userEmail;
 
-        await supabase.from('audit_log').insert([{
+        const { data: systemUser } = userId
+            ? await supabase
+                .from('system_users')
+                .select('department, name')
+                .eq('auth_user_id', userId)
+                .maybeSingle()
+            : { data: null };
+
+        const { error: activityError } = await supabase.from('department_activity_logs').insert([{
+            department: systemUser?.department || 'Administration',
+            activity_date: new Date().toISOString().split('T')[0],
             user_id: userId,
             user_email: userEmail,
-            user_name: entry.user_name || userEmail,
+            user_name: systemUser?.name || userName,
+            action: entry.action,
+            module: entry.module,
+            description: entry.description,
+            record_id: entry.record_id || null,
+            record_type: entry.record_type || null,
+            metadata: {
+                old_values: entry.old_values || null,
+                new_values: entry.new_values || null,
+            },
+        }]);
+
+        if (activityError && activityError.code !== '42P01' && activityError.code !== 'PGRST205') {
+            console.warn('[AuditLog] Failed to write department activity:', activityError);
+        }
+
+        const { error: legacyError } = await supabase.from('audit_log').insert([{
+            user_id: userId,
+            user_email: userEmail,
+            user_name: userName,
             action: entry.action,
             module: entry.module,
             description: entry.description,
@@ -44,11 +70,14 @@ export async function logAudit(entry: AuditEntry): Promise<void> {
             record_type: entry.record_type || null,
             old_values: entry.old_values ? JSON.stringify(entry.old_values) : null,
             new_values: entry.new_values ? JSON.stringify(entry.new_values) : null,
-            ip_address: null, // Could be populated server-side
+            ip_address: null,
             created_at: new Date().toISOString(),
         }]);
+
+        if (legacyError && legacyError.code !== '42P01' && legacyError.code !== 'PGRST205') {
+            console.warn('[AuditLog] Failed to mirror legacy audit entry:', legacyError);
+        }
     } catch (error) {
-        // Fail silently — audit logging should never block the main operation
         console.warn('[AuditLog] Failed to write audit entry:', error);
     }
 }

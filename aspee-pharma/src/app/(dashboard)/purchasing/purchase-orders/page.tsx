@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import PageHeader from '@/components/PageHeader';
 import DataTable from '@/components/DataTable';
 import StatCard from '@/components/StatCard';
@@ -51,7 +51,7 @@ export default function PurchaseOrdersPage() {
                 const poItems = items.map((item: any) => ({
                     po_id: id,
                     product_id: item.product_id,
-                    quantity: item.quantity,
+                    quantity: Math.round(item.quantity),
                     unit_price: item.unit_price,
                     unit: item.unit || 'Pieces'
                 }));
@@ -84,7 +84,7 @@ export default function PurchaseOrdersPage() {
                 const poItems = items.map((item: any) => ({
                     po_id: po.id,
                     product_id: item.product_id,
-                    quantity: item.quantity,
+                    quantity: Math.round(item.quantity),
                     unit_price: item.unit_price,
                     unit: item.unit || 'Pieces'
                 }));
@@ -182,6 +182,71 @@ export default function PurchaseOrdersPage() {
         if (!confirm('Are you sure you want to delete this purchase order?')) return;
         await deleteMutation.mutateAsync(id);
     };
+
+    const openCreateFromRequest = useCallback(async (requestId: string) => {
+        try {
+            const { data, error } = await supabase
+                .from('purchase_requests')
+                .select(`
+                    id,
+                    request_number,
+                    status,
+                    items:purchase_request_items(
+                        product_id,
+                        quantity,
+                        unit,
+                        last_purchase_price,
+                        product:products(
+                            id,
+                            name,
+                            sku,
+                            unit,
+                            purchase_unit,
+                            bulk_unit,
+                            bulk_to_base_ratio,
+                            material_type
+                        )
+                    )
+                `)
+                .eq('id', requestId)
+                .single();
+
+            if (error) throw error;
+
+            const items = (data?.items || [])
+                .filter((item: any) => item.product_id)
+                .map((item: any) => ({
+                    product_id: item.product_id,
+                    quantity: Number(item.quantity) || 1,
+                    unit_price: Number(item.last_purchase_price) || 0,
+                    unit: item.unit || item.product?.purchase_unit || item.product?.unit || 'Pieces',
+                    product: item.product,
+                }));
+
+            if (items.length === 0) {
+                toast.warning('This purchase requisition has no items to copy into a PO.');
+                return;
+            }
+
+            setModalMode('create');
+            setSelectedPO({
+                source_request_id: data.id,
+                source_request_number: data.request_number,
+                status: 'Pending',
+                items,
+            });
+            setIsModalOpen(true);
+        } catch (error: any) {
+            toast.error('Failed to load requisition items: ' + error.message);
+        }
+    }, []);
+
+    useEffect(() => {
+        const requestId = new URLSearchParams(window.location.search).get('request');
+        if (requestId) {
+            openCreateFromRequest(requestId);
+        }
+    }, [openCreateFromRequest]);
 
     const openCreateModal = () => {
         setModalMode('create');
@@ -330,7 +395,7 @@ export default function PurchaseOrdersPage() {
                                             const amount = row.total_amount || 0;
                                             const isHighValue = amount > 10000;
                                             const level = isHighValue ? 'Finance' : 'Manager';
-                                            if (confirm(`Approve this PO for ${level} review?\n\nAmount: GH₵${amount.toLocaleString()}${isHighValue ? '\n\nNote: POs over GH₵10,000 require Finance approval' : ''}`)) {
+                                            if (confirm(`Approve this PO for ${level} review?\n\nAmount: ${formatCurrency(amount, row.currency)}${isHighValue ? `\n\nNote: POs over ${formatCurrency(10000, row.currency)} require Finance approval` : ''}`)) {
                                                 approveMutation.mutate({ poId: row.id, approvalLevel: level });
                                             }
                                         }}

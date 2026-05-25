@@ -1,11 +1,33 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
 import nodemailer from 'nodemailer';
+import { ACCOUNTING_ROLES, REPORT_ADMIN_ROLES } from '@/lib/routePermissions';
+import {
+    createServiceRoleClient,
+    isAuthorizedCronRequest,
+    requireAuthenticatedUser,
+    requireRoles,
+} from '@/lib/serverAuth';
 
-const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-);
+const supabase = createServiceRoleClient();
+
+function escapeHtml(value: string) {
+    return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function sanitizeAttachmentUrl(input: string) {
+    try {
+        const url = new URL(input);
+        if (!['http:', 'https:'].includes(url.protocol)) return null;
+        return url.toString();
+    } catch {
+        return null;
+    }
+}
 
 // ── Data fetchers ────────────────────────────────────────────────────────────
 
@@ -301,12 +323,27 @@ function generateDepartmentSubmissionHtml(report: any) {
             <h3 style="margin:0 0 10px;font-size:14px;font-weight:700;color:#0f172a;">${title}</h3>
             <p style="margin:0;font-size:13px;line-height:1.7;color:#475569;white-space:pre-wrap;">${content && content.trim() ? content : 'Not provided.'}</p>
         </div>`;
+    const dailyEntriesHtml = Array.isArray(report.daily_entries) && report.daily_entries.length
+        ? `
+        <div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:12px;padding:18px 20px;margin-bottom:14px;">
+            <h3 style="margin:0 0 14px;font-size:14px;font-weight:700;color:#0f172a;">Monday to Friday Work Log</h3>
+            ${report.daily_entries.map((entry: any) => `
+                <div style="border-top:1px solid #e2e8f0;padding-top:12px;margin-top:12px;">
+                    <div style="display:flex;justify-content:space-between;gap:12px;margin-bottom:8px;">
+                        <strong style="font-size:13px;color:#0f172a;">${entry.day}</strong>
+                        <span style="font-size:12px;color:#64748b;">${entry.date ? new Date(entry.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : ''}</span>
+                    </div>
+                    <p style="margin:0;font-size:13px;line-height:1.7;color:#475569;white-space:pre-wrap;">${entry.work_done || 'No system-recorded activity for this day.'}</p>
+                </div>
+            `).join('')}
+        </div>`
+        : '';
     const attachmentHtml = Array.isArray(report.attachments) && report.attachments.length
         ? `
         <div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:12px;padding:18px 20px;margin-bottom:14px;">
             <h3 style="margin:0 0 10px;font-size:14px;font-weight:700;color:#0f172a;">Attachments</h3>
             <ul style="margin:0;padding-left:18px;">
-                ${report.attachments.map((attachment: any) => `<li style="margin-bottom:8px;"><a href="${attachment.url}" style="color:#0891b2;text-decoration:none;font-size:13px;">${attachment.name}</a></li>`).join('')}
+                ${report.attachments.map((attachment: any) => `<li style="margin-bottom:8px;"><a href="${attachment.url}" style="color:#0891b2;text-decoration:none;font-size:13px;">${escapeHtml(attachment.name)}</a></li>`).join('')}
             </ul>
         </div>`
         : '';
@@ -319,14 +356,14 @@ function generateDepartmentSubmissionHtml(report: any) {
         <div style="padding:28px 32px;background:linear-gradient(135deg,#1d4ed8,#0891b2);color:#ffffff;">
             <p style="margin:0 0 6px;font-size:12px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:rgba(255,255,255,0.75);">Aspee Pharmaceuticals Limited</p>
             <h1 style="margin:0;font-size:26px;font-weight:800;line-height:1.2;">Department Weekly Report Submission</h1>
-            <p style="margin:8px 0 0;font-size:14px;color:rgba(255,255,255,0.85);">${report.department} · Reporting week ${weekLabel}</p>
+            <p style="margin:8px 0 0;font-size:14px;color:rgba(255,255,255,0.85);">${escapeHtml(report.department)} · Reporting week ${weekLabel}</p>
         </div>
         <div style="padding:28px 32px;">
             <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-bottom:18px;">
                 <div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:12px;padding:16px;">
                     <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#94a3b8;margin-bottom:4px;">Submitted By</div>
-                    <div style="font-size:14px;font-weight:700;color:#0f172a;">${report.submitted_by || 'N/A'}</div>
-                    <div style="font-size:12px;color:#64748b;margin-top:4px;">${report.submitted_by_email || 'No email provided'}</div>
+                    <div style="font-size:14px;font-weight:700;color:#0f172a;">${escapeHtml(report.submitted_by || 'N/A')}</div>
+                    <div style="font-size:12px;color:#64748b;margin-top:4px;">${escapeHtml(report.submitted_by_email || 'No email provided')}</div>
                 </div>
                 <div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:12px;padding:16px;">
                     <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#94a3b8;margin-bottom:4px;">Submitted At</div>
@@ -334,9 +371,8 @@ function generateDepartmentSubmissionHtml(report: any) {
                 </div>
             </div>
             ${section('Executive Summary', report.summary)}
+            ${dailyEntriesHtml}
             ${section('Major Achievements', report.achievements)}
-            ${section('Challenges / Risks', report.challenges)}
-            ${section('Next Week Plan', report.next_week_plan)}
             ${attachmentHtml}
         </div>
     </div>
@@ -392,7 +428,50 @@ export async function POST(request: Request) {
         const transporter = createTransporter();
 
         if (body?.mode === 'department-submission' && body?.report) {
+            const { appUser, error } = await requireAuthenticatedUser();
+            if (error || !appUser) return error;
+
             const report = body.report;
+            const allowedDepartment = appUser.systemUser.department || '';
+            const submitterEmail = appUser.authUser.email?.toLowerCase();
+
+            if (!report.department || report.department !== allowedDepartment) {
+                return NextResponse.json({ error: 'You can only submit reports for your own department.' }, { status: 403 });
+            }
+
+            if (!submitterEmail || String(report.submitted_by_email || '').toLowerCase() !== submitterEmail) {
+                return NextResponse.json({ error: 'Report submitter does not match the authenticated user.' }, { status: 403 });
+            }
+
+            report.summary = escapeHtml(report.summary || '');
+            report.achievements = escapeHtml(report.achievements || '');
+            report.challenges = escapeHtml(report.challenges || '');
+            report.next_week_plan = escapeHtml(report.next_week_plan || '');
+            report.submitted_by = escapeHtml(appUser.systemUser.name || report.submitted_by || 'Unknown user');
+            report.submitted_by_email = escapeHtml(submitterEmail);
+            report.department = escapeHtml(report.department);
+            report.daily_entries = Array.isArray(report.daily_entries)
+                ? report.daily_entries.map((entry: any) => ({
+                    day: escapeHtml(String(entry?.day || '')),
+                    date: escapeHtml(String(entry?.date || '')),
+                    work_done: escapeHtml(String(entry?.work_done || '')),
+                    challenges: escapeHtml(String(entry?.challenges || '')),
+                    next_action: escapeHtml(String(entry?.next_action || '')),
+                }))
+                : [];
+            report.attachments = Array.isArray(report.attachments)
+                ? report.attachments
+                    .map((attachment: any) => {
+                        const safeUrl = sanitizeAttachmentUrl(String(attachment?.url || ''));
+                        if (!safeUrl) return null;
+                        return {
+                            name: escapeHtml(String(attachment?.name || 'Attachment')),
+                            url: safeUrl,
+                        };
+                    })
+                    .filter(Boolean)
+                : [];
+
             const html = generateDepartmentSubmissionHtml(report);
             const weekStr = `${new Date(report.report_week_start).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })} – ${new Date(report.report_week_end).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}`;
 
@@ -405,6 +484,11 @@ export async function POST(request: Request) {
             });
 
             return NextResponse.json({ success: true, message: `Department report sent to ${mdEmail}` });
+        }
+
+        if (!isAuthorizedCronRequest(request)) {
+            const { error } = await requireRoles([...REPORT_ADMIN_ROLES, ...ACCOUNTING_ROLES]);
+            if (error) return error;
         }
 
         const { from, to, label } = weekRange();

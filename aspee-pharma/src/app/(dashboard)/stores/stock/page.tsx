@@ -7,6 +7,7 @@ import StatCard from '@/components/StatCard';
 import StatusBadge from '@/components/StatusBadge';
 import EntityLink from '@/components/EntityLink';
 import { Boxes, Package, AlertTriangle, MapPin, Download, RefreshCw, Send } from 'lucide-react';
+import { formatWithBulk } from '@/lib/unitConversions';
 import { supabase } from '@/lib/supabase';
 import { useFetch } from '@/lib/hooks';
 import SendToMDModal from '@/components/SendToMDModal';
@@ -22,6 +23,8 @@ interface StockRow {
     product_name: string;
     sku: string;
     unit: string;
+    bulk_unit: string | null;
+    bulk_to_base_ratio: number | null;
     material_type: string;
     reorder_level: number;
     locations: Record<string, number>;
@@ -44,7 +47,7 @@ export default function StockLevelsPage() {
         async () => {
             const [locRes, prodRes, stockRes, qaRes] = await Promise.all([
                 supabase.from('stock_locations').select('*').order('name'),
-                supabase.from('products').select('id, name, sku, unit, material_type, reorder_level').order('name'),
+                supabase.from('products').select('id, name, sku, unit, bulk_unit, bulk_to_base_ratio, material_type, reorder_level').order('name'),
                 supabase.from('stock_levels').select('product_id, location_id, qty_on_hand'),
                 supabase.from('grn_items').select('product_id, quantity_received').eq('qa_status', 'Approved'),
             ]);
@@ -63,7 +66,8 @@ export default function StockLevelsPage() {
             const stockMap: Record<string, Record<string, number>> = {};
             for (const level of levels) {
                 if (!stockMap[level.product_id]) stockMap[level.product_id] = {};
-                stockMap[level.product_id][level.location_id] = level.qty_on_hand;
+                stockMap[level.product_id][level.location_id] =
+                    (stockMap[level.product_id][level.location_id] || 0) + Number(level.qty_on_hand || 0);
             }
 
             // Build lookup for approved QA qty
@@ -101,6 +105,8 @@ export default function StockLevelsPage() {
                     product_name: product.name,
                     sku: product.sku,
                     unit: product.unit,
+                    bulk_unit: product.bulk_unit ?? null,
+                    bulk_to_base_ratio: product.bulk_to_base_ratio ?? null,
                     material_type: product.material_type,
                     reorder_level: reorder,
                     locations: locationValues,
@@ -173,9 +179,25 @@ export default function StockLevelsPage() {
             key: 'product_name',
             label: 'Product',
             render: (v: any, row: any) => (
-                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                     <EntityLink href={`/stores/products?search=${encodeURIComponent(v)}`}>{v}</EntityLink>
                     <span style={{ fontSize: 10, color: 'var(--slate-400)' }}>{row.material_type}</span>
+                    <div style={{ display: 'flex', gap: 8, marginTop: 1 }}>
+                        <EntityLink
+                            href={`/stores/sales-movements?search=${encodeURIComponent(v)}`}
+                            subtle
+                            title="View sales movements for this product"
+                        >
+                            Sales movements ↗
+                        </EntityLink>
+                        <EntityLink
+                            href={`/stores/transfers?search=${encodeURIComponent(v)}`}
+                            subtle
+                            title="View transfers for this product"
+                        >
+                            Transfers ↗
+                        </EntityLink>
+                    </div>
                 </div>
             )
         },
@@ -186,7 +208,20 @@ export default function StockLevelsPage() {
                 <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>{v}</span>
             )
         },
-        { key: 'unit', label: 'Unit' },
+        {
+            key: 'unit',
+            label: 'Unit',
+            render: (_v: any, row: any) => (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    <span style={{ fontSize: 11, fontWeight: 600 }}>{row.unit}</span>
+                    {row.bulk_unit && row.bulk_to_base_ratio && (
+                        <span style={{ fontSize: 10, color: 'var(--primary-600)', fontWeight: 500 }}>
+                            1 {row.bulk_unit} = {row.bulk_to_base_ratio} {row.unit}
+                        </span>
+                    )}
+                </div>
+            ),
+        },
         // Dynamic location columns
         ...locations.map(loc => ({
             key: `loc_${loc.id}`,
@@ -206,10 +241,20 @@ export default function StockLevelsPage() {
         {
             key: 'total',
             label: 'Total Stock',
-            render: (v: any) => (
-                <span style={{ fontWeight: 700, color: 'var(--slate-900)', fontSize: 12 }}>
-                    {(v as number).toLocaleString()}
-                </span>
+            render: (v: any, row: any) => (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    <span style={{ fontWeight: 700, color: 'var(--slate-900)', fontSize: 12 }}>
+                        {(v as number).toLocaleString()} {row.unit}
+                    </span>
+                    {row.bulk_unit && row.bulk_to_base_ratio && (
+                        <span style={{ fontSize: 10, color: 'var(--primary-600)', fontWeight: 600 }}>
+                            ≈ {((v as number) / row.bulk_to_base_ratio % 1 === 0
+                                ? ((v as number) / row.bulk_to_base_ratio).toLocaleString()
+                                : ((v as number) / row.bulk_to_base_ratio).toLocaleString(undefined, { maximumFractionDigits: 2 })
+                            )} {row.bulk_unit}
+                        </span>
+                    )}
+                </div>
             )
         },
         {

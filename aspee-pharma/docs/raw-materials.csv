@@ -1,0 +1,83 @@
+source_no,source_label,normalized_name,material_type,unit,purchase_unit,issue_unit,notes
+1,Aerosil,Aerosil,Raw Material,Grams,Kilograms,Grams,Purchase KG issue G
+2,Amaranth Red,Amaranth Red,Raw Material,Grams,Kilograms,Grams,Purchase KG issue G
+3,Ammonium Chloride,Ammonium Chloride,Raw Material,Grams,Kilograms,Grams,Purchase KG issue G
+4,Anise Oil,Anise Oil,Raw Material,Litres,Litres,Litres,Purchase LTR issue L
+5,Ascorbic Acid,Ascorbic Acid,Raw Material,Grams,Kilograms,Grams,Purchase KG issue G
+6,Aspartame,Aspartame,Raw Material,Grams,Kilograms,Grams,Purchase KG issue G
+7,Bee Wax,Bee Wax,Raw Material,Grams,Kilograms,Grams,Purchase KG issue G
+8,Benzoic Acid,Benzoic Acid,Raw Material,Grams,Kilograms,Grams,Purchase KG issue G
+9,Brilliant Blue,Brilliant Blue,Raw Material,Grams,Kilograms,Grams,Purchase KG issue G
+10,Bromhexine,Bromhexine,Raw Material,Grams,Kilograms,Grams,Purchase KG issue G
+11,Caffeine Anhydrous,Caffeine Anhydrous,Raw Material,Grams,Kilograms,Grams,Purchase KG issue G
+12,Carnauba Wax,Carnauba Wax,Raw Material,Grams,Kilograms,Grams,Purchase KG issue G
+13,Caramel,Caramel,Raw Material,Litres,Litres,Litres,Purchase LTR issue L
+14,Carboxymethyl Cellulose,Carboxymethyl Cellulose,Raw Material,Grams,Kilograms,Grams,Purchase KG issue G
+15,Chlorbutanol,Chlorbutanol,Raw Material,Grams,Kilograms,Grams,Purchase KG issue G
+16,Chloroform,Chloroform,Raw Material,Millilitres,Litres,Millilitres,Purchase LTR issue ML
+17,Chlorpheniramine,Chlorpheniramine,Raw Material,Grams,Kilograms,Grams,Purchase KG issue G
+18,Chocolate Flavour,Chocolate Flavour,Raw Material,Litres,Litres,Litres,Purchase LTR issue L
+19,Citric Acid,Citric Acid,Raw Material,Grams,Kilograms,Grams,Purchase KG issue G
+20,Condensed Milk Flavour,Condensed Milk Flavour,Raw Material,Litres,Litres,Litres,Purchase LTR issue L
+21,Cyproheptadine,Cyproheptadine,Raw Material,Grams,Kilograms,Grams,Purchase KG issue G
+22,D-Calcium Pantothenate,D-Calcium Pantothenate,Raw Material,Grams,Kilograms,Grams,Purchase KG issue G
+23,Diaphenhydramine,Diaphenhydramine,Raw Material,Grams,Kilograms,Grams,Purchase KG issue G
+24,Diazepam,Diazepam,Raw Material,Grams,Kilograms,Grams,Purchase KG issue G
+25,Di-Calcium Phosphate,Di-Calcium Phosphate,Raw Material,Grams,Kilograms,Grams,Purchase KG issue G
+26,Diclofenac Sodium,Diclofenac Sodium,Raw Material,Grams,Kilograms,Grams,Purchase KG issue G
+27,Dicyclomine,Dicyclomine,Raw Material,Grams,Kilograms,Grams,Purchase KG issue G
+28,Egg Yellow,Egg Yellow,Raw Material,Grams,Kilograms,Grams,Purchase KG issue G
+29,Ephedrine,Ephedrine,Raw Material,Grams,Kilograms,Grams,Purchase KG issue G
+30,Ethanol,Ethanol,Raw Material,Millilitres,Litres,Millilitres,Purchase LTR issue ML
+31,Ferric Ammonium Citrate,Ferric Ammonium Citrate,Raw Material,Grams,Kilograms,Grams,Purchase KG issue G
+32,Furazolidone,Furazolidone,Raw Material,Grams,Kilograms,Grams,Purchase KG issue G
+33,Gelatin,Gelatin,Raw Material,Grams,Kilograms,Grams,Purchase KG issue G
+34,Glycerine,Glycerine,Raw Material,Millilitres,Litres,Millilitres,Purchase LTR issue ML
+35,Guaiphenesin,Guaiphenesin,Raw Material,Grams,Kilograms,Grams,Purchase KG issue G
+36,Honey,Honey,Raw Material,Millilitres,Litres,Millilitres,Purchase LTR issue ML
+37,Ibuprofen,Ibuprofen,Raw Material,Grams,Kilograms,Grams,Purchase KG issue G
+38,Iron III Polymatose,Iron III Polymatose,Raw Material,Grams,Kilograms,Grams,Purchase KG issue G
+39,Lactose,Lactose,Raw Material,Grams,Kilograms,Grams,Purchase KG issue G
+40,Lemon Flavour,Lemon Flavour,Raw Material,Millilitres,Litres,Millilitres,Purchase LTR issue ML
+41,L-Lysine,L-Lysine,Raw Material,Grams,Kilograms,Grams,Purchase KG issue G
+42,Magnesium Stearate,Magnesium Stearate,Raw Material,Grams,Kilograms,Grams,Purchase KG issue G
+43,Maize Starch,Maize Starch,Raw Material,Grams,Kilograms,Grams,Purchase KG issue G
+44,Mefenamic Acid,Mefenamic Acid,Raw Material,Grams,Kilograms,Grams,Purchase KG issue G
+45,Menthol,Menthol,Raw Material,Grams,Kilograms,Grams,Purchase KG issue G
+46,Metronidazole,Metronidazole,Raw Material,Grams,Kilograms,Grams,Purchase KG issue G
+47,Microcrystalline Cellulose,Microcrystalline Cellulose,Raw Material,Grams,Kilograms,Grams,Purchase KG issue G
+48,Nicotinamide,Nicotinamide,Raw Material,Grams,Kilograms,Grams,Purchase KG issue G
+49,Orange Emulsion,Orange Emulsion,Raw Material,Millilitres,Litres,Millilitres,Purchase LTR issue ML
+50,Orange Flavour,Orange Flavour,Raw Material,Millilitres,Litres,Millilitres,Purchase LTR issue ML
+51,Paracetamol,Paracetamol,Raw Material,Grams,Kilograms,Grams,Purchase KG issue G
+52,Peppermint Oil,Peppermint Oil,Raw Material,Millilitres,Litres,Millilitres,Purchase LTR issue ML
+53,Pineapple Flavour,Pineapple Flavour,Raw Material,Millilitres,Litres,Millilitres,Purchase LTR issue ML
+54,Ponceau 4R,Ponceau 4R,Raw Material,Grams,Kilograms,Grams,Purchase KG issue G
+55,Propylene Glycol,Propylene Glycol,Raw Material,Millilitres,Litres,Millilitres,Purchase LTR issue ML
+56,Purified Talc Powder,Purified Talc Powder,Raw Material,Grams,Kilograms,Grams,Purchase KG issue G
+57,Pyridoxine HCL,Pyridoxine HCL,Raw Material,Grams,Kilograms,Grams,Purchase KG issue G
+58,Quinine Sulphate,Quinine Sulphate,Raw Material,Grams,Kilograms,Grams,Purchase KG issue G
+59,Raspberry Flavour,Raspberry Flavour,Raw Material,Millilitres,Litres,Millilitres,Purchase LTR issue ML
+60,Riboflavin,Riboflavin,Raw Material,Grams,Kilograms,Grams,Purchase KG issue G
+61,Shellac,Shellac,Raw Material,Grams,Kilograms,Grams,Purchase KG issue G
+62,Sodium Chloride,Sodium Chloride,Raw Material,Grams,Kilograms,Grams,Purchase KG issue G
+63,Sodium Citrate,Sodium Citrate,Raw Material,Grams,Kilograms,Grams,Purchase KG issue G
+64,Sodium Lauryl Sulphate,Sodium Lauryl Sulphate,Raw Material,Grams,Kilograms,Grams,Purchase KG issue G
+65,Sodium Saccharin,Sodium Saccharin,Raw Material,Grams,Kilograms,Grams,Purchase KG issue G
+66,Sodium Starch Glycolate,Sodium Starch Glycolate,Raw Material,Grams,Kilograms,Grams,Purchase KG issue G
+67,Strawberry Emulsion,Strawberry Emulsion,Raw Material,Millilitres,Litres,Millilitres,Purchase LTR issue ML
+68,Strawberry Flavour,Strawberry Flavour,Raw Material,Millilitres,Litres,Millilitres,Purchase LTR issue ML
+69,Tetrazine Yellow,Tetrazine Yellow,Raw Material,Grams,Kilograms,Grams,Purchase KG issue G
+70,Thiamine Hydrochloride,Thiamine Hydrochloride,Raw Material,Grams,Kilograms,Grams,Purchase KG issue G
+71,Thiamine Monohydrate,Thiamine Monohydrate,Raw Material,Grams,Kilograms,Grams,Purchase KG issue G
+72,Titanium Dioxide,Titanium Dioxide,Raw Material,Grams,Kilograms,Grams,Purchase KG issue G
+73,Tramadol,Tramadol,Raw Material,Grams,Kilograms,Grams,Purchase KG issue G
+74,Tween 80,Tween 80,Raw Material,Millilitres,Litres,Millilitres,Purchase LTR issue ML
+75,Vanilla Flavour,Vanilla Flavour,Raw Material,Millilitres,Litres,Millilitres,Purchase LTR issue ML
+76,Vitamin A Acetate,Vitamin A Acetate,Raw Material,Grams,Kilograms,Grams,Purchase KG issue G
+77,Vitamin A Palmitate,Vitamin A Palmitate,Raw Material,Grams,Kilograms,Grams,Purchase KG issue G
+78,Vitamin B12,Vitamin B12,Raw Material,Grams,Kilograms,Grams,Purchase KG issue G
+79,Vitamin D3,Vitamin D3,Raw Material,Millilitres,Litres,Millilitres,Purchase LTR issue ML
+80,Xanthan Gum,Xanthan Gum,Raw Material,Grams,Kilograms,Grams,Purchase KG issue G
+81,Zinc Sulphate,Zinc Sulphate,Raw Material,Grams,Kilograms,Grams,Purchase KG issue G
+82,Sugar,Sugar,Raw Material,Grams,Kilograms,Grams,Purchase KG issue G
