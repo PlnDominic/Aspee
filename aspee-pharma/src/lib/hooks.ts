@@ -152,7 +152,7 @@ export function useTableData<T>(
     options?: {
         columns?: string;
         filters?: Record<string, unknown>;
-        searchColumn?: string;
+        searchColumn?: string | string[];
         searchQuery?: string;
         sortBy?: string;
         sortOrder?: 'asc' | 'desc';
@@ -193,7 +193,14 @@ export function useTableData<T>(
 
             // Apply search
             if (searchColumn && searchQuery) {
-                query = query.ilike(searchColumn, `%${searchQuery}%`);
+                if (Array.isArray(searchColumn)) {
+                    const orFilter = searchColumn
+                        .map(col => `${col}.ilike.%${searchQuery}%`)
+                        .join(',');
+                    query = query.or(orFilter);
+                } else {
+                    query = query.ilike(searchColumn, `%${searchQuery}%`);
+                }
             }
 
             // Apply sorting
