@@ -66,15 +66,24 @@ export async function middleware(request: NextRequest) {
 
     // If logged in, check role for specific routes
     if (user && pathname !== '/login' && pathname !== '/overview' && pathname !== '/') {
-        // Scalability Fix: Use custom claims (app_metadata) instead of a database query.
-        // The 'role' is synced to auth.users.app_metadata via a database trigger.
-        const userRole = user.app_metadata?.role;
+        // Prefer custom claims, but keep a database fallback for existing sessions
+        // whose JWT was issued before role claims were synced.
+        let userRole = user.app_metadata?.role as string | undefined;
 
         if (!userRole) {
-            // Role not yet synced or missing? 
-            // Fallback to overview or try one-time fetch (but usually we just redirect to home)
+            const { data: userData } = await supabase
+                .from('system_users')
+                .select('role')
+                .or(`auth_user_id.eq.${user.id},email.ilike.${user.email ?? ''}`)
+                .maybeSingle();
+
+            userRole = userData?.role;
+        }
+
+        if (!userRole) {
             const url = request.nextUrl.clone();
             url.pathname = '/overview';
+            url.searchParams.set('auth', 'missing-role');
             return NextResponse.redirect(url);
         }
 
