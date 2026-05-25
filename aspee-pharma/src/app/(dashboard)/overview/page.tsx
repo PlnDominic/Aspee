@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import StatusBadge from '@/components/StatusBadge';
 import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
@@ -81,149 +81,52 @@ export default function DashboardPage() {
 
     // ─── Filters & State ───────────────────────────────────────
     const [selectedMonth, setSelectedMonth] = useState<string>(new Date().toISOString().substring(0, 7));
+    const [chartsMounted, setChartsMounted] = useState(false);
 
-    // 1. Total Products
-    const { data: totalProducts = 0 } = useFetch<number>(
-        ['dashboard-product-count'],
+    useEffect(() => {
+        setChartsMounted(true);
+    }, []);
+
+    // ─── Aggregated Dashboard Stats ───────────────────────────────────────
+    // Scalability Fix: Don't fetch everything and process in JS.
+    const { data: stats, isLoading: statsLoading } = useFetch<any>(
+        ['dashboard-stats-summary'],
         async () => {
-            const { count, error } = await supabase
-                .from('products')
-                .select('*', { count: 'exact', head: true });
-            return { data: count || 0, error };
+            const { data, error } = await supabase.rpc('get_dashboard_stats');
+            return { data, error };
         }
     );
 
-    // 2. Low Stock Alerts
-    const { data: stockAlertData } = useFetch<{ lowStockCount: number; lowStockItems: any[] }>(
-        ['dashboard-low-stock'],
+    const {
+        totalProducts = 0,
+        totalCustomers = 0,
+        activePOs = 0,
+        lowStockCount = 0,
+        todaysRevenue = 0,
+        outstandingTotal = 0,
+        outstandingCount = 0,
+        salesData = [],
+        revenueData = []
+    } = stats || {};
+
+    // For the UI, we need the low stock items as well (Recent alerts)
+    const { data: lowStockItems = [] } = useFetch<any[]>(
+        ['dashboard-low-stock-items'],
         async () => {
-            const { data: stockData, error } = await supabase
+            const { data, error } = await supabase
                 .from('stock_levels')
-                .select(`
-                    qty_on_hand,
-                    product:products(name, sku, reorder_level)
-                `);
+                .select('qty_on_hand, product:products(name, sku, reorder_level)')
+                .limit(5); // Explicit limit for dashboard
 
-            if (error) return { data: { lowStockCount: 0, lowStockItems: [] }, error: null };
-
-            const low = (stockData || []).filter(item => {
-                const prod: any = Array.isArray(item.product) ? item.product[0] : item.product;
-                const reorder = prod?.reorder_level || 0;
-                return item.qty_on_hand <= reorder;
-            }).map(item => {
-                const prod: any = Array.isArray(item.product) ? item.product[0] : item.product;
-                return {
-                    product: prod?.name,
-                    sku: prod?.sku,
+            return { 
+                data: (data || []).map(item => ({
+                    product: (item.product as any)?.name,
+                    sku: (item.product as any)?.sku,
                     current: item.qty_on_hand,
-                    reorder: prod?.reorder_level || 0
-                };
-            });
-
-            return { data: { lowStockCount: low.length, lowStockItems: low.slice(0, 5) }, error: null };
-        }
-    );
-    const lowStockCount = stockAlertData?.lowStockCount ?? 0;
-    const lowStockItems = stockAlertData?.lowStockItems ?? [];
-
-    // 3. Invoice data
-    const { data: invoiceData } = useFetch<{
-        outstandingInvoicesCount: number;
-        outstandingInvoicesTotal: number;
-        todaysRevenue: number;
-        salesData: any[];
-        revenueData: any[];
-    }>(
-        ['dashboard-invoices'],
-        async () => {
-            const { data: invoices, error } = await supabase
-                .from('sales_invoices')
-                .select('status, total_amount, date');
-
-            if (error || !invoices) {
-                return {
-                    data: {
-                        outstandingInvoicesCount: 0,
-                        outstandingInvoicesTotal: 0,
-                        todaysRevenue: 0,
-                        salesData: [],
-                        revenueData: [],
-                    },
-                    error: null,
-                };
-            }
-
-            const outstanding = invoices.filter(i => ['Issued', 'Partially Paid', 'Overdue'].includes(i.status));
-            const outstandingInvoicesCount = outstanding.length;
-            const outstandingInvoicesTotal = outstanding.reduce((sum, inv) => sum + Number(inv.total_amount), 0);
-
-            const today = new Date().toISOString().split('T')[0];
-            const todays = invoices.filter(i => i.date === today && i.status !== 'Draft');
-            const todaysRevenue = todays.reduce((sum, inv) => sum + Number(inv.total_amount), 0);
-
-            const last7Days: string[] = [];
-            for (let i = 6; i >= 0; i--) {
-                const d = new Date();
-                d.setDate(d.getDate() - i);
-                last7Days.push(d.toISOString().split('T')[0]);
-            }
-            const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-
-            const salesData = last7Days.map(dateStr => {
-                const dayIndex = new Date(dateStr).getDay();
-                const daySales = invoices
-                    .filter(i => i.date === dateStr && i.status !== 'Draft')
-                    .reduce((sum, inv) => sum + Number(inv.total_amount), 0);
-                return { name: dayNames[dayIndex], sales: daySales };
-            });
-
-            const last6Months: string[] = [];
-            for (let i = 5; i >= 0; i--) {
-                const d = new Date();
-                d.setMonth(d.getMonth() - i);
-                last6Months.push(d.toISOString().substring(0, 7));
-            }
-
-            const revenueData = last6Months.map(monthStr => {
-                const monthIndex = parseInt(monthStr.split('-')[1], 10) - 1;
-                const monthSales = invoices
-                    .filter(i => i.date && i.date.startsWith(monthStr) && i.status !== 'Draft')
-                    .reduce((sum, inv) => sum + Number(inv.total_amount), 0);
-                return { name: monthNames[monthIndex], revenue: monthSales };
-            });
-
-            return {
-                data: { outstandingInvoicesCount, outstandingInvoicesTotal, todaysRevenue, salesData, revenueData },
-                error: null,
+                    reorder: (item.product as any)?.reorder_level || 0
+                })), 
+                error 
             };
-        }
-    );
-    const outstandingInvoicesCount = invoiceData?.outstandingInvoicesCount ?? 0;
-    const outstandingInvoicesTotal = invoiceData?.outstandingInvoicesTotal ?? 0;
-    const todaysRevenue = invoiceData?.todaysRevenue ?? 0;
-    const salesData = invoiceData?.salesData ?? [];
-    const revenueData = invoiceData?.revenueData ?? [];
-
-    // 4. Active POs (Orders equivalent)
-    const { data: activePOsCount = 0 } = useFetch<number>(
-        ['dashboard-active-pos'],
-        async () => {
-            const { count, error } = await supabase
-                .from('purchase_orders')
-                .select('*', { count: 'exact', head: true })
-                .not('status', 'in', '("Received","Cancelled")');
-            return { data: count || 0, error };
-        }
-    );
-
-    // 5. Total Customers
-    const { data: totalCustomers = 0 } = useFetch<number>(
-        ['dashboard-customer-count'],
-        async () => {
-            const { count, error } = await supabase
-                .from('customers')
-                .select('*', { count: 'exact', head: true });
-            return { data: count || 0, error };
         }
     );
 
@@ -464,20 +367,20 @@ export default function DashboardPage() {
         return expiryAlerts.length * 4500; // Placeholder until we have cost prices in alerts hook
     }, [expiryAlerts]);
 
-    const loading = !invoiceData && !stockAlertData;
+    const loading = statsLoading;
     const today = new Date();
     const greeting = today.getHours() < 12 ? 'Good Morning' : today.getHours() < 17 ? 'Good Afternoon' : 'Good Evening';
     const formattedDate = today.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
     const revenueByMonth = useMemo(() => {
-        if (!invoiceData?.revenueData) return 0;
-        const monthData = invoiceData.revenueData.find((d: any) => {
+        if (!revenueData.length) return 0;
+        const monthData = revenueData.find((d: any) => {
             return d.name === monthNames[parseInt(selectedMonth.split('-')[1]) - 1];
         });
         return monthData?.revenue || 0;
-    }, [invoiceData, selectedMonth]);
+    }, [revenueData, selectedMonth]);
 
-    const avgOrderValue = activePOsCount > 0 ? todaysRevenue / activePOsCount : 0;
+    const avgOrderValue = activePOs > 0 ? todaysRevenue / activePOs : 0;
 
     const [activeTab, setActiveTab] = useState<'Pharmaceuticals' | 'Surgicals'>('Pharmaceuticals');
 
@@ -557,11 +460,11 @@ export default function DashboardPage() {
                             <h2 style={{ fontSize: 32, fontWeight: 800, color: 'var(--slate-900)', marginTop: 8 }}>GH₵ {todaysRevenue.toLocaleString()}</h2>
                         </div>
                         <div style={{ width: 100, height: 80 }}>
-                            <ResponsiveContainer width="100%" height="100%">
+                            {chartsMounted && <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
                                 <BarChart data={verticalBarData}>
                                     <Bar dataKey="value" fill="var(--primary-500)" radius={[4, 4, 0, 0]} />
                                 </BarChart>
-                            </ResponsiveContainer>
+                            </ResponsiveContainer>}
                         </div>
                     </div>
                     <div style={{ marginTop: 'auto' }}>
@@ -579,16 +482,16 @@ export default function DashboardPage() {
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
                         <div>
                             <span style={{ fontSize: 12, color: 'var(--slate-500)', fontWeight: 500 }}>Consolidated Revenue</span>
-                            <h2 style={{ fontSize: 32, fontWeight: 800, color: 'var(--slate-900)', marginTop: 8 }}>GH₵ {outstandingInvoicesTotal.toLocaleString()}</h2>
+                            <h2 style={{ fontSize: 32, fontWeight: 800, color: 'var(--slate-900)', marginTop: 8 }}>GH₵ {outstandingTotal.toLocaleString()}</h2>
                         </div>
                         <div style={{ width: 80, height: 80 }}>
-                            <ResponsiveContainer width="100%" height="100%">
+                            {chartsMounted && <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
                                 <PieChart>
                                     <Pie data={gaugeData} innerRadius={25} outerRadius={35} paddingAngle={0} dataKey="value" stroke="none">
                                         {gaugeData.map((entry, index) => <Cell key={index} fill={entry.fill} />)}
                                     </Pie>
                                 </PieChart>
-                            </ResponsiveContainer>
+                            </ResponsiveContainer>}
                         </div>
                     </div>
                     <div style={{ marginTop: 'auto' }}>
@@ -619,7 +522,7 @@ export default function DashboardPage() {
                         </div>
                     </div>
                     <div style={{ height: 300 }}>
-                        <ResponsiveContainer width="100%" height="100%">
+                        {chartsMounted && <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
                             <AreaChart data={salesData}>
                                 <defs>
                                     <linearGradient id="colorSales" x1="0" y1="0" x2="0" y2="1">
@@ -636,14 +539,14 @@ export default function DashboardPage() {
                                 />
                                 <Area type="monotone" dataKey="sales" stroke="var(--primary-500)" strokeWidth={3} fillOpacity={1} fill="url(#colorSales)" />
                             </AreaChart>
-                        </ResponsiveContainer>
+                        </ResponsiveContainer>}
                     </div>
                 </div>
 
                 <div style={cardStyle}>
                     <h3 style={sectionTitle}>Target Attainment</h3>
                     <div style={{ height: 200, position: 'relative', marginTop: 24 }}>
-                        <ResponsiveContainer width="100%" height="100%">
+                        {chartsMounted && <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
                             <PieChart>
                                 <Pie 
                                     data={gaugeData} 
@@ -658,7 +561,7 @@ export default function DashboardPage() {
                                     {gaugeData.map((entry, index) => <Cell key={index} fill={entry.fill} />)}
                                 </Pie>
                             </PieChart>
-                        </ResponsiveContainer>
+                        </ResponsiveContainer>}
                         <div style={{ position: 'absolute', top: '55%', left: '50%', transform: 'translate(-50%, -50%)', textAlign: 'center' }}>
                             <p style={{ fontSize: 28, fontWeight: 800, color: 'var(--slate-900)' }}>{targetMet.toFixed(1)}%</p>
                             <p style={{ fontSize: 11, color: 'var(--slate-500)' }}>Daily Sales Target Progress</p>
@@ -695,7 +598,7 @@ export default function DashboardPage() {
                     </div>
                     <div style={{ height: 180, marginTop: 10 }}>
                         <p style={{ fontSize: 11, color: 'var(--slate-500)', marginBottom: 12 }}>QA Status & Production Flow</p>
-                        <ResponsiveContainer width="100%" height="100%">
+                        {chartsMounted && <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
                             <BarChart data={verticalBarData} layout="vertical">
                                 <XAxis type="number" hide />
                                 <YAxis dataKey="name" type="category" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: 'var(--slate-500)' }} width={40} />
@@ -706,7 +609,7 @@ export default function DashboardPage() {
                                     ))}
                                 </Bar>
                             </BarChart>
-                        </ResponsiveContainer>
+                        </ResponsiveContainer>}
                     </div>
                     <div style={{ marginTop: 20, display: 'flex', gap: 16 }}>
                         <div>

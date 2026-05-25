@@ -96,6 +96,25 @@ function DataTableInner({
     const totalPages = serverSide ? Math.ceil((total ?? 0) / pageSize) : Math.ceil(sorted.length / pageSize);
     const paged = serverSide ? sorted : sorted.slice((page - 1) * pageSize, page * pageSize);
 
+    const handleSearch = (value: string) => {
+        if (serverSide) {
+            onSearchChange?.(value);
+            return;
+        }
+
+        setInternalSearch(value);
+        setInternalPage(1);
+    };
+
+    const handlePageChange = (nextPage: number) => {
+        if (serverSide) {
+            onPageChange?.(nextPage);
+            return;
+        }
+
+        setInternalPage(nextPage);
+    };
+
     const handleSort = (key: string) => {
         const newDir = sortKey === key && sortDir === 'asc' ? 'desc' : 'asc';
         if (serverSide) {

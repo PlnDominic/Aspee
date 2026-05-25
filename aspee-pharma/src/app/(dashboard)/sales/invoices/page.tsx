@@ -13,7 +13,7 @@ import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { exportToCsv } from '@/lib/csvExport';
 import { formatCurrency } from '@/lib/formatCurrency';
-import { useFetch, useAction } from '@/lib/hooks';
+import { useFetch, useAction, useTableData } from '@/lib/hooks';
 import SendToMDModal from '@/components/SendToMDModal';
 
 const normalizeInvoiceStatus = (status?: string | null) => {
@@ -51,24 +51,61 @@ export default function InvoicesPage() {
     const [isReportModalOpen, setIsReportModalOpen] = useState(false);
     const [viewInvoice, setViewInvoice] = useState<any>(null);
 
-    const { data: invoicesList, isLoading: loading } = useFetch<any[]>(
-        ['sales_invoices', '*, items:sales_invoice_items(id, product_id, quantity, unit_price, total_price, product:products(name, sku))'],
-        async () => {
-            const result = await supabase
-                .from('sales_invoices')
-                .select(`
-                    *,
-                    items:sales_invoice_items(
-                        id, product_id, quantity, unit_price, discount_pct, discount_amount, total_price,
-                        product:products(name, sku)
-                    )
-                `)
-                .order('created_at', { ascending: false });
-            return { data: result.data, error: result.error };
-        },
+    // Server-side state
+    const [page, setPage] = useState(1);
+    const [search, setSearch] = useState('');
+    const [sortBy, setSortBy] = useState('created_at');
+    const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+
+    const { data: pagedData, isLoading: loading } = useTableData<any>(
+        'sales_invoices',
+        {
+            columns: `
+                *,
+                items:sales_invoice_items(
+                    id, product_id, quantity, unit_price, discount_pct, discount_amount, total_price,
+                    product:products(name, sku)
+                )
+            `,
+            page,
+            pageSize: 10,
+            searchColumn: ['invoice_number', 'customer_name'],
+            searchQuery: search,
+            sortBy,
+            sortOrder,
+        }
     );
 
-    const invoices = invoicesList ?? [];
+    const invoices = pagedData?.data ?? [];
+    const total = pagedData?.total ?? 0;
+
+    // Separate fetch for global stats (Scalability fix: don't calculate from paged rows)
+    const { data: statsData } = useFetch<any>(
+        ['sales_invoices_stats'],
+        async () => {
+            const { data, error } = await supabase
+                .from('sales_invoices')
+                .select('status, total_amount');
+            
+            if (error) return { data: null, error };
+
+            const calc = (data || []).reduce((acc: any, curr: any) => {
+                const status = normalizeInvoiceStatus(curr.status);
+                const amt = Number(curr.total_amount) || 0;
+                
+                acc.total++;
+                if (status !== 'DRAFT') acc.revenue += amt;
+                if (['ISSUED', 'OVERDUE', 'PARTIAL'].includes(status)) acc.outstanding += amt;
+                if (status === 'PAID') acc.paid += amt;
+                
+                return acc;
+            }, { total: 0, revenue: 0, outstanding: 0, paid: 0 });
+
+            return { data: calc, error: null };
+        }
+    );
+
+    const stats = statsData ?? { total: 0, revenue: 0, outstanding: 0, paid: 0 };
 
     const saveMutation = useAction<any>({
         mutationFn: async (invoiceData: any) => {
@@ -116,13 +153,6 @@ export default function InvoicesPage() {
 
         if (!confirm('Are you sure you want to delete this invoice?')) return;
         await deleteMutation.mutateAsync({ id, status: currentStatus });
-    };
-
-    const stats = {
-        total: invoices.length,
-        revenue: invoices.reduce((acc: number, curr: any) => normalizeInvoiceStatus(curr.status) !== 'DRAFT' ? acc + Number(curr.total_amount) : acc, 0),
-        outstanding: invoices.reduce((acc: number, curr: any) => ['ISSUED', 'OVERDUE', 'PARTIAL'].includes(normalizeInvoiceStatus(curr.status)) ? acc + Number(curr.total_amount) : acc, 0),
-        paid: invoices.reduce((acc: number, curr: any) => normalizeInvoiceStatus(curr.status) === 'PAID' ? acc + Number(curr.total_amount) : acc, 0),
     };
 
     const handleExport = () => {
@@ -238,7 +268,22 @@ export default function InvoicesPage() {
                 <StatCard title="Paid" value={`GHs ${stats.paid.toFixed(2)}`} icon={<CheckCircle size={20} />} color="teal" />
             </div>
 
-            <DataTable columns={columns} data={invoices} loading={loading} searchPlaceholder="Search invoices..." />
+            <DataTable
+                columns={columns}
+                data={invoices}
+                loading={loading}
+                searchPlaceholder="Search invoices..."
+                serverSide
+                total={total}
+                page={page}
+                onPageChange={setPage}
+                onSearchChange={(q) => { setSearch(q); setPage(1); }}
+                onSortChange={(key, dir) => { setSortBy(key); setSortOrder(dir); }}
+                currentSearch={search}
+                currentSortKey={sortBy}
+                currentSortDir={sortOrder}
+                onRowClick={(row) => setViewInvoice(row)}
+            />
 
             <InvoiceModal
                 isOpen={isModalOpen}

@@ -66,17 +66,13 @@ export async function middleware(request: NextRequest) {
 
     // If logged in, check role for specific routes
     if (user && pathname !== '/login' && pathname !== '/overview' && pathname !== '/') {
-        // Fetch user role from system_users — match by email so the admin
-        // only needs to enter the user's email in User Management (no UUID required).
-        const { data: userData, error: roleError } = await supabase
-            .from('system_users')
-            .select('role')
-            .eq('email', user.email)
-            .single();
+        // Scalability Fix: Use custom claims (app_metadata) instead of a database query.
+        // The 'role' is synced to auth.users.app_metadata via a database trigger.
+        const userRole = user.app_metadata?.role;
 
-        const userRole = userData?.role;
-
-        if (roleError || !userData) {
+        if (!userRole) {
+            // Role not yet synced or missing? 
+            // Fallback to overview or try one-time fetch (but usually we just redirect to home)
             const url = request.nextUrl.clone();
             url.pathname = '/overview';
             return NextResponse.redirect(url);

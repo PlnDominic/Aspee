@@ -15,6 +15,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'),
   title: "Aspee Pharmaceuticals — Stock & Inventory Management",
   description: "Comprehensive stock and inventory management system for Aspee Pharmaceuticals. Manage purchasing, stores, production, sales, and accounting.",
   keywords: "pharmaceutical, inventory, stock management, ERP",

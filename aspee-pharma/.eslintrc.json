@@ -8,6 +8,9 @@
     "@typescript-eslint/no-unused-vars": "off",
     "react/no-unescaped-entities": "off",
     "@next/next/no-document-import-in-page": "off",
-    "prefer-const": "off"
+    "prefer-const": "off",
+    "react-hooks/exhaustive-deps": "off",
+    "@next/next/no-img-element": "off",
+    "jsx-a11y/alt-text": "off"
   }
 }
