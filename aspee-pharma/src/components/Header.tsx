@@ -7,7 +7,6 @@ import { useRouter } from 'next/navigation';
 import GlobalSearch from './GlobalSearch';
 import { useTheme } from '@/components/ThemeProvider';
 import { useNotifications, useCurrentUser } from '@/lib/hooks';
-import { supabase } from '@/lib/supabase';
 
 interface HeaderProps {
     title: string;
@@ -48,8 +47,13 @@ export default function Header({ title, subtitle }: HeaderProps) {
 
     const handleLogout = async () => {
         setLoggingOut(true);
-        await supabase.auth.signOut();
-        router.push('/login');
+        try {
+            await fetch('/api/auth/logout', { method: 'POST' });
+        } finally {
+            // router.refresh() clears the Next.js router cache so stale server data isn't served
+            router.push('/login');
+            router.refresh();
+        }
     };
 
     const getIcon = (type: string) => {
