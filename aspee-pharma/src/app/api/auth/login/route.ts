@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
-import { cookies } from 'next/headers';
 import { createServiceRoleClient } from '@/lib/serverAuth';
 
 const MAX_EMAIL_FAILURES = 5;
@@ -80,20 +79,22 @@ export async function POST(request: NextRequest) {
         // Fail open: rate-limit check error must not block valid logins
     }
 
-    // Authenticate using cookie-aware server client so the session is set in the response
-    const cookieStore = await cookies();
+    // Buffer cookies that Supabase wants to set — we apply them to the NextResponse at the end.
+    // In Next.js 15 route handlers, cookies() is read-only; we must set cookies on the response
+    // object directly, not via cookieStore.set().
+    type CookieEntry = { name: string; value: string; options: Record<string, unknown> };
+    const pendingCookies: CookieEntry[] = [];
+
     const supabase = createServerClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
         process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
         {
             cookies: {
                 getAll() {
-                    return cookieStore.getAll();
+                    return request.cookies.getAll();
                 },
                 setAll(cookiesToSet) {
-                    cookiesToSet.forEach(({ name, value, options }) => {
-                        cookieStore.set(name, value, options);
-                    });
+                    pendingCookies.push(...(cookiesToSet as CookieEntry[]));
                 },
             },
         }
@@ -144,5 +145,10 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: message }, { status: 401 });
     }
 
-    return NextResponse.json({ success: true });
+    // Write the Supabase session cookies onto the response so the browser stores the session
+    const response = NextResponse.json({ success: true });
+    pendingCookies.forEach(({ name, value, options }) => {
+        response.cookies.set(name, value, options as Parameters<typeof response.cookies.set>[2]);
+    });
+    return response;
 }
