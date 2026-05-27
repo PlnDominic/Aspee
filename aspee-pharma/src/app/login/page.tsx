@@ -3,7 +3,6 @@
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Eye, EyeOff, Loader2, AlertCircle, ShieldCheck } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
 
 export default function LoginPage() {
     const router = useRouter();
@@ -12,18 +11,29 @@ export default function LoginPage() {
     const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [locked, setLocked] = useState(false);
 
     const handleSignIn = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (locked) return;
         setError(null);
         setLoading(true);
         try {
-            const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
-            if (signInError) throw signInError;
+            const res = await fetch('/api/auth/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, password }),
+            });
+            const data = await res.json();
+            if (!res.ok) {
+                if (data.locked) setLocked(true);
+                setError(data.error || 'Failed to sign in. Please check your credentials.');
+                return;
+            }
             router.push('/overview');
             router.refresh();
-        } catch (err: any) {
-            setError(err.message || 'Failed to sign in. Please check your credentials.');
+        } catch {
+            setError('Failed to sign in. Please try again.');
         } finally {
             setLoading(false);
         }
@@ -143,10 +153,10 @@ export default function LoginPage() {
                         </div>
 
                         {/* Submit */}
-                        <button type="submit" disabled={loading} className="lp-submit">
+                        <button type="submit" disabled={loading || locked} className="lp-submit">
                             {loading
                                 ? <><Loader2 size={18} className="lp-spin" /> Signing in...</>
-                                : 'Sign In'
+                                : locked ? 'Account Locked' : 'Sign In'
                             }
                         </button>
 
