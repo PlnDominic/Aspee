@@ -3,9 +3,11 @@ import { createServerClient } from '@supabase/ssr';
 import { createServiceRoleClient } from '@/lib/serverAuth';
 
 const MAX_EMAIL_FAILURES = 5;
-const MAX_IP_FAILURES = 20;
+const MAX_IP_FAILURES = 100;      // generous for corporate NAT — the per-email limit is the real guard
 const WINDOW_MINUTES = 15;
-const LOCKOUT_MINUTES = 15;
+const LOCKOUT_SECONDS = WINDOW_MINUTES * 60;
+const CLEANUP_AFTER_HOURS = 24;
+const CLEANUP_PROBABILITY = 0.05; // clean up stale rows on ~5% of requests (fire-and-forget)
 
 function getClientIp(request: NextRequest): string {
     return (
@@ -31,6 +33,13 @@ async function countFailures(
     return count ?? 0;
 }
 
+function lockedResponse(message: string): NextResponse {
+    return NextResponse.json(
+        { error: message, locked: true },
+        { status: 429, headers: { 'Retry-After': String(LOCKOUT_SECONDS) } }
+    );
+}
+
 export async function POST(request: NextRequest) {
     let body: { email?: string; password?: string };
     try {
@@ -45,6 +54,11 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Email and password are required.' }, { status: 400 });
     }
 
+    // Reject obviously invalid emails before they touch the DB
+    if (!email.includes('@') || email.length > 254) {
+        return NextResponse.json({ error: 'Invalid email address.' }, { status: 400 });
+    }
+
     const normalizedEmail = email.toLowerCase().trim();
     const ip = getClientIp(request);
     const userAgent = request.headers.get('user-agent') ?? '';
@@ -52,36 +66,34 @@ export async function POST(request: NextRequest) {
 
     const admin = createServiceRoleClient();
 
-    // Rate limit checks — fail open on DB error so a tracking outage never blocks legitimate logins
+    // Rate limit checks — fail open on any DB error so a tracking outage never blocks valid logins
+    let emailFailuresBeforeAttempt = 0;
     try {
-        const emailFailures = await countFailures(admin, { email: normalizedEmail }, windowStart);
-        if (emailFailures >= MAX_EMAIL_FAILURES) {
-            return NextResponse.json(
-                {
-                    error: `Too many failed attempts for this account. Please wait ${LOCKOUT_MINUTES} minutes and try again.`,
-                    locked: true,
-                },
-                { status: 429 }
+        emailFailuresBeforeAttempt = await countFailures(admin, { email: normalizedEmail }, windowStart);
+        if (emailFailuresBeforeAttempt >= MAX_EMAIL_FAILURES) {
+            return lockedResponse(
+                `Too many failed attempts for this account. Please wait ${WINDOW_MINUTES} minutes and try again.`
             );
         }
 
         const ipFailures = await countFailures(admin, { ip }, windowStart);
         if (ipFailures >= MAX_IP_FAILURES) {
-            return NextResponse.json(
-                {
-                    error: `Too many login attempts from your network. Please wait ${LOCKOUT_MINUTES} minutes and try again.`,
-                    locked: true,
-                },
-                { status: 429 }
+            return lockedResponse(
+                `Too many login attempts from your network. Please wait ${WINDOW_MINUTES} minutes and try again.`
             );
         }
     } catch {
-        // Fail open: rate-limit check error must not block valid logins
+        // Fail open: DB error must never block a legitimate login
     }
 
-    // Buffer cookies that Supabase wants to set — we apply them to the NextResponse at the end.
-    // In Next.js 15 route handlers, cookies() is read-only; we must set cookies on the response
-    // object directly, not via cookieStore.set().
+    // Probabilistic cleanup — deletes rows older than 24 h on ~5% of requests.
+    // Fire-and-forget: never awaited, never blocks the login response.
+    if (Math.random() < CLEANUP_PROBABILITY) {
+        const cutoff = new Date(Date.now() - CLEANUP_AFTER_HOURS * 3600 * 1000).toISOString();
+        admin.from('login_attempts').delete().lt('attempted_at', cutoff).then(() => {}).catch(() => {});
+    }
+
+    // Authenticate with a cookie-aware server client so session cookies land in the response
     type CookieEntry = { name: string; value: string; options: Record<string, unknown> };
     const pendingCookies: CookieEntry[] = [];
 
@@ -117,7 +129,7 @@ export async function POST(request: NextRequest) {
         });
 
         if (succeeded) {
-            // Clear the failure log for this account so the lockout window resets
+            // Clear failure log for this account so the lockout window resets
             await admin
                 .from('login_attempts')
                 .delete()
@@ -129,23 +141,21 @@ export async function POST(request: NextRequest) {
     }
 
     if (!succeeded) {
-        let remaining = MAX_EMAIL_FAILURES - 1;
-        try {
-            const updated = await countFailures(admin, { email: normalizedEmail }, windowStart);
-            remaining = Math.max(0, MAX_EMAIL_FAILURES - updated);
-        } catch {
-            // ignore
-        }
+        // Derive remaining attempts from the pre-attempt count — avoids a redundant DB round-trip
+        const failuresNow = emailFailuresBeforeAttempt + 1;
+        const remaining = Math.max(0, MAX_EMAIL_FAILURES - failuresNow);
 
         const message =
             remaining === 0
-                ? `Too many failed attempts for this account. Please wait ${LOCKOUT_MINUTES} minutes and try again.`
+                ? `Too many failed attempts for this account. Please wait ${WINDOW_MINUTES} minutes and try again.`
                 : `Invalid email or password. ${remaining} attempt${remaining !== 1 ? 's' : ''} remaining before your account is temporarily locked.`;
 
-        return NextResponse.json({ error: message }, { status: 401 });
+        const res = NextResponse.json({ error: message }, { status: 401 });
+        if (remaining === 0) res.headers.set('Retry-After', String(LOCKOUT_SECONDS));
+        return res;
     }
 
-    // Write the Supabase session cookies onto the response so the browser stores the session
+    // Write Supabase session cookies onto the response
     const response = NextResponse.json({ success: true });
     pendingCookies.forEach(({ name, value, options }) => {
         response.cookies.set(name, value, options as Parameters<typeof response.cookies.set>[2]);
