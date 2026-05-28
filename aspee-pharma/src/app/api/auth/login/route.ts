@@ -90,7 +90,7 @@ export async function POST(request: NextRequest) {
     // Fire-and-forget: never awaited, never blocks the login response.
     if (Math.random() < CLEANUP_PROBABILITY) {
         const cutoff = new Date(Date.now() - CLEANUP_AFTER_HOURS * 3600 * 1000).toISOString();
-        admin.from('login_attempts').delete().lt('attempted_at', cutoff).then(() => {}).catch(() => {});
+        Promise.resolve(admin.from('login_attempts').delete().lt('attempted_at', cutoff)).catch(() => {});
     }
 
     // Authenticate with a cookie-aware server client so session cookies land in the response
