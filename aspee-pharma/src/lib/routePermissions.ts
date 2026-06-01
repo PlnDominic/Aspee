@@ -3,6 +3,8 @@ export const routePermissions: Record<string, string[]> = {
     '/sales/requests': ['Super Admin', 'Sales Manager', 'Van Sales Rep', 'Store Manager'],
     '/stores/sales-requests': ['Super Admin', 'Store Manager'],
     '/sales/collections': ['Super Admin', 'Accountant', 'Sales Manager'],
+    '/sales/cash-receipts': ['Super Admin', 'Sales Manager', 'Van Sales Rep'],
+    '/sales/cash-reconciliation': ['Super Admin', 'Sales Manager', 'Van Sales Rep', 'Accountant', 'Managing Director'],
     '/sales': ['Super Admin', 'Sales Manager', 'Van Sales Rep'],
     '/customers': ['Super Admin', 'Sales Manager', 'Van Sales Rep'],
     '/purchasing/grn': ['Super Admin', 'Purchasing Manager', 'Quality Assurance'],
@@ -17,6 +19,7 @@ export const routePermissions: Record<string, string[]> = {
     '/weekly-reports/review': ['Super Admin', 'Managing Director'],
     '/weekly-reports': ['*'],
     '/settings/profile': ['*'],
+    '/settings/audit-log': ['Super Admin', 'Managing Director', 'Internal Auditor'],
     '/settings': ['Super Admin'],
 };
 

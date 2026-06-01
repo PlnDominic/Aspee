@@ -33,73 +33,46 @@ export default function ReceiptsPage() {
                 return { data: null, error: receiptsError };
             }
 
-            const invoiceIds = Array.from(
-                new Set((receipts || []).map((row: any) => row.invoice_id).filter(Boolean)),
-            );
+            // Direct sales_person_id from receipt (new), fallback to invoice (legacy)
+            const directSalesIds = (receipts || []).map((r: any) => r.sales_person_id).filter(Boolean);
+            const legacyInvoiceIds = (receipts || [])
+                .filter((r: any) => !r.sales_person_id && r.invoice_id)
+                .map((r: any) => r.invoice_id);
 
             const invoiceSalespersonMap = new Map<string, string | null>();
-            if (invoiceIds.length > 0) {
-                const { data: invoices, error: invoicesError } = await supabase
+            if (legacyInvoiceIds.length > 0) {
+                const { data: invoices } = await supabase
                     .from('sales_invoices')
                     .select('id, salesperson_id, route_id')
-                    .in('id', invoiceIds);
-
-                if (invoicesError) {
-                    return { data: null, error: invoicesError };
-                }
-
-                const salespersonIds = Array.from(
-                    new Set((invoices || []).map((invoice: any) => invoice.salesperson_id).filter(Boolean)),
-                );
-                const salespersonNameMap = new Map<string, string>();
-                if (salespersonIds.length > 0) {
-                    const { data: salespeople, error: salespeopleError } = await supabase
-                        .from('system_users')
-                        .select('id, name')
-                        .in('id', salespersonIds);
-
-                    if (salespeopleError) {
-                        return { data: null, error: salespeopleError };
-                    }
-
-                    (salespeople || []).forEach((person: any) => {
-                        if (person.name) salespersonNameMap.set(person.id, person.name);
-                    });
-                }
-
-                const routeIds = Array.from(
-                    new Set((invoices || []).map((invoice: any) => invoice.route_id).filter(Boolean)),
-                );
-                const vanNameMap = new Map<string, string>();
-                if (routeIds.length > 0) {
-                    const { data: vans, error: vansError } = await supabase
-                        .from('vans')
-                        .select('id, driver_name')
-                        .in('id', routeIds);
-
-                    if (vansError) {
-                        return { data: null, error: vansError };
-                    }
-
-                    (vans || []).forEach((van: any) => {
-                        if (van.driver_name) vanNameMap.set(van.id, van.driver_name);
-                    });
-                }
-
-                (invoices || []).forEach((invoice: any) => {
-                    invoiceSalespersonMap.set(
-                        invoice.id,
-                        (invoice.salesperson_id ? salespersonNameMap.get(invoice.salesperson_id) : null)
-                            ?? (invoice.route_id ? vanNameMap.get(invoice.route_id) : null)
-                            ?? null,
-                    );
+                    .in('id', legacyInvoiceIds);
+                (invoices || []).forEach((inv: any) => {
+                    invoiceSalespersonMap.set(inv.id, inv.salesperson_id ?? null);
                 });
             }
 
-            const mapped = (receipts || []).map((r: any) => ({
-                ...r,
-                salesperson_name: r.invoice_id ? invoiceSalespersonMap.get(r.invoice_id) ?? null : null,
-            }));
+            const allSalesIds = Array.from(new Set([
+                ...directSalesIds,
+                ...Array.from(invoiceSalespersonMap.values()).filter(Boolean) as string[],
+            ]));
+
+            const salespersonNameMap = new Map<string, string>();
+            if (allSalesIds.length > 0) {
+                const { data: salespeople } = await supabase
+                    .from('system_users')
+                    .select('id, name')
+                    .in('id', allSalesIds);
+                (salespeople || []).forEach((p: any) => {
+                    if (p.name) salespersonNameMap.set(p.id, p.name);
+                });
+            }
+
+            const mapped = (receipts || []).map((r: any) => {
+                const sId = r.sales_person_id ?? (r.invoice_id ? invoiceSalespersonMap.get(r.invoice_id) : null);
+                return {
+                    ...r,
+                    salesperson_name: sId ? salespersonNameMap.get(sId) ?? null : null,
+                };
+            });
             return { data: mapped, error: null };
         },
     );

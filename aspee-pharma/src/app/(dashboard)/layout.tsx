@@ -44,6 +44,7 @@ const pageTitles: Record<string, { title: string; subtitle?: string }> = {
     '/settings/profile': { title: 'Profile', subtitle: 'Manage your account settings' },
     '/settings/users': { title: 'User Management', subtitle: 'Manage system users and roles' },
     '/settings/reports': { title: 'Report Settings', subtitle: 'Configure automated weekly department reports' },
+    '/settings/audit-log': { title: 'System Audit Trail', subtitle: 'Review compliance evidence across all ERP modules' },
 };
 
 export default function DashboardLayout({

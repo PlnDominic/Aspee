@@ -56,6 +56,8 @@ import { useCurrentUser } from '@/lib/hooks';
 const ROUTE_ROLES: Record<string, string[]> = {
     '/stores/sales-requests': ['Super Admin', 'Store Manager'],
     '/sales/requests':      ['Super Admin', 'Sales Manager', 'Van Sales Rep', 'Store Manager'],
+    '/sales/cash-receipts':       ['Super Admin', 'Sales Manager', 'Van Sales Rep'],
+    '/sales/cash-reconciliation': ['Super Admin', 'Sales Manager', 'Van Sales Rep', 'Accountant', 'Managing Director'],
     '/sales':               ['Super Admin', 'Sales Manager', 'Van Sales Rep'],
     '/accounting/collections': ['Super Admin', 'Accountant'],
     '/customers':           ['Super Admin', 'Sales Manager', 'Van Sales Rep'],
@@ -75,7 +77,7 @@ const ROUTE_ROLES: Record<string, string[]> = {
     '/compliance':          ['Super Admin', 'Quality Assurance', 'Managing Director'],
     '/settings/users':      ['Super Admin'],
     '/settings/reports':    ['Super Admin'],
-    '/settings/audit-log':  ['Super Admin'],
+    '/settings/audit-log':  ['Super Admin', 'Managing Director', 'Internal Auditor'],
 };
 
 function canAccess(href: string, role: string | null | undefined): boolean {
@@ -167,8 +169,10 @@ const navigation: NavItem[] = [
             { label: 'Sales Request',       href: '/sales/requests',          icon: <ClipboardList size={18} /> },
             { label: 'Dispatch Management', href: '/sales/dispatch',          icon: <Truck size={18} /> },
             { label: 'Waybills',            href: '/sales/waybill',           icon: <FileText size={18} /> },
+            { label: 'Cash Receipt Entry',  href: '/sales/cash-receipts', icon: <Banknote size={18} /> },
             { label: 'Receipts',            href: '/sales/receipts',     icon: <CreditCard size={18} /> },
             { label: 'Credit Notes',        href: '/sales/credit-notes', icon: <BookOpen size={18} /> },
+            { label: 'Cash Reconciliation', href: '/sales/cash-reconciliation', icon: <Scale size={18} /> },
             { label: 'Sales Reports',        href: '/sales/reports',      icon: <BarChart3 size={18} /> },
         ],
     },
@@ -201,6 +205,7 @@ const navigation: NavItem[] = [
             { label: 'Audit Plans',        href: '/internal-audit',                   icon: <ClipboardList size={18} /> },
             { label: 'Audit Reports',      href: '/internal-audit/reports',           icon: <FileText size={18} /> },
             { label: 'Non-Conformances',   href: '/internal-audit/non-conformances',  icon: <AlertTriangle size={18} /> },
+            { label: 'System Audit Trail', href: '/settings/audit-log',               icon: <Activity size={18} /> },
         ],
     },
     {

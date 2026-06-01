@@ -99,7 +99,8 @@
       "Bash(find \"/c/Users/hp/Desktop/Developments/Aspee Pharmaceuticals/aspee-pharma/src/app/\\(dashboard\\)\" -type d)",
       "Bash(npm run:*)",
       "Bash(npx vercel:*)",
-      "Bash(npm install:*)"
+      "Bash(npm install:*)",
+      "Bash(git config *)"
     ]
   }
 }
