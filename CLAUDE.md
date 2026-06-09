@@ -40,6 +40,12 @@ Aspee Pharma ERP is a full-featured pharmaceutical Enterprise Resource Planning 
 
 ---
 
+## Git Workflow
+
+- **Always push to `origin/master`** — this is the permanent target branch for all completed work on PlnDominic/Aspee. Never leave changes on a feature branch as the final destination; merge and push to `master` when done.
+
+---
+
 ## Never Do This
 
 - **Never install packages without asking** — confirm with the user before `npm install`
