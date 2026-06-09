@@ -7,7 +7,7 @@ import StatCard from '@/components/StatCard';
 import StatusBadge from '@/components/StatusBadge';
 import ReceiptModal from '@/components/ReceiptModal';
 import EntityLink from '@/components/EntityLink';
-import { Plus, CreditCard, Banknote, CheckCircle, Clock, Eye, Pencil, Trash2 } from 'lucide-react';
+import { CreditCard, Banknote, CheckCircle, Clock, Eye, Pencil, Trash2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { formatCurrency } from '@/lib/currency';
@@ -224,14 +224,6 @@ export default function ReceiptsPage() {
                 title="Sales Receipts"
                 subtitle="Payment receipts and collections"
                 breadcrumbs={[{ label: 'Sales', href: '/sales/receipts' }, { label: 'Receipts' }]}
-                actions={
-                    <button
-                        onClick={() => setIsModalOpen(true)}
-                        style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 18px', borderRadius: 8, border: 'none', background: 'linear-gradient(135deg, var(--primary-600), var(--primary-500))', fontSize: 11, fontWeight: 600, color: 'white', cursor: 'pointer' }}
-                    >
-                        <Plus size={16} /> Record Receipt
-                    </button>
-                }
             />
 
             <div className="animate-stagger" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 24 }}>
