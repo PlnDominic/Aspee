@@ -167,7 +167,6 @@ const navigation: NavItem[] = [
             { label: 'Sales Request',       href: '/sales/requests',          icon: <ClipboardList size={18} /> },
             { label: 'Dispatch Management', href: '/sales/dispatch',          icon: <Truck size={18} /> },
             { label: 'Waybills',            href: '/sales/waybill',           icon: <FileText size={18} /> },
-            { label: 'Receipts',            href: '/sales/receipts',     icon: <CreditCard size={18} /> },
             { label: 'Credit Notes',        href: '/sales/credit-notes', icon: <BookOpen size={18} /> },
             { label: 'Sales Reports',        href: '/sales/reports',      icon: <BarChart3 size={18} /> },
         ],
