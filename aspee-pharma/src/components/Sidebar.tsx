@@ -192,6 +192,7 @@ const navigation: NavItem[] = [
             { label: 'Equity Statement', href: '/accounting/equity', icon: <PieChart size={18} /> },
             { label: 'Cash Flow', href: '/accounting/cash-flow', icon: <ArrowLeftRight size={18} /> },
             { label: 'Accounting Notes', href: '/accounting/notes', icon: <ClipboardList size={18} /> },
+            { label: 'Banks', href: '/accounting/banks', icon: <Landmark size={18} /> },
         ],
     },
     {
