@@ -113,36 +113,36 @@ export default function BanksPage() {
             {isLoading ? (
                 <div style={{ textAlign: 'center', padding: '60px 0', color: 'var(--slate-400)', fontSize: 13 }}>Loading...</div>
             ) : (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 18, marginBottom: 32 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.max(banks.length, 1)}, 1fr)`, gap: 14, marginBottom: 32 }}>
                     {banks.map(bank => {
                         const { totalDeposits, totalWithdrawals, recent } = getStats(bank);
                         return (
                             <div key={bank.id} style={{
                                 background: 'var(--card-bg)',
                                 border: '1px solid var(--slate-200)',
-                                borderRadius: 16,
-                                padding: '22px 22px 18px',
+                                borderRadius: 12,
+                                padding: '14px 16px 12px',
                                 boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
                                 display: 'flex',
                                 flexDirection: 'column',
-                                gap: 16,
+                                gap: 10,
                             }}>
                                 {/* Header */}
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
                                     <div style={{
-                                        width: 48,
-                                        height: 48,
-                                        borderRadius: 12,
+                                        width: 36,
+                                        height: 36,
+                                        borderRadius: 9,
                                         background: 'var(--slate-100)',
                                         display: 'flex',
                                         alignItems: 'center',
                                         justifyContent: 'center',
                                         flexShrink: 0,
                                     }}>
-                                        <Landmark size={22} color="var(--slate-500)" />
+                                        <Landmark size={16} color="var(--slate-500)" />
                                     </div>
                                     <div>
-                                        <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-primary)', lineHeight: 1.2 }}>{bank.bank_name}</div>
+                                        <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.2 }}>{bank.bank_name}</div>
                                         <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--slate-400)', marginTop: 3, letterSpacing: '0.06em' }}>{bank.short_name}</div>
                                     </div>
                                 </div>
@@ -151,11 +151,11 @@ export default function BanksPage() {
                                 <div style={{
                                     background: 'var(--slate-50)',
                                     border: '1px solid var(--slate-100)',
-                                    borderRadius: 10,
-                                    padding: '14px 16px',
+                                    borderRadius: 8,
+                                    padding: '10px 12px',
                                 }}>
-                                    <div style={{ fontSize: 10, color: 'var(--slate-400)', fontWeight: 700, marginBottom: 5, letterSpacing: '0.06em' }}>CURRENT BALANCE</div>
-                                    <div style={{ fontSize: 24, fontWeight: 800, color: 'var(--text-primary)' }}>{formatCurrency(bank.balance ?? 0)}</div>
+                                    <div style={{ fontSize: 10, color: 'var(--slate-400)', fontWeight: 700, marginBottom: 4, letterSpacing: '0.06em' }}>CURRENT BALANCE</div>
+                                    <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-primary)' }}>{formatCurrency(bank.balance ?? 0)}</div>
                                 </div>
 
                                 {/* Stats */}
