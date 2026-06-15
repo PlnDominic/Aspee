@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState, useCallback } from 'react';
-import PageHeader from '@/components/PageHeader';
 import { BankTransactionModal } from '@/components/BankTransactionModal';
 import { Landmark, ArrowDownCircle, ArrowUpCircle, Wallet } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
@@ -74,39 +73,55 @@ export default function BanksPage() {
 
     return (
         <div style={{ padding: '24px 28px' }}>
-            <PageHeader title="Banks" subtitle="Banking partners & balances" />
-
-            {/* Summary bar */}
+            {/* Hero bar — title + stats in one row */}
             <div style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(3, 1fr)',
-                gap: 16,
-                marginBottom: 32,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 20,
+                marginBottom: 20,
+                background: 'var(--card-bg)',
+                border: '1px solid var(--slate-200)',
+                borderRadius: 14,
+                padding: '16px 22px',
+                boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
+                flexWrap: 'wrap',
             }}>
-                {[
-                    { label: 'Total Bank Balance', value: totalBalance, icon: <Wallet size={20} color="#2563eb" />, bg: '#eff6ff', color: '#1d4ed8' },
-                    { label: 'Total Deposits', value: totalDepositsAll, icon: <ArrowDownCircle size={20} color="#16a34a" />, bg: '#f0fdf4', color: '#15803d' },
-                    { label: 'Total Withdrawals', value: totalWithdrawalsAll, icon: <ArrowUpCircle size={20} color="#dc2626" />, bg: '#fef2f2', color: '#b91c1c' },
-                ].map(s => (
-                    <div key={s.label} style={{
-                        background: 'var(--card-bg)',
-                        border: '1px solid var(--slate-200)',
-                        borderRadius: 14,
-                        padding: '20px 24px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 16,
-                        boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
-                    }}>
-                        <div style={{ width: 44, height: 44, borderRadius: 11, background: s.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                            {s.icon}
-                        </div>
-                        <div>
-                            <div style={{ fontSize: 11, color: 'var(--slate-500)', fontWeight: 600, marginBottom: 4, letterSpacing: '0.03em' }}>{s.label.toUpperCase()}</div>
-                            <div style={{ fontSize: 22, fontWeight: 800, color: s.color }}>{formatCurrency(s.value)}</div>
-                        </div>
+                {/* Title */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <div style={{ width: 38, height: 38, borderRadius: 10, background: '#eff6ff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        <Landmark size={18} color="#2563eb" />
                     </div>
-                ))}
+                    <div>
+                        <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--text-primary)', lineHeight: 1.2 }}>Banks</div>
+                        <div style={{ fontSize: 12, color: 'var(--slate-500)', marginTop: 2 }}>Banking partners & balances</div>
+                    </div>
+                </div>
+
+                {/* Stats */}
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                    {[
+                        { label: 'Total Balance', value: totalBalance, icon: <Wallet size={15} color="#2563eb" />, bg: '#eff6ff', color: '#1d4ed8', border: '#bfdbfe' },
+                        { label: 'Total Deposits', value: totalDepositsAll, icon: <ArrowDownCircle size={15} color="#16a34a" />, bg: '#f0fdf4', color: '#15803d', border: '#bbf7d0' },
+                        { label: 'Total Withdrawals', value: totalWithdrawalsAll, icon: <ArrowUpCircle size={15} color="#dc2626" />, bg: '#fef2f2', color: '#b91c1c', border: '#fecaca' },
+                    ].map(s => (
+                        <div key={s.label} style={{
+                            background: s.bg,
+                            border: `1px solid ${s.border}`,
+                            borderRadius: 10,
+                            padding: '8px 14px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 8,
+                        }}>
+                            {s.icon}
+                            <div>
+                                <div style={{ fontSize: 10, color: s.color, fontWeight: 700, letterSpacing: '0.04em', opacity: 0.75 }}>{s.label.toUpperCase()}</div>
+                                <div style={{ fontSize: 15, fontWeight: 800, color: s.color }}>{formatCurrency(s.value)}</div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
             </div>
 
             {/* Bank cards */}
