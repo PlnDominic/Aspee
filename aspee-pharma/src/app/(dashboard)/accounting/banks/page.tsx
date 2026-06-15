@@ -233,6 +233,64 @@ export default function BanksPage() {
                 </div>
             )}
 
+            {/* Transactions table */}
+            <div style={{ marginTop: 36, background: 'var(--card-bg)', border: '1px solid var(--slate-200)', borderRadius: 14, overflow: 'hidden' }}>
+                <div style={{ padding: '16px 24px', borderBottom: '1px solid var(--slate-200)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)' }}>Transaction History</div>
+                    <div style={{ fontSize: 12, color: 'var(--slate-400)' }}>{transactions.length} record{transactions.length !== 1 ? 's' : ''}</div>
+                </div>
+                {transactions.length === 0 ? (
+                    <div style={{ padding: '48px 0', textAlign: 'center', color: 'var(--slate-400)', fontSize: 13 }}>
+                        No transactions yet. Record a deposit or withdrawal to get started.
+                    </div>
+                ) : (
+                    <div style={{ overflowX: 'auto' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                            <thead>
+                                <tr style={{ background: 'var(--slate-50)', borderBottom: '1px solid var(--slate-200)' }}>
+                                    {['Date', 'Bank', 'Type', 'Description', 'Amount'].map(h => (
+                                        <th key={h} style={{ padding: '10px 20px', textAlign: h === 'Amount' ? 'right' : 'left', fontSize: 11, fontWeight: 700, color: 'var(--slate-500)', letterSpacing: '0.04em', whiteSpace: 'nowrap' }}>{h.toUpperCase()}</th>
+                                    ))}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {transactions.map(tx => {
+                                    const bank = banks.find(b => b.id === tx.bank_account_id);
+                                    return (
+                                        <tr key={tx.id} style={{ borderBottom: '1px solid var(--slate-100)' }}>
+                                            <td style={{ padding: '12px 20px', fontSize: 13, color: 'var(--slate-600)', whiteSpace: 'nowrap' }}>{tx.date}</td>
+                                            <td style={{ padding: '12px 20px', fontSize: 13 }}>
+                                                {bank && (
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                                        <div style={{ width: 8, height: 8, borderRadius: '50%', background: bank.color, flexShrink: 0 }} />
+                                                        <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{bank.bank_name}</span>
+                                                    </div>
+                                                )}
+                                            </td>
+                                            <td style={{ padding: '12px 20px' }}>
+                                                <span style={{
+                                                    display: 'inline-flex', alignItems: 'center', gap: 5,
+                                                    padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700,
+                                                    background: tx.type === 'deposit' ? '#f0fdf4' : '#fef2f2',
+                                                    color: tx.type === 'deposit' ? '#16a34a' : '#dc2626',
+                                                }}>
+                                                    {tx.type === 'deposit' ? <ArrowDownCircle size={11} /> : <ArrowUpCircle size={11} />}
+                                                    {tx.type.charAt(0).toUpperCase() + tx.type.slice(1)}
+                                                </span>
+                                            </td>
+                                            <td style={{ padding: '12px 20px', fontSize: 13, color: 'var(--slate-500)' }}>{tx.description || '—'}</td>
+                                            <td style={{ padding: '12px 20px', textAlign: 'right', fontSize: 13, fontWeight: 700, color: tx.type === 'deposit' ? '#16a34a' : '#dc2626', whiteSpace: 'nowrap' }}>
+                                                {tx.type === 'deposit' ? '+' : '-'}{formatCurrency(tx.amount)}
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
+            </div>
+
             <BankTransactionModal
                 isOpen={!!modal}
                 onClose={() => setModal(null)}
