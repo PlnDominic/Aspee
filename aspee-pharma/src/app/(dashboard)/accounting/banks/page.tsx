@@ -3,7 +3,7 @@
 import React, { useState, useCallback } from 'react';
 import PageHeader from '@/components/PageHeader';
 import { BankTransactionModal } from '@/components/BankTransactionModal';
-import { Landmark, ArrowDownCircle, ArrowUpCircle, TrendingUp, Clock } from 'lucide-react';
+import { Landmark, ArrowDownCircle, ArrowUpCircle, TrendingUp, Clock, Wallet } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { formatCurrency } from '@/lib/currency';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -61,6 +61,8 @@ export default function BanksPage() {
     }, [queryClient]);
 
     const totalBalance = banks.reduce((sum, b) => sum + (b.balance ?? 0), 0);
+    const totalDepositsAll = transactions.filter(t => t.type === 'deposit').reduce((s, t) => s + t.amount, 0);
+    const totalWithdrawalsAll = transactions.filter(t => t.type === 'withdrawal').reduce((s, t) => s + t.amount, 0);
 
     const getStats = (bank: BankAccount) => {
         const txs = transactions.filter(t => t.bank_account_id === bank.id);
@@ -71,161 +73,169 @@ export default function BanksPage() {
     };
 
     return (
-        <div style={{ padding: 20 }}>
-            <PageHeader
-                title="Banks"
-                subtitle="Banking partners & balances"
-            />
+        <div style={{ padding: '24px 28px' }}>
+            <PageHeader title="Banks" subtitle="Banking partners & balances" />
 
-            {/* Total balance summary */}
+            {/* Summary bar */}
             <div style={{
-                background: 'var(--card-bg)',
-                border: '1px solid var(--slate-200)',
-                borderRadius: 12,
-                padding: '20px 28px',
-                marginBottom: 28,
-                display: 'flex',
-                alignItems: 'center',
+                display: 'grid',
+                gridTemplateColumns: 'repeat(3, 1fr)',
                 gap: 16,
+                marginBottom: 32,
             }}>
-                <div style={{ width: 48, height: 48, borderRadius: 12, background: '#eff6ff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <TrendingUp size={22} color="#2563eb" />
-                </div>
-                <div>
-                    <div style={{ fontSize: 12, color: 'var(--slate-500)', fontWeight: 600, marginBottom: 2 }}>TOTAL BANK BALANCE</div>
-                    <div style={{ fontSize: 26, fontWeight: 800, color: 'var(--text-primary)' }}>{formatCurrency(totalBalance)}</div>
-                </div>
-                <div style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--slate-400)' }}>{banks.length} banks</div>
+                {[
+                    { label: 'Total Bank Balance', value: totalBalance, icon: <Wallet size={20} color="#2563eb" />, bg: '#eff6ff', color: '#1d4ed8' },
+                    { label: 'Total Deposits', value: totalDepositsAll, icon: <ArrowDownCircle size={20} color="#16a34a" />, bg: '#f0fdf4', color: '#15803d' },
+                    { label: 'Total Withdrawals', value: totalWithdrawalsAll, icon: <ArrowUpCircle size={20} color="#dc2626" />, bg: '#fef2f2', color: '#b91c1c' },
+                ].map(s => (
+                    <div key={s.label} style={{
+                        background: 'var(--card-bg)',
+                        border: '1px solid var(--slate-200)',
+                        borderRadius: 14,
+                        padding: '20px 24px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 16,
+                        boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+                    }}>
+                        <div style={{ width: 44, height: 44, borderRadius: 11, background: s.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                            {s.icon}
+                        </div>
+                        <div>
+                            <div style={{ fontSize: 11, color: 'var(--slate-500)', fontWeight: 600, marginBottom: 4, letterSpacing: '0.03em' }}>{s.label.toUpperCase()}</div>
+                            <div style={{ fontSize: 22, fontWeight: 800, color: s.color }}>{formatCurrency(s.value)}</div>
+                        </div>
+                    </div>
+                ))}
             </div>
 
+            {/* Bank cards */}
             {isLoading ? (
                 <div style={{ textAlign: 'center', padding: '60px 0', color: 'var(--slate-400)', fontSize: 13 }}>Loading...</div>
             ) : (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: 20 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 18, marginBottom: 32 }}>
                     {banks.map(bank => {
                         const { totalDeposits, totalWithdrawals, recent } = getStats(bank);
                         return (
-                            <div
-                                key={bank.id}
-                                style={{
-                                    background: 'var(--card-bg)',
-                                    border: '1px solid var(--slate-200)',
-                                    borderRadius: 14,
-                                    overflow: 'hidden',
-                                    boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
-                                }}
-                            >
-                                <div style={{ height: 5, background: bank.color }} />
+                            <div key={bank.id} style={{
+                                background: 'var(--card-bg)',
+                                border: '1px solid var(--slate-200)',
+                                borderRadius: 16,
+                                padding: '22px 22px 18px',
+                                boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: 16,
+                            }}>
+                                {/* Header */}
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                                    <div style={{
+                                        width: 48,
+                                        height: 48,
+                                        borderRadius: 12,
+                                        background: 'var(--slate-100)',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        flexShrink: 0,
+                                    }}>
+                                        <Landmark size={22} color="var(--slate-500)" />
+                                    </div>
+                                    <div>
+                                        <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-primary)', lineHeight: 1.2 }}>{bank.bank_name}</div>
+                                        <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--slate-400)', marginTop: 3, letterSpacing: '0.06em' }}>{bank.short_name}</div>
+                                    </div>
+                                </div>
 
-                                <div style={{ padding: '20px 22px' }}>
-                                    {/* Header */}
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 18 }}>
-                                        <div style={{
-                                            width: 46,
-                                            height: 46,
-                                            borderRadius: 11,
-                                            background: bank.color + '18',
+                                {/* Balance */}
+                                <div style={{
+                                    background: 'var(--slate-50)',
+                                    border: '1px solid var(--slate-100)',
+                                    borderRadius: 10,
+                                    padding: '14px 16px',
+                                }}>
+                                    <div style={{ fontSize: 10, color: 'var(--slate-400)', fontWeight: 700, marginBottom: 5, letterSpacing: '0.06em' }}>CURRENT BALANCE</div>
+                                    <div style={{ fontSize: 24, fontWeight: 800, color: 'var(--text-primary)' }}>{formatCurrency(bank.balance ?? 0)}</div>
+                                </div>
+
+                                {/* Stats */}
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                                    <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 9, padding: '10px 12px' }}>
+                                        <div style={{ fontSize: 10, color: '#15803d', fontWeight: 700, marginBottom: 4, letterSpacing: '0.04em' }}>DEPOSITS</div>
+                                        <div style={{ fontSize: 14, fontWeight: 800, color: '#15803d' }}>{formatCurrency(totalDeposits)}</div>
+                                    </div>
+                                    <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 9, padding: '10px 12px' }}>
+                                        <div style={{ fontSize: 10, color: '#b91c1c', fontWeight: 700, marginBottom: 4, letterSpacing: '0.04em' }}>WITHDRAWALS</div>
+                                        <div style={{ fontSize: 14, fontWeight: 800, color: '#b91c1c' }}>{formatCurrency(totalWithdrawals)}</div>
+                                    </div>
+                                </div>
+
+                                {/* Recent */}
+                                {recent.length > 0 && (
+                                    <div style={{ borderTop: '1px solid var(--slate-100)', paddingTop: 12 }}>
+                                        <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--slate-400)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 4, letterSpacing: '0.05em' }}>
+                                            <Clock size={10} /> RECENT ACTIVITY
+                                        </div>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                            {recent.map(tx => (
+                                                <div key={tx.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
+                                                    {tx.type === 'deposit'
+                                                        ? <ArrowDownCircle size={13} color="#16a34a" />
+                                                        : <ArrowUpCircle size={13} color="#dc2626" />}
+                                                    <span style={{ color: 'var(--slate-500)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                        {tx.description || tx.type}
+                                                    </span>
+                                                    <span style={{ fontWeight: 700, color: tx.type === 'deposit' ? '#16a34a' : '#dc2626', flexShrink: 0 }}>
+                                                        {tx.type === 'deposit' ? '+' : '-'}{formatCurrency(tx.amount)}
+                                                    </span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Actions */}
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 'auto' }}>
+                                    <button
+                                        onClick={() => setModal({ bank, type: 'deposit' })}
+                                        style={{
+                                            padding: '10px 0',
+                                            borderRadius: 9,
+                                            border: '1px solid #bbf7d0',
+                                            background: '#f0fdf4',
+                                            color: '#15803d',
+                                            fontWeight: 700,
+                                            fontSize: 12,
+                                            cursor: 'pointer',
                                             display: 'flex',
                                             alignItems: 'center',
                                             justifyContent: 'center',
-                                            flexShrink: 0,
-                                        }}>
-                                            <Landmark size={22} color={bank.color} />
-                                        </div>
-                                        <div>
-                                            <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)', lineHeight: 1.2 }}>{bank.bank_name}</div>
-                                            <div style={{ fontSize: 11, fontWeight: 600, color: bank.color, marginTop: 2, letterSpacing: '0.06em' }}>{bank.short_name}</div>
-                                        </div>
-                                    </div>
-
-                                    {/* Balance */}
-                                    <div style={{
-                                        background: bank.color + '0d',
-                                        borderRadius: 10,
-                                        padding: '14px 16px',
-                                        marginBottom: 16,
-                                    }}>
-                                        <div style={{ fontSize: 11, color: 'var(--slate-500)', fontWeight: 600, marginBottom: 4 }}>CURRENT BALANCE</div>
-                                        <div style={{ fontSize: 22, fontWeight: 800, color: bank.color }}>{formatCurrency(bank.balance ?? 0)}</div>
-                                    </div>
-
-                                    {/* Stats row */}
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16 }}>
-                                        <div style={{ background: '#f0fdf4', borderRadius: 8, padding: '10px 12px' }}>
-                                            <div style={{ fontSize: 10, color: '#15803d', fontWeight: 700, marginBottom: 3 }}>TOTAL DEPOSITS</div>
-                                            <div style={{ fontSize: 13, fontWeight: 800, color: '#15803d' }}>{formatCurrency(totalDeposits)}</div>
-                                        </div>
-                                        <div style={{ background: '#fef2f2', borderRadius: 8, padding: '10px 12px' }}>
-                                            <div style={{ fontSize: 10, color: '#b91c1c', fontWeight: 700, marginBottom: 3 }}>TOTAL WITHDRAWALS</div>
-                                            <div style={{ fontSize: 13, fontWeight: 800, color: '#b91c1c' }}>{formatCurrency(totalWithdrawals)}</div>
-                                        </div>
-                                    </div>
-
-                                    {/* Recent transactions */}
-                                    {recent.length > 0 && (
-                                        <div style={{ marginBottom: 16 }}>
-                                            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--slate-400)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 4 }}>
-                                                <Clock size={11} /> RECENT
-                                            </div>
-                                            <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-                                                {recent.map(tx => (
-                                                    <div key={tx.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11 }}>
-                                                        {tx.type === 'deposit'
-                                                            ? <ArrowDownCircle size={13} color="#16a34a" />
-                                                            : <ArrowUpCircle size={13} color="#dc2626" />}
-                                                        <span style={{ color: 'var(--slate-500)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                                            {tx.description || tx.type}
-                                                        </span>
-                                                        <span style={{ fontWeight: 700, color: tx.type === 'deposit' ? '#16a34a' : '#dc2626', flexShrink: 0 }}>
-                                                            {tx.type === 'deposit' ? '+' : '-'}{formatCurrency(tx.amount)}
-                                                        </span>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {/* Action buttons */}
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                                        <button
-                                            onClick={() => setModal({ bank, type: 'deposit' })}
-                                            style={{
-                                                padding: '9px 0',
-                                                borderRadius: 8,
-                                                border: '1.5px solid #16a34a',
-                                                background: '#f0fdf4',
-                                                color: '#16a34a',
-                                                fontWeight: 700,
-                                                fontSize: 12,
-                                                cursor: 'pointer',
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                justifyContent: 'center',
-                                                gap: 5,
-                                            }}
-                                        >
-                                            <ArrowDownCircle size={14} /> Deposit
-                                        </button>
-                                        <button
-                                            onClick={() => setModal({ bank, type: 'withdrawal' })}
-                                            style={{
-                                                padding: '9px 0',
-                                                borderRadius: 8,
-                                                border: '1.5px solid #dc2626',
-                                                background: '#fef2f2',
-                                                color: '#dc2626',
-                                                fontWeight: 700,
-                                                fontSize: 12,
-                                                cursor: 'pointer',
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                justifyContent: 'center',
-                                                gap: 5,
-                                            }}
-                                        >
-                                            <ArrowUpCircle size={14} /> Withdrawal
-                                        </button>
-                                    </div>
+                                            gap: 5,
+                                            transition: 'all 0.15s',
+                                        }}
+                                    >
+                                        <ArrowDownCircle size={13} /> Deposit
+                                    </button>
+                                    <button
+                                        onClick={() => setModal({ bank, type: 'withdrawal' })}
+                                        style={{
+                                            padding: '10px 0',
+                                            borderRadius: 9,
+                                            border: '1px solid #fecaca',
+                                            background: '#fef2f2',
+                                            color: '#b91c1c',
+                                            fontWeight: 700,
+                                            fontSize: 12,
+                                            cursor: 'pointer',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            gap: 5,
+                                            transition: 'all 0.15s',
+                                        }}
+                                    >
+                                        <ArrowUpCircle size={13} /> Withdrawal
+                                    </button>
                                 </div>
                             </div>
                         );
@@ -233,14 +243,17 @@ export default function BanksPage() {
                 </div>
             )}
 
-            {/* Transactions table */}
-            <div style={{ marginTop: 36, background: 'var(--card-bg)', border: '1px solid var(--slate-200)', borderRadius: 14, overflow: 'hidden' }}>
-                <div style={{ padding: '16px 24px', borderBottom: '1px solid var(--slate-200)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)' }}>Transaction History</div>
-                    <div style={{ fontSize: 12, color: 'var(--slate-400)' }}>{transactions.length} record{transactions.length !== 1 ? 's' : ''}</div>
+            {/* Transaction history table */}
+            <div style={{ background: 'var(--card-bg)', border: '1px solid var(--slate-200)', borderRadius: 16, overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
+                <div style={{ padding: '18px 24px', borderBottom: '1px solid var(--slate-100)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-primary)' }}>Transaction History</div>
+                    <div style={{ fontSize: 12, color: 'var(--slate-400)', fontWeight: 500 }}>
+                        {transactions.length} record{transactions.length !== 1 ? 's' : ''}
+                    </div>
                 </div>
+
                 {transactions.length === 0 ? (
-                    <div style={{ padding: '48px 0', textAlign: 'center', color: 'var(--slate-400)', fontSize: 13 }}>
+                    <div style={{ padding: '56px 0', textAlign: 'center', color: 'var(--slate-400)', fontSize: 13 }}>
                         No transactions yet. Record a deposit or withdrawal to get started.
                     </div>
                 ) : (
@@ -248,39 +261,66 @@ export default function BanksPage() {
                         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                             <thead>
                                 <tr style={{ background: 'var(--slate-50)', borderBottom: '1px solid var(--slate-200)' }}>
-                                    {['Date', 'Bank', 'Type', 'Description', 'Amount'].map(h => (
-                                        <th key={h} style={{ padding: '10px 20px', textAlign: h === 'Amount' ? 'right' : 'left', fontSize: 11, fontWeight: 700, color: 'var(--slate-500)', letterSpacing: '0.04em', whiteSpace: 'nowrap' }}>{h.toUpperCase()}</th>
+                                    {[
+                                        { label: 'Date', align: 'left' },
+                                        { label: 'Bank', align: 'left' },
+                                        { label: 'Type', align: 'left' },
+                                        { label: 'Description', align: 'left' },
+                                        { label: 'Amount', align: 'right' },
+                                    ].map(h => (
+                                        <th key={h.label} style={{
+                                            padding: '11px 20px',
+                                            textAlign: h.align as any,
+                                            fontSize: 11,
+                                            fontWeight: 700,
+                                            color: 'var(--slate-500)',
+                                            letterSpacing: '0.05em',
+                                            whiteSpace: 'nowrap',
+                                        }}>
+                                            {h.label.toUpperCase()}
+                                        </th>
                                     ))}
                                 </tr>
                             </thead>
                             <tbody>
-                                {transactions.map(tx => {
+                                {transactions.map((tx, i) => {
                                     const bank = banks.find(b => b.id === tx.bank_account_id);
                                     return (
-                                        <tr key={tx.id} style={{ borderBottom: '1px solid var(--slate-100)' }}>
-                                            <td style={{ padding: '12px 20px', fontSize: 13, color: 'var(--slate-600)', whiteSpace: 'nowrap' }}>{tx.date}</td>
-                                            <td style={{ padding: '12px 20px', fontSize: 13 }}>
-                                                {bank && (
+                                        <tr key={tx.id} style={{
+                                            borderBottom: '1px solid var(--slate-100)',
+                                            background: i % 2 === 0 ? 'transparent' : 'var(--slate-50)',
+                                            transition: 'background 0.1s',
+                                        }}>
+                                            <td style={{ padding: '13px 20px', fontSize: 13, color: 'var(--slate-500)', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
+                                                {tx.date}
+                                            </td>
+                                            <td style={{ padding: '13px 20px', fontSize: 13 }}>
+                                                {bank ? (
                                                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                                        <div style={{ width: 8, height: 8, borderRadius: '50%', background: bank.color, flexShrink: 0 }} />
+                                                        <div style={{ width: 28, height: 28, borderRadius: 7, background: 'var(--slate-100)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                                            <Landmark size={13} color="var(--slate-500)" />
+                                                        </div>
                                                         <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{bank.bank_name}</span>
                                                     </div>
-                                                )}
+                                                ) : '—'}
                                             </td>
-                                            <td style={{ padding: '12px 20px' }}>
+                                            <td style={{ padding: '13px 20px' }}>
                                                 <span style={{
                                                     display: 'inline-flex', alignItems: 'center', gap: 5,
-                                                    padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700,
+                                                    padding: '4px 11px', borderRadius: 20, fontSize: 11, fontWeight: 700,
                                                     background: tx.type === 'deposit' ? '#f0fdf4' : '#fef2f2',
                                                     color: tx.type === 'deposit' ? '#16a34a' : '#dc2626',
+                                                    border: `1px solid ${tx.type === 'deposit' ? '#bbf7d0' : '#fecaca'}`,
                                                 }}>
                                                     {tx.type === 'deposit' ? <ArrowDownCircle size={11} /> : <ArrowUpCircle size={11} />}
                                                     {tx.type.charAt(0).toUpperCase() + tx.type.slice(1)}
                                                 </span>
                                             </td>
-                                            <td style={{ padding: '12px 20px', fontSize: 13, color: 'var(--slate-500)' }}>{tx.description || '—'}</td>
-                                            <td style={{ padding: '12px 20px', textAlign: 'right', fontSize: 13, fontWeight: 700, color: tx.type === 'deposit' ? '#16a34a' : '#dc2626', whiteSpace: 'nowrap' }}>
-                                                {tx.type === 'deposit' ? '+' : '-'}{formatCurrency(tx.amount)}
+                                            <td style={{ padding: '13px 20px', fontSize: 13, color: 'var(--slate-500)', maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                {tx.description || <span style={{ color: 'var(--slate-300)' }}>—</span>}
+                                            </td>
+                                            <td style={{ padding: '13px 20px', textAlign: 'right', fontSize: 13, fontWeight: 700, color: tx.type === 'deposit' ? '#16a34a' : '#dc2626', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
+                                                {tx.type === 'deposit' ? '+' : '−'}{formatCurrency(tx.amount)}
                                             </td>
                                         </tr>
                                     );
