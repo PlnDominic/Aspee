@@ -357,6 +357,10 @@ export default function TrialBalancePage() {
                     <div className="tb-footer">
                         <p>Prepared from general ledger as at {asAtFormatted}.</p>
                         <p>All amounts in Ghana Cedis (GH₵). Auto-posted entries included.</p>
+                        <p>
+                            Cash receipts, cash payments, and petty cash journals are included in the Asset accounts above.
+                            The net closing balance of all Cash &amp; Bank accounts ties directly to the <strong>Cash &amp; Bank Balances</strong> line on the Statement of Financial Position.
+                        </p>
                     </div>
                 )}
             </div>
