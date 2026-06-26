@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState, useCallback } from 'react';
-import PageHeader from '@/components/PageHeader';
 import { BankTransactionModal } from '@/components/BankTransactionModal';
 import { Landmark, ArrowDownCircle, ArrowUpCircle, Wallet, TrendingUp, FileText } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
@@ -88,15 +87,18 @@ export default function BanksPage() {
     const bankWithdrawals = bankTxs.filter(t => t.type === 'withdrawal').reduce((s, t) => s + t.amount, 0);
 
     return (
-        <div style={{ padding: '24px 28px' }}>
-            <PageHeader title="Banks" subtitle="Banking partners & account statements" />
+        <div style={{ padding: '16px 28px 24px' }}>
+            <div style={{ marginBottom: 12 }}>
+                <h2 style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>Banks</h2>
+                <p style={{ fontSize: 12, color: 'var(--slate-500)', marginTop: 2 }}>Banking partners &amp; account statements</p>
+            </div>
 
             {/* Tab bar */}
             <div style={{
                 display: 'flex',
                 gap: 0,
                 borderBottom: '2px solid var(--slate-200)',
-                marginBottom: 28,
+                marginBottom: 20,
                 overflowX: 'auto',
             }}>
                 {/* Overview tab */}
