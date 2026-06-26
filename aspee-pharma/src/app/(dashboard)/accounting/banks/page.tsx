@@ -87,8 +87,8 @@ export default function BanksPage() {
     const bankWithdrawals = bankTxs.filter(t => t.type === 'withdrawal').reduce((s, t) => s + t.amount, 0);
 
     return (
-        <div style={{ padding: '16px 28px 24px' }}>
-            <div style={{ marginBottom: 12 }}>
+        <div style={{ padding: '8px 28px 24px' }}>
+            <div style={{ marginBottom: 8 }}>
                 <h2 style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>Banks</h2>
                 <p style={{ fontSize: 12, color: 'var(--slate-500)', marginTop: 2 }}>Banking partners &amp; account statements</p>
             </div>
