@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { Suspense, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import PageHeader from '@/components/PageHeader';
 import StatCard from '@/components/StatCard';
@@ -40,6 +40,14 @@ interface SupplierLedger {
 // ── Component ──────────────────────────────────────────────────────────────────
 
 export default function AccountsPayableLedgerPage() {
+    return (
+        <Suspense fallback={<div style={{ padding: 40, textAlign: 'center', color: 'var(--slate-400)', fontSize: 13 }}>Loading ledger…</div>}>
+            <AccountsPayableLedgerContent />
+        </Suspense>
+    );
+}
+
+function AccountsPayableLedgerContent() {
     const searchParams = useSearchParams();
     const initialSearch = searchParams.get('search') || '';
 
