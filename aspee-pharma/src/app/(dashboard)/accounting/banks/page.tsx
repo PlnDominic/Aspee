@@ -2,10 +2,11 @@
 
 import React, { useState, useCallback } from 'react';
 import { BankTransactionModal } from '@/components/BankTransactionModal';
-import { Landmark, ArrowDownCircle, ArrowUpCircle, Wallet, TrendingUp, FileText } from 'lucide-react';
+import { Landmark, ArrowDownCircle, ArrowUpCircle, Wallet, TrendingUp, FileText, Edit2, Trash2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { formatCurrency } from '@/lib/currency';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 
 interface BankAccount {
     id: string;
@@ -29,6 +30,7 @@ export default function BanksPage() {
     const queryClient = useQueryClient();
     const [activeTab, setActiveTab] = useState<'overview' | string>('overview');
     const [modal, setModal] = useState<{ bank: BankAccount; type: 'deposit' | 'withdrawal' } | null>(null);
+    const [editingTx, setEditingTx] = useState<BankTransaction | null>(null);
 
     const { data: banks = [], isLoading } = useQuery({
         queryKey: ['bank_accounts'],
@@ -60,6 +62,26 @@ export default function BanksPage() {
         queryClient.invalidateQueries({ queryKey: ['bank_accounts'] });
         queryClient.invalidateQueries({ queryKey: ['bank_transactions'] });
     }, [queryClient]);
+
+    const handleDeleteTx = async (tx: BankTransaction) => {
+        if (!confirm('Are you sure you want to delete this transaction? This will reverse its effect on the account balance.')) return;
+        try {
+            const { error: txError } = await supabase.from('bank_transactions').delete().eq('id', tx.id);
+            if (txError) throw txError;
+
+            const reverseDelta = tx.type === 'deposit' ? -tx.amount : tx.amount;
+            const { error: balError } = await supabase.rpc('increment_bank_balance', {
+                p_bank_id: tx.bank_account_id,
+                p_delta: reverseDelta,
+            });
+            if (balError) throw balError;
+
+            toast.success('Transaction deleted');
+            refresh();
+        } catch (err: any) {
+            toast.error(err.message);
+        }
+    };
 
     const totalBalance = banks.reduce((sum, b) => sum + (b.balance ?? 0), 0);
     const totalDeposits = transactions.filter(t => t.type === 'deposit').reduce((s, t) => s + t.amount, 0);
@@ -398,6 +420,7 @@ export default function BanksPage() {
                                             <th style={{ padding: '11px 20px', textAlign: 'right', fontSize: 11, fontWeight: 700, color: '#15803d', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>CREDIT (DR)</th>
                                             <th style={{ padding: '11px 20px', textAlign: 'right', fontSize: 11, fontWeight: 700, color: '#b91c1c', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>DEBIT (DR)</th>
                                             <th style={{ padding: '11px 20px', textAlign: 'right', fontSize: 11, fontWeight: 700, color: '#1d4ed8', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>BALANCE</th>
+                                            <th style={{ padding: '11px 20px', textAlign: 'right', fontSize: 11, fontWeight: 700, color: 'var(--slate-500)', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>ACTIONS</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -425,6 +448,24 @@ export default function BanksPage() {
                                                     {formatCurrency(Math.abs(runningBalance))}
                                                     {runningBalance < 0 && <span style={{ fontSize: 10, fontWeight: 600, marginLeft: 4, color: '#dc2626' }}>DR</span>}
                                                 </td>
+                                                <td style={{ padding: '13px 20px', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                                                    <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                                                        <button
+                                                            onClick={() => setEditingTx(tx)}
+                                                            title="Edit transaction"
+                                                            style={actionButtonStyle}
+                                                        >
+                                                            <Edit2 size={14} />
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleDeleteTx(tx)}
+                                                            title="Delete transaction"
+                                                            style={{ ...actionButtonStyle, color: 'var(--danger)' }}
+                                                        >
+                                                            <Trash2 size={14} />
+                                                        </button>
+                                                    </div>
+                                                </td>
                                             </tr>
                                         ))}
                                     </tbody>
@@ -434,6 +475,7 @@ export default function BanksPage() {
                                             <td style={{ padding: '13px 20px', textAlign: 'right', fontSize: 13, fontWeight: 800, color: '#15803d', fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(bankDeposits)}</td>
                                             <td style={{ padding: '13px 20px', textAlign: 'right', fontSize: 13, fontWeight: 800, color: '#dc2626', fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(bankWithdrawals)}</td>
                                             <td style={{ padding: '13px 20px', textAlign: 'right', fontSize: 13, fontWeight: 800, color: '#1d4ed8', fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(activeBank.balance ?? 0)}</td>
+                                            <td></td>
                                         </tr>
                                     </tfoot>
                                 </table>
@@ -450,6 +492,27 @@ export default function BanksPage() {
                 defaultType={modal?.type ?? 'deposit'}
                 onSuccess={refresh}
             />
+
+            <BankTransactionModal
+                isOpen={!!editingTx}
+                onClose={() => setEditingTx(null)}
+                bank={activeBank}
+                transaction={editingTx}
+                onSuccess={refresh}
+            />
         </div>
     );
 }
+
+const actionButtonStyle: React.CSSProperties = {
+    padding: '6px',
+    borderRadius: '6px',
+    border: '1px solid var(--slate-200)',
+    background: 'var(--card-bg)',
+    color: 'var(--slate-600)',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    transition: 'all 0.15s ease',
+};
