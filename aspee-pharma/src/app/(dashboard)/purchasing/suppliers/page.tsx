@@ -5,7 +5,8 @@ import PageHeader from '@/components/PageHeader';
 import DataTable from '@/components/DataTable';
 import StatusBadge from '@/components/StatusBadge';
 import SupplierModal from '@/components/SupplierModal';
-import { Plus, Download, Edit2, Trash2, Mail, Phone } from 'lucide-react';
+import EntityLink from '@/components/EntityLink';
+import { Plus, Download, Edit2, Trash2, Mail, Phone, BookOpen } from 'lucide-react';
 import { useSupabaseQuery, useSave, useDelete } from '@/lib/hooks';
 
 export default function SuppliersPage() {
@@ -116,6 +117,11 @@ export default function SuppliersPage() {
             label: 'Actions',
             render: (_: any, row: any) => (
                 <div style={{ display: 'flex', gap: 8 }}>
+                    <EntityLink href={`/accounting/ap-ledger?search=${encodeURIComponent(row.name)}`} title="View A/P Ledger">
+                        <span style={{ ...actionButtonStyle, display: 'inline-flex' }}>
+                            <BookOpen size={14} />
+                        </span>
+                    </EntityLink>
                     <button
                         onClick={() => {
                             setSelectedSupplier(row);
