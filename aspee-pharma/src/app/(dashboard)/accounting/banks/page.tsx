@@ -209,7 +209,7 @@ export default function BanksPage() {
                     {isLoading ? (
                         <div style={{ textAlign: 'center', padding: '60px 0', color: 'var(--slate-400)', fontSize: 13 }}>Loading...</div>
                     ) : (
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16, marginBottom: 28 }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${banks.length || 1}, 1fr)`, gap: 12, marginBottom: 28 }}>
                             {banks.map(bank => {
                                 const txs = transactions.filter(t => t.bank_account_id === bank.id);
                                 const dep = txs.filter(t => t.type === 'deposit').reduce((s, t) => s + t.amount, 0);
@@ -221,10 +221,11 @@ export default function BanksPage() {
                                         style={{
                                             background: 'var(--card-bg)',
                                             border: '1px solid var(--slate-200)',
-                                            borderRadius: 16,
-                                            padding: '20px 20px 16px',
+                                            borderRadius: 14,
+                                            padding: '14px 14px 12px',
                                             boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
                                             cursor: 'pointer',
+                                            minWidth: 0,
                                             transition: 'box-shadow 0.15s, border-color 0.15s',
                                         }}
                                         onMouseEnter={e => {
@@ -236,31 +237,31 @@ export default function BanksPage() {
                                             (e.currentTarget as HTMLDivElement).style.borderColor = 'var(--slate-200)';
                                         }}
                                     >
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
-                                            <div style={{ width: 44, height: 44, borderRadius: 11, background: 'var(--slate-100)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                                                <Landmark size={20} color="var(--slate-500)" />
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, minWidth: 0 }}>
+                                            <div style={{ width: 32, height: 32, borderRadius: 9, background: 'var(--slate-100)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                                <Landmark size={15} color="var(--slate-500)" />
                                             </div>
-                                            <div>
-                                                <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)', lineHeight: 1.2 }}>{bank.bank_name}</div>
-                                                <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--slate-400)', marginTop: 2, letterSpacing: '0.05em' }}>{bank.short_name}</div>
-                                            </div>
-                                        </div>
-                                        <div style={{ background: 'var(--slate-50)', borderRadius: 9, padding: '12px 14px', marginBottom: 12 }}>
-                                            <div style={{ fontSize: 10, color: 'var(--slate-400)', fontWeight: 700, marginBottom: 4, letterSpacing: '0.06em' }}>CURRENT BALANCE</div>
-                                            <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--text-primary)' }}>{formatCurrency(bank.balance ?? 0)}</div>
-                                        </div>
-                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                                            <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8, padding: '8px 10px' }}>
-                                                <div style={{ fontSize: 10, color: '#15803d', fontWeight: 700, marginBottom: 3, letterSpacing: '0.04em' }}>DEPOSITS</div>
-                                                <div style={{ fontSize: 13, fontWeight: 800, color: '#15803d' }}>{formatCurrency(dep)}</div>
-                                            </div>
-                                            <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, padding: '8px 10px' }}>
-                                                <div style={{ fontSize: 10, color: '#b91c1c', fontWeight: 700, marginBottom: 3, letterSpacing: '0.04em' }}>WITHDRAWALS</div>
-                                                <div style={{ fontSize: 13, fontWeight: 800, color: '#b91c1c' }}>{formatCurrency(wit)}</div>
+                                            <div style={{ minWidth: 0 }}>
+                                                <div style={{ fontWeight: 700, fontSize: 12, color: 'var(--text-primary)', lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{bank.bank_name}</div>
+                                                <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--slate-400)', marginTop: 2, letterSpacing: '0.05em' }}>{bank.short_name}</div>
                                             </div>
                                         </div>
-                                        <div style={{ marginTop: 12, fontSize: 11, color: '#2563eb', fontWeight: 600, textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4 }}>
-                                            <FileText size={11} /> View Statement
+                                        <div style={{ background: 'var(--slate-50)', borderRadius: 8, padding: '8px 10px', marginBottom: 8 }}>
+                                            <div style={{ fontSize: 9, color: 'var(--slate-400)', fontWeight: 700, marginBottom: 3, letterSpacing: '0.06em' }}>BALANCE</div>
+                                            <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{formatCurrency(bank.balance ?? 0)}</div>
+                                        </div>
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                                            <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 7, padding: '6px 8px', minWidth: 0 }}>
+                                                <div style={{ fontSize: 9, color: '#15803d', fontWeight: 700, marginBottom: 2, letterSpacing: '0.04em' }}>DEPOSITS</div>
+                                                <div style={{ fontSize: 11, fontWeight: 800, color: '#15803d', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{formatCurrency(dep)}</div>
+                                            </div>
+                                            <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 7, padding: '6px 8px', minWidth: 0 }}>
+                                                <div style={{ fontSize: 9, color: '#b91c1c', fontWeight: 700, marginBottom: 2, letterSpacing: '0.04em' }}>WITHDRAWALS</div>
+                                                <div style={{ fontSize: 11, fontWeight: 800, color: '#b91c1c', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{formatCurrency(wit)}</div>
+                                            </div>
+                                        </div>
+                                        <div style={{ marginTop: 10, fontSize: 10, color: '#2563eb', fontWeight: 600, textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4 }}>
+                                            <FileText size={10} /> View Statement
                                         </div>
                                     </div>
                                 );
