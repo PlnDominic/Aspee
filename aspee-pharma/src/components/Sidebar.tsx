@@ -186,6 +186,7 @@ const navigation: NavItem[] = [
             { label: 'Supplier Payments', href: '/purchasing/payments',   icon: <CreditCard size={18} /> },
             { label: 'Collections',       href: '/accounting/collections', icon: <Banknote size={18} /> },
             { label: 'A/R Aging',         href: '/accounting/ar-aging',   icon: <BarChart3 size={18} /> },
+            { label: 'A/P Ledger',        href: '/accounting/ap-ledger',  icon: <BookOpen size={18} /> },
             { label: 'Financial Reports', href: '/accounting/reports',    icon: <PieChart size={18} /> },
             { label: 'Comprehensive Income', href: '/accounting/comprehensive-income', icon: <FileText size={18} /> },
             { label: 'Financial Position', href: '/accounting/financial-position', icon: <FileCheck size={18} /> },
