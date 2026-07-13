@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Modal from './Modal';
 import { ArrowDownCircle, ArrowUpCircle, Calendar, FileText, Save } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
@@ -12,6 +12,7 @@ interface BankTransactionModalProps {
     onClose: () => void;
     bank: { id: string; bank_name: string; color: string } | null;
     defaultType?: 'deposit' | 'withdrawal';
+    transaction?: { id: string; type: 'deposit' | 'withdrawal'; amount: number; description: string | null; date: string } | null;
     onSuccess: () => void;
 }
 
@@ -20,13 +21,22 @@ export const BankTransactionModal = ({
     onClose,
     bank,
     defaultType = 'deposit',
+    transaction = null,
     onSuccess,
 }: BankTransactionModalProps) => {
-    const [type, setType] = useState<'deposit' | 'withdrawal'>(defaultType);
-    const [amount, setAmount] = useState('');
-    const [description, setDescription] = useState('');
-    const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+    const isEditing = !!transaction;
+    const [type, setType] = useState<'deposit' | 'withdrawal'>(transaction?.type ?? defaultType);
+    const [amount, setAmount] = useState(transaction ? String(transaction.amount) : '');
+    const [description, setDescription] = useState(transaction?.description ?? '');
+    const [date, setDate] = useState(transaction?.date ?? new Date().toISOString().split('T')[0]);
     const [saving, setSaving] = useState(false);
+
+    useEffect(() => {
+        setType(transaction?.type ?? defaultType);
+        setAmount(transaction ? String(transaction.amount) : '');
+        setDescription(transaction?.description ?? '');
+        setDate(transaction?.date ?? new Date().toISOString().split('T')[0]);
+    }, [transaction, defaultType, isOpen]);
 
     const handleClose = () => {
         setAmount('');
@@ -48,23 +58,49 @@ export const BankTransactionModal = ({
 
         setSaving(true);
         try {
-            const { error: txError } = await supabase.from('bank_transactions').insert({
-                bank_account_id: bank.id,
-                type,
-                amount: num,
-                description: description.trim() || null,
-                date,
-            });
-            if (txError) throw txError;
+            if (isEditing && transaction) {
+                const { error: txError } = await supabase
+                    .from('bank_transactions')
+                    .update({
+                        type,
+                        amount: num,
+                        description: description.trim() || null,
+                        date,
+                    })
+                    .eq('id', transaction.id);
+                if (txError) throw txError;
 
-            const delta = type === 'deposit' ? num : -num;
-            const { error: balError } = await supabase.rpc('increment_bank_balance', {
-                p_bank_id: bank.id,
-                p_delta: delta,
-            });
-            if (balError) throw balError;
+                const oldDelta = transaction.type === 'deposit' ? transaction.amount : -transaction.amount;
+                const newDelta = type === 'deposit' ? num : -num;
+                const netDelta = newDelta - oldDelta;
+                if (netDelta !== 0) {
+                    const { error: balError } = await supabase.rpc('increment_bank_balance', {
+                        p_bank_id: bank.id,
+                        p_delta: netDelta,
+                    });
+                    if (balError) throw balError;
+                }
 
-            toast.success(`${type === 'deposit' ? 'Deposit' : 'Withdrawal'} of ${CURRENCY_SYMBOL}${num.toFixed(2)} recorded`);
+                toast.success('Transaction updated successfully');
+            } else {
+                const { error: txError } = await supabase.from('bank_transactions').insert({
+                    bank_account_id: bank.id,
+                    type,
+                    amount: num,
+                    description: description.trim() || null,
+                    date,
+                });
+                if (txError) throw txError;
+
+                const delta = type === 'deposit' ? num : -num;
+                const { error: balError } = await supabase.rpc('increment_bank_balance', {
+                    p_bank_id: bank.id,
+                    p_delta: delta,
+                });
+                if (balError) throw balError;
+
+                toast.success(`${type === 'deposit' ? 'Deposit' : 'Withdrawal'} of ${CURRENCY_SYMBOL}${num.toFixed(2)} recorded`);
+            }
             onSuccess();
             handleClose();
         } catch (err: any) {
@@ -82,7 +118,7 @@ export const BankTransactionModal = ({
         <Modal
             isOpen={isOpen}
             onClose={handleClose}
-            title={`${isDeposit ? 'Deposit' : 'Withdrawal'} — ${bank.bank_name}`}
+            title={`${isEditing ? 'Edit Transaction' : isDeposit ? 'Deposit' : 'Withdrawal'} — ${bank.bank_name}`}
             size="sm"
         >
             <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -216,7 +252,7 @@ export const BankTransactionModal = ({
                     }}
                 >
                     <Save size={15} />
-                    {saving ? 'Saving...' : `Record ${isDeposit ? 'Deposit' : 'Withdrawal'}`}
+                    {saving ? 'Saving...' : isEditing ? 'Save Changes' : `Record ${isDeposit ? 'Deposit' : 'Withdrawal'}`}
                 </button>
             </form>
         </Modal>

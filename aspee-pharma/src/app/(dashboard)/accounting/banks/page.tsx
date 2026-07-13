@@ -2,10 +2,11 @@
 
 import React, { useState, useCallback } from 'react';
 import { BankTransactionModal } from '@/components/BankTransactionModal';
-import { Landmark, ArrowDownCircle, ArrowUpCircle, Wallet, TrendingUp, FileText } from 'lucide-react';
+import { Landmark, ArrowDownCircle, ArrowUpCircle, Wallet, TrendingUp, FileText, Edit2, Trash2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { formatCurrency } from '@/lib/currency';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 
 interface BankAccount {
     id: string;
@@ -29,6 +30,7 @@ export default function BanksPage() {
     const queryClient = useQueryClient();
     const [activeTab, setActiveTab] = useState<'overview' | string>('overview');
     const [modal, setModal] = useState<{ bank: BankAccount; type: 'deposit' | 'withdrawal' } | null>(null);
+    const [editingTx, setEditingTx] = useState<BankTransaction | null>(null);
 
     const { data: banks = [], isLoading } = useQuery({
         queryKey: ['bank_accounts'],
@@ -60,6 +62,26 @@ export default function BanksPage() {
         queryClient.invalidateQueries({ queryKey: ['bank_accounts'] });
         queryClient.invalidateQueries({ queryKey: ['bank_transactions'] });
     }, [queryClient]);
+
+    const handleDeleteTx = async (tx: BankTransaction) => {
+        if (!confirm('Are you sure you want to delete this transaction? This will reverse its effect on the account balance.')) return;
+        try {
+            const { error: txError } = await supabase.from('bank_transactions').delete().eq('id', tx.id);
+            if (txError) throw txError;
+
+            const reverseDelta = tx.type === 'deposit' ? -tx.amount : tx.amount;
+            const { error: balError } = await supabase.rpc('increment_bank_balance', {
+                p_bank_id: tx.bank_account_id,
+                p_delta: reverseDelta,
+            });
+            if (balError) throw balError;
+
+            toast.success('Transaction deleted');
+            refresh();
+        } catch (err: any) {
+            toast.error(err.message);
+        }
+    };
 
     const totalBalance = banks.reduce((sum, b) => sum + (b.balance ?? 0), 0);
     const totalDeposits = transactions.filter(t => t.type === 'deposit').reduce((s, t) => s + t.amount, 0);
@@ -187,7 +209,7 @@ export default function BanksPage() {
                     {isLoading ? (
                         <div style={{ textAlign: 'center', padding: '60px 0', color: 'var(--slate-400)', fontSize: 13 }}>Loading...</div>
                     ) : (
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16, marginBottom: 28 }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${banks.length || 1}, 1fr)`, gap: 12, marginBottom: 28 }}>
                             {banks.map(bank => {
                                 const txs = transactions.filter(t => t.bank_account_id === bank.id);
                                 const dep = txs.filter(t => t.type === 'deposit').reduce((s, t) => s + t.amount, 0);
@@ -199,10 +221,11 @@ export default function BanksPage() {
                                         style={{
                                             background: 'var(--card-bg)',
                                             border: '1px solid var(--slate-200)',
-                                            borderRadius: 16,
-                                            padding: '20px 20px 16px',
+                                            borderRadius: 14,
+                                            padding: '14px 14px 12px',
                                             boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
                                             cursor: 'pointer',
+                                            minWidth: 0,
                                             transition: 'box-shadow 0.15s, border-color 0.15s',
                                         }}
                                         onMouseEnter={e => {
@@ -214,31 +237,31 @@ export default function BanksPage() {
                                             (e.currentTarget as HTMLDivElement).style.borderColor = 'var(--slate-200)';
                                         }}
                                     >
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
-                                            <div style={{ width: 44, height: 44, borderRadius: 11, background: 'var(--slate-100)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                                                <Landmark size={20} color="var(--slate-500)" />
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, minWidth: 0 }}>
+                                            <div style={{ width: 32, height: 32, borderRadius: 9, background: 'var(--slate-100)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                                <Landmark size={15} color="var(--slate-500)" />
                                             </div>
-                                            <div>
-                                                <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)', lineHeight: 1.2 }}>{bank.bank_name}</div>
-                                                <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--slate-400)', marginTop: 2, letterSpacing: '0.05em' }}>{bank.short_name}</div>
-                                            </div>
-                                        </div>
-                                        <div style={{ background: 'var(--slate-50)', borderRadius: 9, padding: '12px 14px', marginBottom: 12 }}>
-                                            <div style={{ fontSize: 10, color: 'var(--slate-400)', fontWeight: 700, marginBottom: 4, letterSpacing: '0.06em' }}>CURRENT BALANCE</div>
-                                            <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--text-primary)' }}>{formatCurrency(bank.balance ?? 0)}</div>
-                                        </div>
-                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                                            <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8, padding: '8px 10px' }}>
-                                                <div style={{ fontSize: 10, color: '#15803d', fontWeight: 700, marginBottom: 3, letterSpacing: '0.04em' }}>DEPOSITS</div>
-                                                <div style={{ fontSize: 13, fontWeight: 800, color: '#15803d' }}>{formatCurrency(dep)}</div>
-                                            </div>
-                                            <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, padding: '8px 10px' }}>
-                                                <div style={{ fontSize: 10, color: '#b91c1c', fontWeight: 700, marginBottom: 3, letterSpacing: '0.04em' }}>WITHDRAWALS</div>
-                                                <div style={{ fontSize: 13, fontWeight: 800, color: '#b91c1c' }}>{formatCurrency(wit)}</div>
+                                            <div style={{ minWidth: 0 }}>
+                                                <div style={{ fontWeight: 700, fontSize: 12, color: 'var(--text-primary)', lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{bank.bank_name}</div>
+                                                <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--slate-400)', marginTop: 2, letterSpacing: '0.05em' }}>{bank.short_name}</div>
                                             </div>
                                         </div>
-                                        <div style={{ marginTop: 12, fontSize: 11, color: '#2563eb', fontWeight: 600, textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4 }}>
-                                            <FileText size={11} /> View Statement
+                                        <div style={{ background: 'var(--slate-50)', borderRadius: 8, padding: '8px 10px', marginBottom: 8 }}>
+                                            <div style={{ fontSize: 9, color: 'var(--slate-400)', fontWeight: 700, marginBottom: 3, letterSpacing: '0.06em' }}>BALANCE</div>
+                                            <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{formatCurrency(bank.balance ?? 0)}</div>
+                                        </div>
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                                            <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 7, padding: '6px 8px', minWidth: 0 }}>
+                                                <div style={{ fontSize: 9, color: '#15803d', fontWeight: 700, marginBottom: 2, letterSpacing: '0.04em' }}>DEPOSITS</div>
+                                                <div style={{ fontSize: 11, fontWeight: 800, color: '#15803d', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{formatCurrency(dep)}</div>
+                                            </div>
+                                            <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 7, padding: '6px 8px', minWidth: 0 }}>
+                                                <div style={{ fontSize: 9, color: '#b91c1c', fontWeight: 700, marginBottom: 2, letterSpacing: '0.04em' }}>WITHDRAWALS</div>
+                                                <div style={{ fontSize: 11, fontWeight: 800, color: '#b91c1c', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{formatCurrency(wit)}</div>
+                                            </div>
+                                        </div>
+                                        <div style={{ marginTop: 10, fontSize: 10, color: '#2563eb', fontWeight: 600, textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4 }}>
+                                            <FileText size={10} /> View Statement
                                         </div>
                                     </div>
                                 );
@@ -398,6 +421,7 @@ export default function BanksPage() {
                                             <th style={{ padding: '11px 20px', textAlign: 'right', fontSize: 11, fontWeight: 700, color: '#15803d', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>CREDIT (DR)</th>
                                             <th style={{ padding: '11px 20px', textAlign: 'right', fontSize: 11, fontWeight: 700, color: '#b91c1c', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>DEBIT (DR)</th>
                                             <th style={{ padding: '11px 20px', textAlign: 'right', fontSize: 11, fontWeight: 700, color: '#1d4ed8', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>BALANCE</th>
+                                            <th style={{ padding: '11px 20px', textAlign: 'right', fontSize: 11, fontWeight: 700, color: 'var(--slate-500)', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>ACTIONS</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -425,6 +449,24 @@ export default function BanksPage() {
                                                     {formatCurrency(Math.abs(runningBalance))}
                                                     {runningBalance < 0 && <span style={{ fontSize: 10, fontWeight: 600, marginLeft: 4, color: '#dc2626' }}>DR</span>}
                                                 </td>
+                                                <td style={{ padding: '13px 20px', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                                                    <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                                                        <button
+                                                            onClick={() => setEditingTx(tx)}
+                                                            title="Edit transaction"
+                                                            style={actionButtonStyle}
+                                                        >
+                                                            <Edit2 size={14} />
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleDeleteTx(tx)}
+                                                            title="Delete transaction"
+                                                            style={{ ...actionButtonStyle, color: 'var(--danger)' }}
+                                                        >
+                                                            <Trash2 size={14} />
+                                                        </button>
+                                                    </div>
+                                                </td>
                                             </tr>
                                         ))}
                                     </tbody>
@@ -434,6 +476,7 @@ export default function BanksPage() {
                                             <td style={{ padding: '13px 20px', textAlign: 'right', fontSize: 13, fontWeight: 800, color: '#15803d', fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(bankDeposits)}</td>
                                             <td style={{ padding: '13px 20px', textAlign: 'right', fontSize: 13, fontWeight: 800, color: '#dc2626', fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(bankWithdrawals)}</td>
                                             <td style={{ padding: '13px 20px', textAlign: 'right', fontSize: 13, fontWeight: 800, color: '#1d4ed8', fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(activeBank.balance ?? 0)}</td>
+                                            <td></td>
                                         </tr>
                                     </tfoot>
                                 </table>
@@ -450,6 +493,27 @@ export default function BanksPage() {
                 defaultType={modal?.type ?? 'deposit'}
                 onSuccess={refresh}
             />
+
+            <BankTransactionModal
+                isOpen={!!editingTx}
+                onClose={() => setEditingTx(null)}
+                bank={activeBank}
+                transaction={editingTx}
+                onSuccess={refresh}
+            />
         </div>
     );
 }
+
+const actionButtonStyle: React.CSSProperties = {
+    padding: '6px',
+    borderRadius: '6px',
+    border: '1px solid var(--slate-200)',
+    background: 'var(--card-bg)',
+    color: 'var(--slate-600)',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    transition: 'all 0.15s ease',
+};
