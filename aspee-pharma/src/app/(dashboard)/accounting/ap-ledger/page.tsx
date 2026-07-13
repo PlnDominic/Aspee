@@ -41,7 +41,7 @@ interface SupplierLedger {
 
 export default function AccountsPayableLedgerPage() {
     return (
-        <Suspense fallback={null}>
+        <Suspense fallback={<div style={{ padding: 40, textAlign: 'center', color: 'var(--slate-400)', fontSize: 13 }}>Loading ledger…</div>}>
             <AccountsPayableLedgerContent />
         </Suspense>
     );
