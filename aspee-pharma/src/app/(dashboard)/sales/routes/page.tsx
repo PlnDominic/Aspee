@@ -8,7 +8,8 @@ import StatusBadge from '@/components/StatusBadge';
 import VanModal from '@/components/VanModal';
 import { Plus, Truck, Banknote, MapPin, Users, Edit2, Trash2, Eye } from 'lucide-react';
 import { useSupabaseQuery, useDelete } from '@/lib/hooks';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { supabase } from '@/lib/supabase';
 import { formatCurrency } from '@/lib/currency';
 import { toast } from 'sonner';
 
@@ -16,6 +17,91 @@ export default function RoutesPage() {
     const { data, isLoading: loading } = useSupabaseQuery<any>('vans');
     const vans = data ?? [];
     const queryClient = useQueryClient();
+
+    const { data: loadedValueMap = {} } = useQuery<Record<string, number>>({
+        queryKey: ['vans', 'loaded-values', vans.map(v => v.van_id).join(',')],
+        enabled: vans.length > 0,
+        queryFn: async () => {
+            const locationNames = vans
+                .map((v: any) => v.van_id ? `Sales Van - ${v.van_id}` : null)
+                .filter((n: string | null): n is string => !!n);
+
+            if (locationNames.length === 0) return {};
+
+            const { data: locations } = await supabase
+                .from('stock_locations')
+                .select('id, name')
+                .in('name', locationNames);
+
+            const locationIdToVanId = new Map<string, string>();
+            for (const loc of locations || []) {
+                const vanId = (loc.name as string).replace(/^Sales Van - /, '');
+                locationIdToVanId.set(loc.id, vanId);
+            }
+
+            const locationIds = Array.from(locationIdToVanId.keys());
+            if (locationIds.length === 0) return {};
+
+            const { data: stockRows } = await supabase
+                .from('stock_levels')
+                .select('product_id, location_id, qty_on_hand')
+                .in('location_id', locationIds);
+
+            const productIds = Array.from(new Set((stockRows || []).map(r => r.product_id).filter(Boolean)));
+            if (productIds.length === 0) return {};
+
+            const { data: products } = await supabase
+                .from('products')
+                .select('id, cash_price, unit_price')
+                .in('id', productIds);
+
+            const priceMap = new Map<string, number>();
+            for (const p of products || []) {
+                priceMap.set(p.id, Number((p as any).cash_price ?? (p as any).unit_price ?? 0));
+            }
+
+            const totals: Record<string, number> = {};
+            for (const row of stockRows || []) {
+                const vanId = locationIdToVanId.get(row.location_id);
+                if (!vanId) continue;
+                const qty = Number(row.qty_on_hand) || 0;
+                const price = priceMap.get(row.product_id) || 0;
+                totals[vanId] = (totals[vanId] || 0) + qty * price;
+            }
+            return totals;
+        },
+    });
+
+    const { data: todaysSalesMap = {} } = useQuery<Record<string, number>>({
+        queryKey: ['vans', 'todays-sales', vans.map(v => v.id).join(',')],
+        enabled: vans.length > 0,
+        queryFn: async () => {
+            const today = new Date().toISOString().split('T')[0];
+            const vanIds = vans.map((v: any) => v.id).filter(Boolean);
+            if (vanIds.length === 0) return {};
+
+            const { data: invoices } = await supabase
+                .from('sales_invoices')
+                .select('route_id, total_amount, status')
+                .in('route_id', vanIds)
+                .eq('date', today);
+
+            // Map by route_id (= van.id) to total sales, only committed invoices
+            const totals: Record<string, number> = {};
+            for (const inv of invoices || []) {
+                const status = String(inv.status || '').trim().toUpperCase();
+                if (!['ISSUED', 'PAID', 'PARTIAL', 'OVERDUE'].includes(status)) continue;
+                totals[inv.route_id] = (totals[inv.route_id] || 0) + (Number(inv.total_amount) || 0);
+            }
+            return totals;
+        },
+    });
+
+    const vansWithLoadedValue = vans.map((v: any) => ({
+        ...v,
+        loaded_value: loadedValueMap[v.van_id] ?? 0,
+        today_sales: todaysSalesMap[v.id] ?? 0,
+    }));
 
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedVan, setSelectedVan] = useState<any>(null);
@@ -39,10 +125,10 @@ export default function RoutesPage() {
     };
 
     // Stats
-    const activeVans = vans.filter(v => v.status !== 'Maintenance').length;
-    const todaysRevenue = vans.reduce((sum, v) => sum + (parseFloat(v.today_sales) || 0), 0);
-    const activeRoutes = new Set(vans.filter(v => v.status === 'On Route').map(v => v.route_area)).size;
-    const totalCustomers = vans.reduce((sum, v) => sum + (parseInt(v.customer_count) || 0), 0);
+    const activeVans = vansWithLoadedValue.filter(v => v.status !== 'Maintenance').length;
+    const todaysRevenue = vansWithLoadedValue.reduce((sum, v) => sum + (parseFloat(v.today_sales) || 0), 0);
+    const activeRoutes = new Set(vansWithLoadedValue.filter(v => v.status === 'On Route').map(v => v.route_area)).size;
+    const totalCustomers = vansWithLoadedValue.reduce((sum, v) => sum + (parseInt(v.customer_count) || 0), 0);
 
     const columns = [
         {
@@ -133,7 +219,7 @@ export default function RoutesPage() {
 
             <DataTable
                 columns={columns}
-                data={vans}
+                data={vansWithLoadedValue}
                 loading={loading}
                 searchPlaceholder="Search vans or routes..."
             />

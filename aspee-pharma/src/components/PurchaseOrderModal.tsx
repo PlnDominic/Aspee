@@ -928,6 +928,7 @@ export default function PurchaseOrderModal({ isOpen, onClose, onSave, initialDat
                                                     <input
                                                         type="number"
                                                         min="0"
+                                                        step="0.0001"
                                                         value={item.quantity || ''}
                                                         onChange={(e) => updateItem(group.type as any, index, 'quantity', parseFloat(e.target.value) || 0)}
                                                         className="qty-input"
@@ -950,13 +951,13 @@ export default function PurchaseOrderModal({ isOpen, onClose, onSave, initialDat
                                                         <span className="currency-label">{currency === 'GHS' ? '₵' : '$'}</span>
                                                         <input
                                                             type="number"
-                                                            step="0.01"
+                                                            step="0.0000001"
                                                             min="0"
                                                             value={item.unit_price || ''}
                                                             onChange={(e) => updateItem(group.type as any, index, 'unit_price', parseFloat(e.target.value) || 0)}
                                                             className="qty-input"
                                                             style={{ paddingLeft: '24px' }}
-                                                            placeholder="0.00"
+                                                            placeholder="0.0000000"
                                                         />
                                                     </div>
                                                 </td>
