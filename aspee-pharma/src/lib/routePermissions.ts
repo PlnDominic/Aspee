@@ -2,6 +2,8 @@ export const routePermissions: Record<string, string[]> = {
     '/dashboard': ['*'],
     '/sales/requests': ['Super Admin', 'Sales Manager', 'Van Sales Rep', 'Store Manager'],
     '/stores/sales-requests': ['Super Admin', 'Store Manager'],
+    '/stores/products': ['Super Admin', 'Store Manager', 'Purchasing Manager'],
+    '/stores/stock': ['Super Admin', 'Store Manager', 'Purchasing Manager'],
     '/sales/collections': ['Super Admin', 'Accountant', 'Sales Manager'],
     '/sales/cash-receipts': ['Super Admin', 'Sales Manager', 'Van Sales Rep'],
     '/sales/cash-reconciliation': ['Super Admin', 'Sales Manager', 'Van Sales Rep', 'Accountant', 'Managing Director'],
