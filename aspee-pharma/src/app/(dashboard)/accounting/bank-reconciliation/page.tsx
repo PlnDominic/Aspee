@@ -497,7 +497,7 @@ export default function BankReconciliationPage() {
       if (error) throw error;
       return (data || []) as BankAccount[];
     },
-    onSuccess: (data) => {
+    onSuccess: (data: BankAccount[]) => {
       if (data.length && !activeTab) setActiveTab(data[0].id);
     },
   } as any);
