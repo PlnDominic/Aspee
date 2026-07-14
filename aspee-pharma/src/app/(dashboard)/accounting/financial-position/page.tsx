@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import PageHeader from '@/components/PageHeader';
-import { Calendar, Printer, Save, ExternalLink } from 'lucide-react';
+import { Calendar, Printer, Save, ExternalLink, ChevronDown, ChevronRight } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { formatCurrency } from '@/lib/currency';
 import { toast } from 'sonner';
@@ -30,6 +30,16 @@ interface Account {
 
 type Overrides = Record<string, number>;
 
+interface CustomerBalance {
+    customer_name: string;
+    outstanding: number;
+}
+
+interface SupplierBalance {
+    supplier_name: string;
+    outstanding: number;
+}
+
 export default function FinancialPositionPage() {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -38,10 +48,15 @@ export default function FinancialPositionPage() {
     const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
     const [editMode, setEditMode] = useState(false);
     const [overrides, setOverrides] = useState<Overrides>({});
+    const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
+    const [arByCustomer, setArByCustomer] = useState<CustomerBalance[]>([]);
+    const [apBySupplier, setApBySupplier] = useState<SupplierBalance[]>([]);
 
     useEffect(() => {
         fetchReportData();
         fetchAccounts();
+        fetchARByCustomer();
+        fetchAPBySupplier();
     }, [endDate]);
 
     const fetchReportData = async () => {
@@ -63,6 +78,84 @@ export default function FinancialPositionPage() {
     const fetchAccounts = async () => {
         const { data } = await supabase.from('chart_of_accounts').select('id, code, name, type, subtype').eq('is_active', true);
         setAccounts(data || []);
+    };
+
+    const fetchARByCustomer = async () => {
+        try {
+            const { data: invoices, error } = await supabase
+                .from('sales_invoices')
+                .select('id, customer_name, total_amount, status')
+                .in('status', ['Issued', 'ISSUED', 'Partially Paid', 'PARTIALLY PAID', 'Overdue', 'OVERDUE'])
+                .lte('date', endDate);
+            if (error) throw error;
+
+            const ids = (invoices || []).map((i: any) => i.id);
+            const paidMap: Record<string, number> = {};
+            if (ids.length > 0) {
+                const { data: receipts } = await supabase
+                    .from('sales_receipts')
+                    .select('invoice_id, amount_collected')
+                    .in('invoice_id', ids);
+                for (const r of receipts || []) {
+                    paidMap[r.invoice_id] = (paidMap[r.invoice_id] || 0) + Number(r.amount_collected || 0);
+                }
+            }
+
+            const balanceMap: Record<string, number> = {};
+            for (const inv of invoices || []) {
+                const outstanding = Number(inv.total_amount) - (paidMap[inv.id] || 0);
+                if (outstanding > 0.01) {
+                    balanceMap[inv.customer_name] = (balanceMap[inv.customer_name] || 0) + outstanding;
+                }
+            }
+
+            setArByCustomer(
+                Object.entries(balanceMap)
+                    .map(([customer_name, outstanding]) => ({ customer_name, outstanding }))
+                    .sort((a, b) => b.outstanding - a.outstanding)
+            );
+        } catch (_) {
+            // silently fail — drill-down won't show if invoices aren't accessible
+        }
+    };
+
+    const fetchAPBySupplier = async () => {
+        try {
+            const { data: orders, error } = await supabase
+                .from('purchase_orders')
+                .select('id, supplier_name, total_amount, status')
+                .lte('created_at', endDate + 'T23:59:59');
+            if (error) throw error;
+
+            const ids = (orders || []).map((o: any) => o.id);
+            const paidMap: Record<string, number> = {};
+            if (ids.length > 0) {
+                const { data: payments } = await supabase
+                    .from('supplier_payments')
+                    .select('po_id, amount')
+                    .in('po_id', ids);
+                for (const p of payments || []) {
+                    paidMap[p.po_id] = (paidMap[p.po_id] || 0) + Number(p.amount || 0);
+                }
+            }
+
+            const balanceMap: Record<string, number> = {};
+            for (const order of orders || []) {
+                if (['Draft', 'Cancelled', 'Rejected'].includes(order.status)) continue;
+                const outstanding = Number(order.total_amount) - (paidMap[order.id] || 0);
+                if (outstanding > 0.01) {
+                    balanceMap[order.supplier_name] = (balanceMap[order.supplier_name] || 0) + outstanding;
+                }
+            }
+
+            setApBySupplier(
+                Object.entries(balanceMap)
+                    .map(([supplier_name, outstanding]) => ({ supplier_name, outstanding }))
+                    .sort((a, b) => b.outstanding - a.outstanding)
+            );
+        } catch (_) {
+            // silently fail
+        }
     };
 
     // --- Asset Calculations ---
@@ -113,6 +206,74 @@ export default function FinancialPositionPage() {
     const taxation = val('taxation', ledgerTaxation);
     const overdraft = val('overdraft', ledgerOverdraft);
     const totalLiabilities = tradeCreditors + taxation + overdraft;
+
+    // --- Drill-down computed from entries ---
+
+    // PPE: individual fixed asset ledger entries (debit side = purchases/additions)
+    const ppeEntries = useMemo(() => {
+        const map = new Map<string, { balance: number; description: string; date: string }>();
+        for (const e of entries) {
+            if (e.type !== 'Asset') continue;
+            if (!e.subtype?.includes('Fixed Asset') && !e.subtype?.includes('Intangible')) continue;
+            const existing = map.get(e.account_name);
+            if (existing) {
+                existing.balance += e.debit - e.credit;
+            } else {
+                map.set(e.account_name, { balance: e.debit - e.credit, description: e.description || '', date: e.date });
+            }
+        }
+        return Array.from(map.entries())
+            .map(([name, v]) => ({ name, ...v }))
+            .filter(e => e.balance > 0.01)
+            .sort((a, b) => b.balance - a.balance);
+    }, [entries]);
+
+    // Inventory: breakdown by account (Raw Materials, WIP, Finished Goods, etc.)
+    const inventoryBreakdown = useMemo(() => {
+        const map = new Map<string, number>();
+        for (const e of entries) {
+            if (e.type !== 'Asset' || !e.subtype?.includes('Inventory')) continue;
+            map.set(e.account_name, (map.get(e.account_name) || 0) + (e.debit - e.credit));
+        }
+        return Array.from(map.entries())
+            .map(([name, balance]) => ({ name, balance }))
+            .filter(e => e.balance > 0.01)
+            .sort((a, b) => b.balance - a.balance);
+    }, [entries]);
+
+    // Taxation: breakdown per tax liability account
+    const taxBreakdown = useMemo(() => {
+        const map = new Map<string, number>();
+        for (const e of entries) {
+            if (e.type !== 'Liability' || !e.subtype?.includes('Taxes')) continue;
+            map.set(e.account_name, (map.get(e.account_name) || 0) + (e.credit - e.debit));
+        }
+        return Array.from(map.entries())
+            .map(([name, balance]) => ({ name, balance }))
+            .filter(e => e.balance > 0.01)
+            .sort((a, b) => b.balance - a.balance);
+    }, [entries]);
+
+    // Cash: breakdown by cash/bank account
+    const cashBreakdown = useMemo(() => {
+        const map = new Map<string, number>();
+        for (const e of entries) {
+            if (e.type !== 'Asset' || !e.subtype?.includes('Cash')) continue;
+            map.set(e.account_name, (map.get(e.account_name) || 0) + (e.debit - e.credit));
+        }
+        return Array.from(map.entries())
+            .map(([name, balance]) => ({ name, balance }))
+            .sort((a, b) => b.balance - a.balance);
+    }, [entries]);
+
+    const toggleSection = (key: string) => {
+        setExpandedSections(prev => {
+            const next = new Set(prev);
+            if (next.has(key)) next.delete(key);
+            else next.add(key);
+            return next;
+        });
+    };
 
     const handleOverride = (key: string, value: string) => {
         const num = parseFloat(value);
@@ -216,6 +377,7 @@ export default function FinancialPositionPage() {
         </tr>
     );
 
+    // Standard account row (no drill-down)
     const AccountRow = ({ label, fieldKey, ledgerValue, isTotal = false }: any) => (
         <tr style={{ height: 35, borderTop: isTotal ? '1.5px solid #000' : 'none' }}>
             <td style={{ fontSize: 13, fontWeight: isTotal ? 700 : 400 }}>{label}</td>
@@ -226,6 +388,60 @@ export default function FinancialPositionPage() {
             <td style={{ textAlign: 'right', padding: '0 10px', fontSize: 13, fontWeight: isTotal ? 700 : 400 }}>
                 {isTotal ? fmt(ledgerValue) : ''}
             </td>
+        </tr>
+    );
+
+    // Account row with expand/collapse chevron and drill-down sub-rows
+    const ExpandableRow = ({
+        label,
+        fieldKey,
+        ledgerValue,
+        sectionKey,
+        children,
+    }: {
+        label: string;
+        fieldKey: string;
+        ledgerValue: number;
+        sectionKey: string;
+        children: React.ReactNode;
+    }) => {
+        const isExpanded = expandedSections.has(sectionKey);
+        return (
+            <>
+                <tr style={{ height: 35 }}>
+                    <td style={{ fontSize: 13, fontWeight: 400 }}>
+                        <button
+                            className="no-print"
+                            onClick={() => toggleSection(sectionKey)}
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '0 4px 0 0', verticalAlign: 'middle', color: '#1e40af' }}
+                        >
+                            {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                        </button>
+                        {label}
+                    </td>
+                    <td></td>
+                    <td style={{ textAlign: 'right', padding: '0 20px', fontSize: 13 }}>
+                        <EditableCell fieldKey={fieldKey} ledgerValue={ledgerValue} />
+                    </td>
+                    <td></td>
+                </tr>
+                {isExpanded && children}
+            </>
+        );
+    };
+
+    const DrillRow = ({ label, amount, indent = 1 }: { label: string; amount: number; indent?: number }) => (
+        <tr className="no-print" style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+            <td style={{ fontSize: 11.5, color: '#475569', paddingLeft: 16 + indent * 12 }}>{label}</td>
+            <td></td>
+            <td style={{ textAlign: 'right', padding: '4px 20px', fontSize: 11.5, color: '#475569', fontFamily: 'monospace' }}>{fmt(amount)}</td>
+            <td></td>
+        </tr>
+    );
+
+    const DrillSeparator = () => (
+        <tr className="no-print" style={{ background: '#f0f4f8' }}>
+            <td colSpan={4} style={{ height: 2 }}></td>
         </tr>
     );
 
@@ -269,6 +485,10 @@ export default function FinancialPositionPage() {
                     </div>
                 )}
 
+                <div style={{ margin: '0 0 12px 0', padding: '10px 14px', background: '#f0fdf4', borderRadius: 8, border: '1px solid #bbf7d0', fontSize: 12, color: '#15803d' }}>
+                    Click the <strong>▶</strong> arrow next to any line item to expand its breakdown detail.
+                </div>
+
                 {/* CONNECTED LINKS */}
                 <div style={{ display: 'flex', gap: 12, marginBottom: 24, flexWrap: 'wrap' }}>
                     {[
@@ -279,6 +499,7 @@ export default function FinancialPositionPage() {
                         { label: 'A/R Aging', href: '/accounting/ar-aging' },
                         { label: 'Stock Inventory', href: '/stores/stock' },
                         { label: 'Petty Cash', href: '/accounting/petty-cash' },
+                        { label: 'Trial Balance', href: '/accounting/trial-balance' },
                     ].map(link => (
                         <Link key={link.href} href={link.href} style={{ padding: '6px 14px', borderRadius: 20, background: 'var(--card-bg)', border: '1px solid var(--slate-200)', fontSize: 11, fontWeight: 600, color: 'var(--slate-600)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4 }}>
                             <ExternalLink size={11} /> {link.label}
@@ -307,13 +528,64 @@ export default function FinancialPositionPage() {
                     <tbody>
                         <SectionHeader title="ASSETS" />
                         <SectionHeader title="NON-CURRENT ASSETS" />
-                        <AccountRow label="Property, Plant & Equipment" fieldKey="ppe" ledgerValue={ledgerPPE} />
+
+                        {/* PPE — expandable to show fixed asset accounts (purchase entries) */}
+                        <ExpandableRow label="Property, Plant & Equipment" fieldKey="ppe" ledgerValue={ledgerPPE} sectionKey="ppe">
+                            {ppeEntries.length === 0 ? (
+                                <DrillRow label="No fixed asset entries found" amount={0} />
+                            ) : (
+                                ppeEntries.map(e => (
+                                    <DrillRow key={e.name} label={e.name} amount={e.balance} />
+                                ))
+                            )}
+                            <DrillSeparator />
+                        </ExpandableRow>
 
                         <tr style={{ height: 20 }}></tr>
                         <SectionHeader title="CURRENT ASSETS:" />
-                        <AccountRow label="Inventories" fieldKey="inventories" ledgerValue={ledgerInventories} />
-                        <AccountRow label="Receivables" fieldKey="receivables" ledgerValue={ledgerReceivables} />
-                        <AccountRow label="Cash & Bank Balances" fieldKey="cash" ledgerValue={ledgerCash} />
+
+                        {/* Inventories — expandable to show Raw Materials / WIP / Finished Goods */}
+                        <ExpandableRow label="Inventories" fieldKey="inventories" ledgerValue={ledgerInventories} sectionKey="inventories">
+                            {inventoryBreakdown.length === 0 ? (
+                                <DrillRow label="No inventory accounts found" amount={0} />
+                            ) : (
+                                inventoryBreakdown.map(e => (
+                                    <DrillRow key={e.name} label={e.name} amount={e.balance} />
+                                ))
+                            )}
+                            <DrillSeparator />
+                        </ExpandableRow>
+
+                        {/* Receivables — expandable to show per-customer outstanding balances */}
+                        <ExpandableRow label="Receivables" fieldKey="receivables" ledgerValue={ledgerReceivables} sectionKey="receivables">
+                            {arByCustomer.length === 0 ? (
+                                <DrillRow label="No outstanding receivables" amount={0} />
+                            ) : (
+                                arByCustomer.map(c => (
+                                    <DrillRow key={c.customer_name} label={c.customer_name} amount={c.outstanding} />
+                                ))
+                            )}
+                            <DrillSeparator />
+                        </ExpandableRow>
+
+                        {/* Cash & Bank — expandable to show per-account balances (links to trial balance) */}
+                        <ExpandableRow label="Cash & Bank Balances" fieldKey="cash" ledgerValue={ledgerCash} sectionKey="cash">
+                            {cashBreakdown.length === 0 ? (
+                                <DrillRow label="No cash/bank accounts found" amount={0} />
+                            ) : (
+                                cashBreakdown.map(c => (
+                                    <DrillRow key={c.name} label={c.name} amount={c.balance} />
+                                ))
+                            )}
+                            <tr className="no-print" style={{ background: '#f8fafc' }}>
+                                <td colSpan={4} style={{ paddingLeft: 28, paddingBottom: 6, fontSize: 11, color: '#2563eb' }}>
+                                    <Link href="/accounting/trial-balance" style={{ color: '#2563eb', textDecoration: 'underline' }}>
+                                        View cash & bank ending balances on Trial Balance →
+                                    </Link>
+                                </td>
+                            </tr>
+                            <DrillSeparator />
+                        </ExpandableRow>
 
                         <tr style={{ height: 20 }}></tr>
                         <AccountRow label="TOTAL ASSETS" isTotal ledgerValue={totalAssets} />
@@ -328,8 +600,31 @@ export default function FinancialPositionPage() {
 
                         <tr style={{ height: 40 }}></tr>
                         <SectionHeader title="CURRENT LIABILITIES" />
-                        <AccountRow label="Trade Creditors & Accruals" fieldKey="tradeCreditors" ledgerValue={ledgerTradeCreditors} />
-                        <AccountRow label="Taxation" fieldKey="taxation" ledgerValue={ledgerTaxation} />
+
+                        {/* Trade Creditors — expandable to show per-supplier outstanding balances */}
+                        <ExpandableRow label="Trade Creditors & Accruals" fieldKey="tradeCreditors" ledgerValue={ledgerTradeCreditors} sectionKey="tradeCreditors">
+                            {apBySupplier.length === 0 ? (
+                                <DrillRow label="No outstanding supplier balances" amount={0} />
+                            ) : (
+                                apBySupplier.map(s => (
+                                    <DrillRow key={s.supplier_name} label={s.supplier_name} amount={s.outstanding} />
+                                ))
+                            )}
+                            <DrillSeparator />
+                        </ExpandableRow>
+
+                        {/* Taxation — expandable to show individual tax accounts */}
+                        <ExpandableRow label="Taxation" fieldKey="taxation" ledgerValue={ledgerTaxation} sectionKey="taxation">
+                            {taxBreakdown.length === 0 ? (
+                                <DrillRow label="No tax liability entries found" amount={0} />
+                            ) : (
+                                taxBreakdown.map(t => (
+                                    <DrillRow key={t.name} label={t.name} amount={t.balance} />
+                                ))
+                            )}
+                            <DrillSeparator />
+                        </ExpandableRow>
+
                         <AccountRow label="Bank Overdraft" fieldKey="overdraft" ledgerValue={ledgerOverdraft} />
 
                         <tr style={{ height: 20 }}></tr>

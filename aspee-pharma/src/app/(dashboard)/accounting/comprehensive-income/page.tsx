@@ -41,10 +41,12 @@ export default function ComprehensiveIncomePage() {
     const [showBreakdown, setShowBreakdown] = useState<string | null>(null);
     const [editMode, setEditMode] = useState(false);
     const [overrides, setOverrides] = useState<Overrides>({});
+    const [invoiceRevenue, setInvoiceRevenue] = useState<number>(0);
 
     useEffect(() => {
         fetchReportData();
         fetchAccounts();
+        fetchInvoiceRevenue();
     }, [startDate, endDate]);
 
     const fetchReportData = async () => {
@@ -64,6 +66,23 @@ export default function ComprehensiveIncomePage() {
         }
     };
 
+    const fetchInvoiceRevenue = async () => {
+        try {
+            const { data, error } = await supabase
+                .from('sales_invoices')
+                .select('total_amount, status')
+                .gte('date', startDate)
+                .lte('date', endDate)
+                .neq('status', 'DRAFT')
+                .neq('status', 'draft');
+            if (error) throw error;
+            const total = (data || []).reduce((sum, inv) => sum + (Number(inv.total_amount) || 0), 0);
+            setInvoiceRevenue(total);
+        } catch {
+            // non-fatal — revenue will fall back to ledger
+        }
+    };
+
     const fetchAccounts = async () => {
         const { data } = await supabase.from('chart_of_accounts').select('id, code, name, type, subtype').eq('is_active', true);
         setAccounts(data || []);
@@ -79,7 +98,9 @@ export default function ComprehensiveIncomePage() {
     const getLedgerValue = (key: string, ledgerAmount: number) => 
         overrides[key] !== undefined ? overrides[key] : ledgerAmount;
 
-    const ledgerRevenue = revenueEntries.reduce((sum, e) => sum + (e.credit - e.debit), 0);
+    const ledgerRevenue = invoiceRevenue > 0
+        ? invoiceRevenue
+        : revenueEntries.reduce((sum, e) => sum + (e.credit - e.debit), 0);
     const ledgerCOS = cosEntries.reduce((sum, e) => sum + (e.debit - e.credit), 0);
     const ledgerAdmin = adminEntries.reduce((sum, e) => sum + (e.debit - e.credit), 0);
     const ledgerFinance = financeEntries.reduce((sum, e) => sum + (e.debit - e.credit), 0);
@@ -152,6 +173,7 @@ export default function ComprehensiveIncomePage() {
             setOverrides({});
             setEditMode(false);
             fetchReportData();
+            fetchInvoiceRevenue();
         } catch (error: any) {
             toast.error('Failed to save: ' + error.message);
         } finally {

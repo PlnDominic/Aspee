@@ -80,6 +80,7 @@ export default function PurchaseOrderModal({ isOpen, onClose, onSave, initialDat
     const [stationeryItems, setStationeryItems] = useState<POItem[]>([blankPOItem()]);
     const [generalItems, setGeneralItems] = useState<POItem[]>([blankPOItem()]);
     const [currency, setCurrency] = useState('GHS');
+    const [exchangeRate, setExchangeRate] = useState(1);
 
     // Quick Add State
     const [quickAddName, setQuickAddName] = useState('');
@@ -120,6 +121,7 @@ export default function PurchaseOrderModal({ isOpen, onClose, onSave, initialDat
         setStationeryItems([blankPOItem()]);
         setGeneralItems([blankPOItem()]);
         setCurrency('GHS');
+        setExchangeRate(1);
         setQuickAddName('');
     };
 
@@ -162,6 +164,7 @@ export default function PurchaseOrderModal({ isOpen, onClose, onSave, initialDat
         setSupplierId(po.supplier_id);
         setPoNumber(po.po_number);
         setCurrency(po.currency || 'GHS');
+        setExchangeRate(Number(po.exchange_rate) || 1);
         setFetching(true);
         try {
             const { data, error } = await supabase
@@ -392,6 +395,7 @@ export default function PurchaseOrderModal({ isOpen, onClose, onSave, initialDat
                 supplier_id: supplierId,
                 po_number: poNumber,
                 currency,
+                exchange_rate: currency === 'GHS' ? 1 : exchangeRate,
                 total_amount: calculateTotal(),
                 status: initialData?.status || 'Pending',
                 items: allItems
@@ -787,12 +791,30 @@ export default function PurchaseOrderModal({ isOpen, onClose, onSave, initialDat
                                 <Banknote size={16} className="icon" />
                                 <select
                                     value={currency}
-                                    onChange={(e) => setCurrency(e.target.value)}
+                                    onChange={(e) => {
+                                        const value = e.target.value;
+                                        setCurrency(value);
+                                        if (value === 'GHS') setExchangeRate(1);
+                                    }}
                                 >
                                     <option value="GHS">GHS (GH₵)</option>
                                     <option value="USD">USD ($)</option>
                                 </select>
                             </div>
+                            {currency !== 'GHS' && (
+                                <div className="input-wrapper" style={{ marginTop: 8 }}>
+                                    <span className="icon" style={{ position: 'absolute', left: 12, fontSize: 11, color: 'var(--slate-400)' }}>1{currency}=</span>
+                                    <input
+                                        type="number"
+                                        step="0.0001"
+                                        min="0"
+                                        value={exchangeRate || ''}
+                                        onChange={(e) => setExchangeRate(parseFloat(e.target.value) || 0)}
+                                        placeholder="Rate to GH₵"
+                                        style={{ paddingLeft: 62 }}
+                                    />
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -984,6 +1006,14 @@ export default function PurchaseOrderModal({ isOpen, onClose, onSave, initialDat
                                 {formatCurrency(calculateTotal(), currency)}
                             </span>
                         </div>
+                        {currency !== 'GHS' && (
+                            <div className="summary-item">
+                                <span className="summary-label">≈ GH₵ Equivalent (@ {exchangeRate || 0}):</span>
+                                <span className="summary-value">
+                                    {formatCurrency(calculateTotal() * (exchangeRate || 0), 'GHS')}
+                                </span>
+                            </div>
+                        )}
                     </div>
                 </div>
 
