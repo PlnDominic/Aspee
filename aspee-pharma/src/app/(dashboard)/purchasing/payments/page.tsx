@@ -77,6 +77,7 @@ export default function SupplierPaymentsPage() {
                     description: `Payment to ${supplierData?.name || 'Supplier'} — PO ${poData2?.po_number || paymentData.po_id}`,
                     refNumber: paymentData.payment_number,
                     paymentMethod: paymentData.payment_method,
+                    counterparty: supplierData?.name,
                 });
             }
 

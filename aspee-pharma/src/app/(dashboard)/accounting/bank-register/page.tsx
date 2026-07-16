@@ -26,6 +26,7 @@ interface JournalEntry {
     credit_account: string;
     credit_amount: number;
     notes?: string;
+    counterparty_name?: string | null;
 }
 
 interface Account {
@@ -41,6 +42,7 @@ interface RegisterLine {
     description: string;
     ref_type: string;
     correspondingAccount: string;
+    party: string;
     dr: number;   // money into this account
     cr: number;   // money out of this account
     runningBalance: number;
@@ -63,9 +65,11 @@ export default function BankRegisterPage() {
         ['bank_register'],
         async () => {
             const [journalRes, coaRes] = await Promise.all([
+                // select * so the page works whether or not the counterparty
+                // migration has been applied yet (missing column → undefined).
                 supabase
                     .from('journal_entries')
-                    .select('entry_number, date, description, ref_type, debit_account, debit_amount, credit_account, credit_amount, notes')
+                    .select('*')
                     .order('date', { ascending: true }),
                 supabase
                     .from('chart_of_accounts')
@@ -144,6 +148,7 @@ export default function BankRegisterPage() {
                 description: e.description,
                 ref_type: e.ref_type,
                 correspondingAccount: isDebit ? e.credit_account : e.debit_account,
+                party: e.counterparty_name || '',
                 dr,
                 cr,
                 runningBalance: running,
@@ -168,6 +173,7 @@ export default function BankRegisterPage() {
                 { header: 'Reference', accessor: r => r.entry_number },
                 { header: 'Remarks', accessor: r => r.description },
                 { header: 'Corresponding Account', accessor: r => r.correspondingAccount },
+                { header: 'Customer/Vendor', accessor: r => r.party },
                 { header: 'Dr (In)', accessor: r => r.dr || '' },
                 { header: 'Cr (Out)', accessor: r => r.cr || '' },
                 { header: 'Balance', accessor: r => r.runningBalance },
@@ -176,7 +182,7 @@ export default function BankRegisterPage() {
         toast.success('Exported to CSV successfully');
     };
 
-    const cols = '100px 1fr 190px 90px 120px 120px 130px';
+    const cols = '92px 1fr 150px 150px 82px 105px 105px 118px';
 
     return (
         <div className="animate-fade-in">
@@ -257,6 +263,7 @@ export default function BankRegisterPage() {
                         <span>Date</span>
                         <span>Remarks</span>
                         <span>Corresponding Acct</span>
+                        <span>Customer/Vendor</span>
                         <span>Ref</span>
                         <span style={{ textAlign: 'right' }}>Dr (In)</span>
                         <span style={{ textAlign: 'right' }}>Cr (Out)</span>
@@ -267,6 +274,7 @@ export default function BankRegisterPage() {
                     <div style={{ display: 'grid', gridTemplateColumns: cols, gap: 8, padding: '10px 20px', borderTop: '1px solid var(--slate-50)', fontSize: 12, fontWeight: 700, background: 'var(--slate-50)', alignItems: 'center' }}>
                         <span style={{ color: 'var(--slate-500)', fontFamily: 'var(--font-mono)', fontSize: 11 }}>{startDate}</span>
                         <span style={{ color: 'var(--slate-600)' }}>Opening balance</span>
+                        <span />
                         <span />
                         <span />
                         <span />
@@ -291,6 +299,7 @@ export default function BankRegisterPage() {
                             </span>
                             <span style={{ color: 'var(--slate-700)' }}>{line.description}</span>
                             <span style={{ color: 'var(--slate-600)', fontWeight: 500 }}>{line.correspondingAccount || '—'}</span>
+                            <span style={{ color: line.party ? 'var(--slate-700)' : 'var(--slate-300)' }}>{line.party || '—'}</span>
                             <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 600, color: 'var(--primary-600)' }}>{line.entry_number}</span>
                             <span style={{ textAlign: 'right', fontWeight: 600, color: line.dr > 0 ? '#15803d' : 'var(--slate-300)' }}>
                                 {line.dr > 0 ? formatCurrency(line.dr) : '—'}
@@ -306,7 +315,7 @@ export default function BankRegisterPage() {
 
                     {/* Totals footer */}
                     <div style={{ display: 'grid', gridTemplateColumns: cols, gap: 8, padding: '11px 20px', borderTop: '2px solid var(--slate-200)', background: 'var(--slate-50)', fontSize: 12, fontWeight: 800, alignItems: 'center' }}>
-                        <span style={{ gridColumn: '1 / 5', color: 'var(--slate-700)' }}>PERIOD TOTALS &amp; CLOSING BALANCE</span>
+                        <span style={{ gridColumn: '1 / 6', color: 'var(--slate-700)' }}>PERIOD TOTALS &amp; CLOSING BALANCE</span>
                         <span style={{ textAlign: 'right', color: '#15803d' }}>{formatCurrency(register.totalIn)}</span>
                         <span style={{ textAlign: 'right', color: '#b91c1c' }}>{formatCurrency(register.totalOut)}</span>
                         <span style={{ textAlign: 'right', color: 'var(--slate-800)' }}>{formatCurrency(register.closing)}</span>

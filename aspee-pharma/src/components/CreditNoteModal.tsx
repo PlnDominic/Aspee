@@ -207,6 +207,7 @@ export default function CreditNoteModal({ isOpen, onClose, onSuccess, record, re
                         date,
                         description: `Credit Note ${cnNumber} — ${customerName.trim()} (${reason})`,
                         refNumber: cnNumber,
+                        counterparty: customerName.trim(),
                     });
                 }
             } else {
