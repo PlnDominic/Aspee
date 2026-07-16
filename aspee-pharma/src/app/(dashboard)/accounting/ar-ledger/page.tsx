@@ -5,14 +5,16 @@ import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import PageHeader from '@/components/PageHeader';
 import StatCard from '@/components/StatCard';
+import PrintableCustomerLedger, { StatementRow } from '@/components/PrintableCustomerLedger';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { formatCurrency } from '@/lib/formatCurrency';
+import { generatePDF } from '@/lib/pdfGenerator';
 import { useFetch } from '@/lib/hooks';
 import { exportToCsv } from '@/lib/csvExport';
 import {
     Download, Users, AlertTriangle, CheckCircle2,
-    ChevronDown, ChevronRight, Search, Scale, ExternalLink,
+    ChevronDown, ChevronRight, Search, Scale, ExternalLink, Calendar, Printer, Loader2,
 } from 'lucide-react';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -58,6 +60,12 @@ function AccountsReceivableLedgerContent() {
     const [search, setSearch] = useState(initialSearch);
     const [expanded, setExpanded] = useState<Set<string>>(new Set());
     const [autoExpanded, setAutoExpanded] = useState(false);
+
+    // Statement (Book by Slip) period + PDF generation state
+    const [stmtFrom, setStmtFrom] = useState(`${new Date().getFullYear()}-01-01`);
+    const [stmtTo, setStmtTo] = useState(new Date().toISOString().split('T')[0]);
+    const [generating, setGenerating] = useState<string | null>(null);
+    const [statement, setStatement] = useState<{ customer: any; rows: StatementRow[]; period: { from: string; to: string }; generatedAt: string } | null>(null);
 
     const { data, isLoading: loading } = useFetch<{
         customers: any[];
@@ -274,6 +282,147 @@ function AccountsReceivableLedgerContent() {
         toast.success('Exported to CSV successfully');
     };
 
+    // ── "Book (by Slip)" customer statement ─────────────────────────────────────
+    const fmtDate = (d: string) => (d || '').slice(0, 10).replace(/-/g, '/');
+
+    const handleStatement = async (ledger: CustomerLedger) => {
+        if (stmtFrom > stmtTo) {
+            toast.error('Statement "from" date must be before the "to" date');
+            return;
+        }
+        setGenerating(ledger.key);
+        try {
+            const name = ledger.customerName;
+            const customer = data?.customers.find(c => normalizeName(c.name) === ledger.key) ?? { name };
+
+            const [invRes, rcptRes, cnRes] = await Promise.all([
+                supabase
+                    .from('sales_invoices')
+                    .select('id, invoice_number, date, total_amount, status, items:sales_invoice_items(quantity, unit_price, total_price, product:products(name, sku))')
+                    .ilike('customer_name', name),
+                supabase
+                    .from('sales_receipts')
+                    .select('id, receipt_number, date, amount, payment_method, status')
+                    .ilike('customer_name', name),
+                supabase.from('credit_notes').select('*').ilike('customer_name', name),
+            ]);
+            if (invRes.error) throw invRes.error;
+            if (rcptRes.error) throw rcptRes.error;
+            if (cnRes.error) throw cnRes.error;
+
+            const invoices = (invRes.data || []).filter(i => {
+                const s = (i.status || '').trim().toUpperCase();
+                return s !== 'DRAFT' && s !== 'CANCELLED' && Number(i.total_amount) > 0;
+            });
+            const receipts = (rcptRes.data || []).filter(r => {
+                const s = (r.status || '').trim().toUpperCase();
+                return s !== 'VOID' && s !== 'CANCELLED' && Number(r.amount) > 0;
+            });
+            const creditNotes = (cnRes.data || []).filter((cn: any) => {
+                const s = (cn.status || '').trim().toUpperCase();
+                const amt = Number(cn.amount ?? cn.original_amount ?? cn.total_amount) || 0;
+                return s !== 'DRAFT' && s !== 'CANCELLED' && s !== 'VOID' && amt > 0;
+            });
+
+            // Beginning balance = net receivable movement strictly before the period start.
+            const before = (d: string) => (d || '') < stmtFrom;
+            const inPeriod = (d: string) => (d || '') >= stmtFrom && (d || '') <= stmtTo;
+
+            let beginning = 0;
+            invoices.forEach(i => { if (before(i.date)) beginning += Number(i.total_amount) || 0; });
+            receipts.forEach(r => { if (before(r.date)) beginning -= Number(r.amount) || 0; });
+            creditNotes.forEach((cn: any) => { if (before(cn.date)) beginning -= Number(cn.amount ?? cn.original_amount ?? cn.total_amount) || 0; });
+
+            // Period events, sorted by date
+            type Ev =
+                | { kind: 'invoice'; date: string; total: number; items: { remark: string; sales: number }[] }
+                | { kind: 'receipt'; date: string; amount: number; remark: string }
+                | { kind: 'credit'; date: string; amount: number; remark: string };
+
+            const events: Ev[] = [];
+            invoices.forEach(i => {
+                if (!inPeriod(i.date)) return;
+                const items = (i.items || []).map((it: any) => {
+                    const prod = it.product?.name ?? 'Item';
+                    const qty = Number(it.quantity) || 0;
+                    const price = Number(it.unit_price) || 0;
+                    const line = Number(it.total_price) || qty * price;
+                    return { remark: `${prod} / ${qty.toLocaleString('en-GB')} * ${price.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, sales: line };
+                });
+                events.push({ kind: 'invoice', date: i.date, total: Number(i.total_amount) || 0, items });
+            });
+            receipts.forEach(r => {
+                if (!inPeriod(r.date)) return;
+                const parts = ['Payment received', r.payment_method ? `(${r.payment_method})` : '', r.receipt_number ? `- ${r.receipt_number}` : ''];
+                events.push({ kind: 'receipt', date: r.date, amount: Number(r.amount) || 0, remark: parts.filter(Boolean).join(' ') });
+            });
+            creditNotes.forEach((cn: any) => {
+                if (!inPeriod(cn.date)) return;
+                const amt = Number(cn.amount ?? cn.original_amount ?? cn.total_amount) || 0;
+                const ref = cn.credit_note_number ?? cn.cn_number ?? '';
+                events.push({ kind: 'credit', date: cn.date, amount: amt, remark: `CREDIT NOTE ${ref}`.trim() });
+            });
+            events.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+
+            // Build display rows, grouped by month with sub-totals
+            const rows: StatementRow[] = [{ type: 'beginning', remark: 'Beginning', balance: beginning }];
+            let running = beginning;
+            let ytdSales = 0, ytdReceipt = 0;
+            let curMonth = '';
+            let monthSales = 0, monthReceipt = 0;
+
+            const flushMonth = () => {
+                if (!curMonth) return;
+                rows.push({ type: 'subtotal', remark: `${curMonth.replace('-', '/')} Sub Total`, sales: monthSales, receipt: monthReceipt });
+            };
+
+            for (const ev of events) {
+                const month = (ev.date || '').slice(0, 7);
+                if (month !== curMonth) {
+                    flushMonth();
+                    curMonth = month;
+                    monthSales = 0;
+                    monthReceipt = 0;
+                }
+                if (ev.kind === 'invoice') {
+                    running += ev.total;
+                    monthSales += ev.total;
+                    ytdSales += ev.total;
+                    rows.push({ type: 'invoice', date: fmtDate(ev.date), remark: '', sales: ev.total, balance: running });
+                    ev.items.forEach(it => rows.push({ type: 'item', remark: it.remark, sales: it.sales }));
+                } else {
+                    running -= ev.amount;
+                    monthReceipt += ev.amount;
+                    ytdReceipt += ev.amount;
+                    rows.push({ type: 'receipt', date: fmtDate(ev.date), remark: ev.remark, receipt: ev.amount, balance: running });
+                }
+            }
+            flushMonth();
+            rows.push({ type: 'ytd', remark: 'Year-to-Date Total', sales: ytdSales, receipt: ytdReceipt, balance: running });
+
+            const generatedAt = new Date().toLocaleString('en-GB', {
+                year: 'numeric', month: '2-digit', day: '2-digit',
+                hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true,
+            }).replace(',', '');
+
+            setStatement({
+                customer,
+                rows,
+                period: { from: fmtDate(stmtFrom), to: fmtDate(stmtTo) },
+                generatedAt,
+            });
+
+            setTimeout(async () => {
+                await generatePDF('printable-customer-ledger', `Statement_${name.replace(/\s+/g, '_')}_${stmtFrom}_${stmtTo}`);
+                setStatement(null);
+                setGenerating(null);
+            }, 500);
+        } catch (err: any) {
+            toast.error('Failed to generate statement: ' + err.message);
+            setGenerating(null);
+        }
+    };
+
     return (
         <div className="animate-fade-in">
             <PageHeader
@@ -284,12 +433,20 @@ function AccountsReceivableLedgerContent() {
                     { label: 'A/R Ledger' },
                 ]}
                 actions={
-                    <button
-                        onClick={handleExport}
-                        style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 16px', borderRadius: 8, border: '1px solid var(--slate-200)', background: 'var(--card-bg)', fontSize: 11, fontWeight: 500, color: 'var(--slate-700)', cursor: 'pointer' }}
-                    >
-                        <Download size={16} /> Export
-                    </button>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--card-bg)', border: '1px solid var(--slate-200)', padding: '6px 12px', borderRadius: 8 }} title="Statement period">
+                            <Calendar size={14} color="var(--slate-400)" />
+                            <input type="date" value={stmtFrom} onChange={e => setStmtFrom(e.target.value)} style={{ border: 'none', fontSize: 12, outline: 'none', background: 'transparent' }} />
+                            <span style={{ color: 'var(--slate-400)', fontSize: 12 }}>–</span>
+                            <input type="date" value={stmtTo} onChange={e => setStmtTo(e.target.value)} style={{ border: 'none', fontSize: 12, outline: 'none', background: 'transparent' }} />
+                        </div>
+                        <button
+                            onClick={handleExport}
+                            style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 16px', borderRadius: 8, border: '1px solid var(--slate-200)', background: 'var(--card-bg)', fontSize: 11, fontWeight: 500, color: 'var(--slate-700)', cursor: 'pointer' }}
+                        >
+                            <Download size={16} /> Export
+                        </button>
+                    </div>
                 }
             />
 
@@ -357,9 +514,10 @@ function AccountsReceivableLedgerContent() {
                         const isOpen = expanded.has(ledger.key);
                         return (
                             <div key={ledger.key} style={{ background: 'var(--card-bg)', border: '1px solid var(--slate-200)', borderRadius: 12, overflow: 'hidden' }}>
+                                <div style={{ display: 'flex', alignItems: 'center' }}>
                                 <button
                                     onClick={() => toggle(ledger.key)}
-                                    style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 14, padding: '14px 20px', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left' }}
+                                    style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 14, padding: '14px 20px', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left' }}
                                 >
                                     <span style={{ color: 'var(--slate-400)', flexShrink: 0 }}>
                                         {isOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
@@ -386,6 +544,18 @@ function AccountsReceivableLedgerContent() {
                                         </div>
                                     </div>
                                 </button>
+                                <button
+                                    onClick={() => handleStatement(ledger)}
+                                    disabled={generating === ledger.key}
+                                    title="Download customer statement (Book by Slip)"
+                                    style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '0 16px', padding: '8px 12px', borderRadius: 8, border: '1px solid var(--slate-200)', background: 'var(--card-bg)', fontSize: 11, fontWeight: 600, color: generating === ledger.key ? 'var(--slate-400)' : 'var(--primary-600)', cursor: generating === ledger.key ? 'not-allowed' : 'pointer', flexShrink: 0 }}
+                                >
+                                    {generating === ledger.key
+                                        ? <Loader2 size={14} className="animate-spin" />
+                                        : <Printer size={14} />}
+                                    Statement
+                                </button>
+                                </div>
 
                                 {isOpen && (
                                     <div style={{ borderTop: '1px solid var(--slate-100)' }}>
@@ -431,6 +601,16 @@ function AccountsReceivableLedgerContent() {
                         );
                     })}
                 </div>
+            )}
+
+            {/* Hidden printable statement — rendered off-screen for PDF capture */}
+            {statement && (
+                <PrintableCustomerLedger
+                    customer={statement.customer}
+                    period={statement.period}
+                    rows={statement.rows}
+                    generatedAt={statement.generatedAt}
+                />
             )}
         </div>
     );
