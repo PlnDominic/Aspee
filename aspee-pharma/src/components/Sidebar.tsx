@@ -184,6 +184,7 @@ const navigation: NavItem[] = [
         children: [
             { label: 'Journal Entries',   href: '/accounting/journal',    icon: <BookOpen size={18} /> },
             { label: 'General Ledger',    href: '/accounting/ledger',        icon: <BookOpen size={18} /> },
+            { label: 'Bank & Cash Register', href: '/accounting/bank-register', icon: <Landmark size={18} /> },
             { label: 'Trial Balance',     href: '/accounting/trial-balance', icon: <Scale size={18} /> },
             { label: 'Expenses',          href: '/accounting/expenses',   icon: <Banknote size={18} /> },
             { label: 'Payroll',           href: '/accounting/payroll',    icon: <Users size={18} /> },
