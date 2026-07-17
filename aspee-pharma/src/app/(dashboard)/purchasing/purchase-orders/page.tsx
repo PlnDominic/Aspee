@@ -298,11 +298,18 @@ export default function PurchaseOrdersPage() {
     };
 
     const pos = purchaseOrders ?? [];
+    // Sum PO values per currency — GHS and USD must not be added together.
+    const totalsByCurrency = pos.reduce((acc: Record<string, number>, po: any) => {
+        const code = (po.currency || 'GHS').toUpperCase();
+        acc[code] = (acc[code] || 0) + (Number(po.total_amount) || 0);
+        return acc;
+    }, {} as Record<string, number>);
     const stats = {
         total: pos.length,
         pending: pos.filter((po: any) => po.status === 'Pending').length,
         received: pos.filter((po: any) => po.status === 'Received').length,
-        totalValue: pos.reduce((sum: number, po: any) => sum + (po.total_amount || 0), 0)
+        totalGHS: totalsByCurrency.GHS || 0,
+        totalUSD: totalsByCurrency.USD || 0,
     };
 
     return (
@@ -364,7 +371,13 @@ export default function PurchaseOrdersPage() {
                 <StatCard title="Total POs" value={stats.total.toString()} icon={<ClipboardList size={20} />} color="blue" />
                 <StatCard title="Pending Review" value={stats.pending.toString()} icon={<Clock size={20} />} color="amber" />
                 <StatCard title="Completed" value={stats.received.toString()} icon={<CheckCircle size={20} />} color="green" />
-                <StatCard title="Total Value" value={`GH₵ ${stats.totalValue.toLocaleString()}`} icon={<FileText size={20} />} color="purple" />
+                <StatCard
+                    title="Total Value"
+                    value={formatCurrency(stats.totalGHS, 'GHS')}
+                    subtitle={stats.totalUSD > 0 ? formatCurrency(stats.totalUSD, 'USD') : undefined}
+                    icon={<FileText size={20} />}
+                    color="purple"
+                />
             </div>
 
             <DataTable
