@@ -64,6 +64,12 @@ interface PurchaseOrderModalProps {
 
 const blankPOItem = (): POItem => ({ product_id: '', quantity: 1, unit_price: 0, unit: 'Pieces' });
 
+const formatAmount = (value: number, currencyCode: string): string =>
+    new Intl.NumberFormat(currencyCode === 'USD' ? 'en-US' : 'en-GH', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+    }).format(value);
+
 export default function PurchaseOrderModal({ isOpen, onClose, onSave, initialData, mode = 'create' }: PurchaseOrderModalProps) {
     const [suppliers, setSuppliers] = useState<Supplier[]>([]);
     const [products, setProducts] = useState<Product[]>([]);
@@ -659,8 +665,8 @@ export default function PurchaseOrderModal({ isOpen, onClose, onSave, initialDat
                                             <th style={{ width: '100px' }}>Material Type</th>
                                             <th style={{ width: '60px' }}>Unit</th>
                                             <th style={{ width: '80px', textAlign: 'right' }}>Qty</th>
-                                            <th style={{ width: '100px', textAlign: 'right' }}>Unit Price (GH₵)</th>
-                                            <th style={{ width: '120px', textAlign: 'right' }}>Total (GH₵)</th>
+                                            <th style={{ width: '100px', textAlign: 'right' }}>Unit Price ({currency === 'USD' ? '$' : 'GH₵'})</th>
+                                            <th style={{ width: '120px', textAlign: 'right' }}>Total ({currency === 'USD' ? '$' : 'GH₵'})</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -681,8 +687,8 @@ export default function PurchaseOrderModal({ isOpen, onClose, onSave, initialDat
                                                 <td>{item.product?.material_type || products.find(p => p.id === item.product_id)?.material_type}</td>
                                                 <td>{item.unit || item.product?.unit || products.find(p => p.id === item.product_id)?.unit || 'Pieces'}</td>
                                                 <td style={{ textAlign: 'right' }}>{item.quantity}</td>
-                                                <td style={{ textAlign: 'right' }}>{item.unit_price.toFixed(2)}</td>
-                                                <td style={{ textAlign: 'right', fontWeight: 'bold' }}>{(item.quantity * item.unit_price).toFixed(2)}</td>
+                                                <td style={{ textAlign: 'right' }}>{formatAmount(item.unit_price, currency)}</td>
+                                                <td style={{ textAlign: 'right', fontWeight: 'bold' }}>{formatAmount(item.quantity * item.unit_price, currency)}</td>
                                             </tr>
                                         ))}
                                     </tbody>
@@ -690,7 +696,7 @@ export default function PurchaseOrderModal({ isOpen, onClose, onSave, initialDat
                                         <tr>
                                             <td colSpan={5} className="no-border"></td>
                                             <td className="total-label">SUBTOTAL</td>
-                                            <td className="total-value">{calculateTotal().toFixed(2)}</td>
+                                            <td className="total-value">{formatAmount(calculateTotal(), currency)}</td>
                                         </tr>
                                         <tr>
                                             <td colSpan={5} className="no-border"></td>
@@ -700,7 +706,7 @@ export default function PurchaseOrderModal({ isOpen, onClose, onSave, initialDat
                                         <tr className="grand-total-row">
                                             <td colSpan={5} className="no-border"></td>
                                             <td className="total-label">GRAND TOTAL</td>
-                                            <td className="total-value">GH₵ {calculateTotal().toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                            <td className="total-value">{formatCurrency(calculateTotal(), currency)}</td>
                                         </tr>
                                     </tfoot>
                                 </table>
