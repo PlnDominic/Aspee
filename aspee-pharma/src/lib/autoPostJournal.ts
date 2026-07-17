@@ -34,6 +34,8 @@ export interface AutoJournalPayload {
     paymentMethod?: string;
     /** For EXPENSE_APPROVED: the expense category, used to resolve the COA debit account */
     expenseCategory?: string;
+    /** Customer or vendor this entry relates to — stored on journal_entries.counterparty_name */
+    counterparty?: string;
 }
 
 // ── Expense category → Chart of Accounts account name ─────────────────────────
@@ -239,7 +241,10 @@ function buildEntry(payload: AutoJournalPayload): {
 export async function autoPostJournal(payload: AutoJournalPayload): Promise<void> {
     if (!payload.amount || payload.amount <= 0) return;
 
-    const entry = buildEntry(payload);
+    const entry = {
+        ...buildEntry(payload),
+        counterparty_name: payload.counterparty?.trim() || null,
+    };
 
     // ── Duplicate guard ──────────────────────────────────────────────────────
     // The `notes` field is deterministic per (event, refNumber) pair, making

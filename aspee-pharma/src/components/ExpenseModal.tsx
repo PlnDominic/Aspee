@@ -152,6 +152,7 @@ export default function ExpenseModal({ isOpen, onClose, onSuccess, record }: Exp
                         refNumber: expenseNumber,
                         paymentMethod,
                         expenseCategory: category,
+                        counterparty: payee?.trim() || undefined,
                     });
                 }
             } else {
@@ -171,6 +172,7 @@ export default function ExpenseModal({ isOpen, onClose, onSuccess, record }: Exp
                         refNumber: expenseNumber,
                         paymentMethod,
                         expenseCategory: category,
+                        counterparty: payee?.trim() || undefined,
                     });
                 }
 

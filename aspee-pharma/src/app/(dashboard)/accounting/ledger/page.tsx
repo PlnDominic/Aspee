@@ -248,6 +248,8 @@ export default function GeneralLedgerPage() {
                     { label: 'Sales Invoices', href: '/sales/invoices' },
                     { label: 'Sales Receipts', href: '/sales/receipts' },
                     { label: 'Supplier Payments', href: '/purchasing/payments' },
+                    { label: 'Bank & Cash Register', href: '/accounting/bank-register' },
+                    { label: 'A/R Ledger', href: '/accounting/ar-ledger' },
                     { label: 'A/P Ledger', href: '/accounting/ap-ledger' },
                     { label: 'Cash Flow', href: '/accounting/cash-flow' },
                     { label: 'Financial Position', href: '/accounting/financial-position' },
