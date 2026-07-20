@@ -56,7 +56,7 @@ export default function ExcelImportModal({ isOpen, onClose, onSuccess, entityTyp
                     'Address': '123 Main Street, Accra',
                     'Location': 'Downtown Accra',
                     'Category': 'RETAIL PHARMACY',
-                    'Route Code': 'RT-001',
+                    'Route Code': 'VAN-001',
                     'Sales Person Email': 'sales@aspee.com',
                     'Status': 'Active'
                 },
@@ -68,7 +68,7 @@ export default function ExcelImportModal({ isOpen, onClose, onSuccess, entityTyp
                     'Address': '456 Hospital Road, Accra',
                     'Location': 'East Legon',
                     'Category': 'HOSPITAL',
-                    'Route Code': 'RT-002',
+                    'Route Code': 'VAN-002',
                     'Sales Person Email': 'rep@aspee.com',
                     'Status': 'Active'
                 }
@@ -227,11 +227,17 @@ export default function ExcelImportModal({ isOpen, onClose, onSuccess, entityTyp
                     }
 
                     // Validate route
+                    // "Route Code" must match an existing van's van_id (Sales > Routes) —
+                    // routes in this system are represented by vans, e.g. "VAN-001".
                     let routeId = null;
                     if (row['Route Code']) {
                         routeId = routeMap.get(row['Route Code'].toString().trim());
                         if (!routeId) {
-                            errors.push(`Row ${rowNum}: Route "${row['Route Code']}" not found`);
+                            const knownCodes = Array.from(routeMap.keys());
+                            const hint = knownCodes.length > 0
+                                ? `Existing route codes: ${knownCodes.join(', ')}.`
+                                : 'No routes exist yet — create one under Sales > Routes, or leave Route Code blank.';
+                            errors.push(`Row ${rowNum}: Route "${row['Route Code']}" not found. ${hint}`);
                             continue;
                         }
                     }
