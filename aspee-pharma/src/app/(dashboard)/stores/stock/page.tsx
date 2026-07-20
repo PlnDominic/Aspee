@@ -6,11 +6,13 @@ import DataTable from '@/components/DataTable';
 import StatCard from '@/components/StatCard';
 import StatusBadge from '@/components/StatusBadge';
 import EntityLink from '@/components/EntityLink';
-import { Boxes, Package, AlertTriangle, MapPin, Download, RefreshCw, Send } from 'lucide-react';
+import { Boxes, Package, AlertTriangle, MapPin, Download, RefreshCw, Send, PackagePlus } from 'lucide-react';
 import { formatWithBulk } from '@/lib/unitConversions';
 import { supabase } from '@/lib/supabase';
-import { useFetch } from '@/lib/hooks';
+import { useFetch, useAction } from '@/lib/hooks';
+import { logAudit } from '@/lib/auditLog';
 import SendToMDModal from '@/components/SendToMDModal';
+import OpeningStockModal from '@/components/OpeningStockModal';
 
 interface Location {
     id: string;
@@ -41,6 +43,7 @@ interface StockData {
 export default function StockLevelsPage() {
     const [filterType, setFilterType] = useState<string>('All');
     const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+    const [isOpeningStockOpen, setIsOpeningStockOpen] = useState(false);
 
     const { data: stockData, isLoading: loading, refetch } = useFetch<StockData>(
         ['stock-levels-matrix'],
@@ -122,6 +125,84 @@ export default function StockLevelsPage() {
 
     const stockRows = stockData?.rows ?? [];
     const locations = stockData?.locations ?? [];
+
+    // Opening stock entry — a one-off way to set the physical count for a
+    // product/location/batch directly, bypassing GRN/transfer/sales workflow.
+    // Sets stock_levels.qty_on_hand to the counted value (not additive) and
+    // logs the resulting delta as a normal stock movement so it stays auditable.
+    const saveOpeningStock = useAction<{
+        product_id: string;
+        location_id: string;
+        batch_number: string;
+        expiry_date: string | null;
+        counted_qty: number;
+        notes: string;
+    }, void>({
+        mutationFn: async (input) => {
+            const { data: existing, error: fetchError } = await supabase
+                .from('stock_levels')
+                .select('id, qty_on_hand')
+                .eq('product_id', input.product_id)
+                .eq('location_id', input.location_id)
+                .eq('batch_number', input.batch_number)
+                .maybeSingle();
+            if (fetchError) throw fetchError;
+
+            const oldQty = Number(existing?.qty_on_hand || 0);
+            const newQty = input.counted_qty;
+            const delta = newQty - oldQty;
+
+            if (existing) {
+                const { error } = await supabase
+                    .from('stock_levels')
+                    .update({
+                        qty_on_hand: newQty,
+                        expiry_date: input.expiry_date,
+                        updated_at: new Date().toISOString(),
+                    })
+                    .eq('id', existing.id);
+                if (error) throw error;
+            } else {
+                const { error } = await supabase
+                    .from('stock_levels')
+                    .insert([{
+                        product_id: input.product_id,
+                        location_id: input.location_id,
+                        batch_number: input.batch_number,
+                        expiry_date: input.expiry_date,
+                        qty_on_hand: newQty,
+                    }]);
+                if (error) throw error;
+            }
+
+            if (delta !== 0) {
+                const { error: moveError } = await supabase
+                    .from('stock_movements')
+                    .insert([{
+                        product_id: input.product_id,
+                        movement_type: delta > 0 ? 'IN' : 'OUT',
+                        quantity: Math.abs(delta),
+                        reference_type: 'Adjustment',
+                        batch_number: input.batch_number,
+                        expiry_date: input.expiry_date,
+                        notes: `Opening stock entry: ${oldQty.toLocaleString()} → ${newQty.toLocaleString()}${input.notes ? ` — ${input.notes}` : ''}`,
+                    }]);
+                if (moveError) throw moveError;
+            }
+
+            await logAudit({
+                action: 'UPDATE',
+                module: 'Stock Inventory',
+                description: `Opening stock entry: set to ${newQty.toLocaleString()} (was ${oldQty.toLocaleString()})`,
+                record_id: existing?.id,
+                record_type: 'stock_levels',
+                old_values: { qty_on_hand: oldQty },
+                new_values: { qty_on_hand: newQty, batch_number: input.batch_number, notes: input.notes },
+            });
+        },
+        invalidateKeys: ['stock-levels-matrix', 'stock_movements'],
+        successMessage: 'Opening stock recorded successfully',
+    });
 
     const materialTypes = ['All', ...Array.from(new Set(stockRows.map(r => r.material_type).filter(Boolean)))];
     const filteredRows = filterType === 'All' ? stockRows : stockRows.filter(r => r.material_type === filterType);
@@ -315,6 +396,19 @@ export default function StockLevelsPage() {
                             <Send size={15} /> Send Weekly Report
                         </button>
                         <button
+                            onClick={() => setIsOpeningStockOpen(true)}
+                            title="One-time entry of stock already physically on hand"
+                            style={{
+                                display: 'flex', alignItems: 'center', gap: 8,
+                                padding: '9px 16px', borderRadius: 8,
+                                border: '1px solid #fde68a', background: '#fffbeb',
+                                fontSize: 11, fontWeight: 600, color: '#92400e',
+                                cursor: 'pointer',
+                            }}
+                        >
+                            <PackagePlus size={16} /> Enter Opening Stock
+                        </button>
+                        <button
                             onClick={() => refetch()}
                             style={{
                                 display: 'flex', alignItems: 'center', gap: 8,
@@ -428,10 +522,16 @@ export default function StockLevelsPage() {
                 emptyMessage="No stock records found"
             />
 
-            <SendToMDModal 
-                isOpen={isReportModalOpen} 
-                onClose={() => setIsReportModalOpen(false)} 
-                department="Stores" 
+            <SendToMDModal
+                isOpen={isReportModalOpen}
+                onClose={() => setIsReportModalOpen(false)}
+                department="Stores"
+            />
+
+            <OpeningStockModal
+                isOpen={isOpeningStockOpen}
+                onClose={() => setIsOpeningStockOpen(false)}
+                onSave={data => saveOpeningStock.mutateAsync(data)}
             />
         </div>
     );
