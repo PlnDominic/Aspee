@@ -26,20 +26,25 @@ export default function ExcelImportModal({ isOpen, onClose, onSuccess, entityTyp
     const [previewData, setPreviewData] = useState<any[]>([]);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
-    // Template columns based on entity type
+    // Template columns based on entity type.
+    // Customer columns mirror the "Add New Customer" form (CustomerModal.tsx)
+    // field-for-field — same names, same free-text Sales Person / Route, and
+    // customer_location (not the legacy, unused "location" column) — so a
+    // bulk-imported customer looks and behaves exactly like a manually added one.
     const getTemplateColumns = () => {
         if (entityType === 'customers') {
             return [
                 'Customer Name*',
                 'Contact Person',
-                'Email',
-                'Phone',
-                'Address',
+                'Status',
+                'Category*',
+                'Sales Person',
+                'Route',
+                'Credit Limit',
                 'Location',
-                'Category',
-                'Route Code',
-                'Sales Person Email',
-                'Status'
+                'Phone',
+                'Email',
+                'Address',
             ];
         }
         return [];
@@ -51,26 +56,28 @@ export default function ExcelImportModal({ isOpen, onClose, onSuccess, entityTyp
                 {
                     'Customer Name*': 'Example Pharmacy Ltd',
                     'Contact Person': 'John Doe',
-                    'Email': 'john@example.com',
-                    'Phone': '+233123456789',
-                    'Address': '123 Main Street, Accra',
+                    'Status': 'Active',
+                    'Category*': 'RETAIL PHARMACY',
+                    'Sales Person': 'John Mensah',
+                    'Route': 'East Legon',
+                    'Credit Limit': 5000,
                     'Location': 'Downtown Accra',
-                    'Category': 'RETAIL PHARMACY',
-                    'Route Code': 'VAN-001',
-                    'Sales Person Email': 'sales@aspee.com',
-                    'Status': 'Active'
+                    'Phone': '+233123456789',
+                    'Email': 'john@example.com',
+                    'Address': '123 Main Street, Accra',
                 },
                 {
                     'Customer Name*': 'City Hospital',
                     'Contact Person': 'Dr. Sarah Smith',
-                    'Email': 'procurement@cityhospital.com',
-                    'Phone': '+233987654321',
-                    'Address': '456 Hospital Road, Accra',
+                    'Status': 'Active',
+                    'Category*': 'HOSPITAL',
+                    'Sales Person': '',
+                    'Route': '',
+                    'Credit Limit': 0,
                     'Location': 'East Legon',
-                    'Category': 'HOSPITAL',
-                    'Route Code': 'VAN-002',
-                    'Sales Person Email': 'rep@aspee.com',
-                    'Status': 'Active'
+                    'Phone': '+233987654321',
+                    'Email': 'procurement@cityhospital.com',
+                    'Address': '456 Hospital Road, Accra',
                 }
             ];
         }
@@ -200,13 +207,6 @@ export default function ExcelImportModal({ isOpen, onClose, onSuccess, entityTyp
         let importedCount = 0;
 
         if (entityType === 'customers') {
-            // Get routes and sales persons for validation
-            const { data: routes } = await supabase.from('vans').select('id, van_id');
-            const { data: salesPersons } = await supabase.from('system_users').select('id, email, name');
-
-            const routeMap = new Map(routes?.map(r => [r.van_id, r.id]) || []);
-            const salesPersonMap = new Map(salesPersons?.map(p => [p.email, p.id]) || []);
-
             for (let i = 0; i < data.length; i++) {
                 const row = data[i];
                 const rowNum = i + 2; // +2 for header row and 1-based indexing
@@ -218,38 +218,12 @@ export default function ExcelImportModal({ isOpen, onClose, onSuccess, entityTyp
                         continue;
                     }
 
-                    // Validate category
+                    // Validate category — same fixed list as the "Add New Customer" dropdown
                     const validCategories = ['OTC', 'WHOLESALE PHARMACY', 'RETAIL PHARMACY', 'CLINIC', 'HOSPITAL', 'MEDICAL STORES'];
-                    const category = row['Category']?.toString().toUpperCase().trim();
+                    const category = row['Category*']?.toString().toUpperCase().trim();
                     if (category && !validCategories.includes(category)) {
-                        errors.push(`Row ${rowNum}: Invalid category "${row['Category']}"`);
+                        errors.push(`Row ${rowNum}: Invalid category "${row['Category*']}"`);
                         continue;
-                    }
-
-                    // Validate route
-                    // "Route Code" must match an existing van's van_id (Sales > Routes) —
-                    // routes in this system are represented by vans, e.g. "VAN-001".
-                    let routeId = null;
-                    if (row['Route Code']) {
-                        routeId = routeMap.get(row['Route Code'].toString().trim());
-                        if (!routeId) {
-                            const knownCodes = Array.from(routeMap.keys());
-                            const hint = knownCodes.length > 0
-                                ? `Existing route codes: ${knownCodes.join(', ')}.`
-                                : 'No routes exist yet — create one under Sales > Routes, or leave Route Code blank.';
-                            errors.push(`Row ${rowNum}: Route "${row['Route Code']}" not found. ${hint}`);
-                            continue;
-                        }
-                    }
-
-                    // Validate sales person
-                    let salesPersonId = null;
-                    if (row['Sales Person Email']) {
-                        salesPersonId = salesPersonMap.get(row['Sales Person Email'].toString().trim().toLowerCase());
-                        if (!salesPersonId) {
-                            errors.push(`Row ${rowNum}: Sales person with email "${row['Sales Person Email']}" not found`);
-                            continue;
-                        }
                     }
 
                     // Validate status
@@ -259,17 +233,31 @@ export default function ExcelImportModal({ isOpen, onClose, onSuccess, entityTyp
                         continue;
                     }
 
-                    // Prepare customer data
+                    // Validate credit limit
+                    const creditLimitRaw = row['Credit Limit'];
+                    const creditLimit = creditLimitRaw === undefined || creditLimitRaw === ''
+                        ? 0
+                        : Number(creditLimitRaw);
+                    if (Number.isNaN(creditLimit)) {
+                        errors.push(`Row ${rowNum}: Credit Limit "${creditLimitRaw}" is not a number`);
+                        continue;
+                    }
+
+                    // Prepare customer data — same fields, same column names as
+                    // CustomerModal's "Add New Customer" form. Sales Person and
+                    // Route are free text (matching the form's select-backed but
+                    // unconstrained text columns), so no lookup or FK can fail here.
                     const customerData = {
                         name: row['Customer Name*'].toString().trim(),
                         contact_person: row['Contact Person']?.toString().trim() || null,
                         email: row['Email']?.toString().trim() || null,
                         phone: row['Phone']?.toString().trim() || null,
                         address: row['Address']?.toString().trim() || null,
-                        location: row['Location']?.toString().trim() || null,
-                        category: category || null,
-                        route_id: routeId,
-                        sales_person_id: salesPersonId,
+                        customer_location: row['Location']?.toString().trim() || null,
+                        customer_category: category || null,
+                        sales_person: row['Sales Person']?.toString().trim() || null,
+                        route: row['Route']?.toString().trim() || null,
+                        credit_limit: creditLimit,
                         status: status
                     };
 
