@@ -51,7 +51,7 @@ export default function PurchaseOrdersPage() {
                 const poItems = items.map((item: any) => ({
                     po_id: id,
                     product_id: item.product_id,
-                    quantity: Math.round(item.quantity),
+                    quantity: Number(item.quantity) || 0,
                     unit_price: item.unit_price,
                     unit: item.unit || 'Pieces'
                 }));
@@ -84,7 +84,7 @@ export default function PurchaseOrdersPage() {
                 const poItems = items.map((item: any) => ({
                     po_id: po.id,
                     product_id: item.product_id,
-                    quantity: Math.round(item.quantity),
+                    quantity: Number(item.quantity) || 0,
                     unit_price: item.unit_price,
                     unit: item.unit || 'Pieces'
                 }));
