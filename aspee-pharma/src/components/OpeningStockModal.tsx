@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Modal from './Modal';
-import { Save, ChevronDown, Search, AlertTriangle, Plus, Trash2, Loader2 } from 'lucide-react';
+import { Save, ChevronDown, Search, AlertTriangle, Plus, Trash2, Loader2, Download, Upload } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 
@@ -52,7 +52,10 @@ export default function OpeningStockModal({ isOpen, onClose, onSave }: OpeningSt
     const [saveErrors, setSaveErrors] = useState<{ product: string; location: string; message: string }[]>([]);
     const [openProductDropdown, setOpenProductDropdown] = useState<string | null>(null);
     const [productSearch, setProductSearch] = useState('');
+    const [importing, setImporting] = useState(false);
+    const [importErrors, setImportErrors] = useState<{ row: number; label: string; message: string }[]>([]);
     const dropdownRef = useRef<HTMLDivElement>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
         if (isOpen) {
@@ -61,6 +64,7 @@ export default function OpeningStockModal({ isOpen, onClose, onSave }: OpeningSt
             setNotes('');
             setRecordedQtyByKey({});
             setSaveErrors([]);
+            setImportErrors([]);
         }
     }, [isOpen]);
 
@@ -81,6 +85,125 @@ export default function OpeningStockModal({ isOpen, onClose, onSave }: OpeningSt
         ]);
         if (!prodRes.error) setProducts(prodRes.data || []);
         if (!locRes.error) setLocations(locRes.data || []);
+    };
+
+    const handleDownloadTemplate = async () => {
+        const XLSX = await import('xlsx');
+        const sampleProduct = products[0];
+        const sampleLocation = locations[0];
+        const templateRows = [{
+            'Product SKU*': sampleProduct?.sku || 'SKU-001',
+            'Location*': sampleLocation?.name || 'Main Warehouse',
+            'Batch Number': '',
+            'Expiry Date (YYYY-MM-DD)': '',
+            'Counted Qty*': 0,
+        }];
+        const worksheet = XLSX.utils.json_to_sheet(templateRows);
+        worksheet['!cols'] = [{ wch: 18 }, { wch: 22 }, { wch: 16 }, { wch: 22 }, { wch: 14 }];
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, 'Opening Stock');
+        XLSX.writeFile(workbook, 'opening_stock_template.xlsx');
+    };
+
+    // Bulk-import counted quantities from Excel/CSV. Products are matched by
+    // SKU (falls back to exact product name), locations by exact name — both
+    // case-insensitive. Rows that don't match are reported, never silently
+    // dropped or guessed at.
+    const handleImportFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+
+        setImporting(true);
+        setImportErrors([]);
+        try {
+            const XLSX = await import('xlsx');
+            const arrayBuffer = await file.arrayBuffer();
+            const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+            const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+            const data: any[] = XLSX.utils.sheet_to_json(worksheet);
+
+            if (data.length === 0) {
+                toast.error('The uploaded file has no rows');
+                return;
+            }
+
+            const importedRows: OpeningStockRow[] = [];
+            const errors: { row: number; label: string; message: string }[] = [];
+
+            data.forEach((raw, i) => {
+                const rowNum = i + 2; // +2 for header row and 1-based indexing
+                const skuOrName = String(raw['Product SKU*'] ?? raw['Product SKU'] ?? raw['Product Name'] ?? '').trim();
+                const locationName = String(raw['Location*'] ?? raw['Location'] ?? '').trim();
+                const qtyRaw = raw['Counted Qty*'] ?? raw['Counted Qty'];
+                const label = `${skuOrName || '(no product)'} @ ${locationName || '(no location)'}`;
+
+                if (!skuOrName) {
+                    errors.push({ row: rowNum, label, message: 'Product SKU is required' });
+                    return;
+                }
+                if (!locationName) {
+                    errors.push({ row: rowNum, label, message: 'Location is required' });
+                    return;
+                }
+                if (qtyRaw === undefined || qtyRaw === '' || Number.isNaN(Number(qtyRaw))) {
+                    errors.push({ row: rowNum, label, message: 'Counted Qty is required and must be a number' });
+                    return;
+                }
+                if (Number(qtyRaw) < 0) {
+                    errors.push({ row: rowNum, label, message: 'Counted Qty cannot be negative' });
+                    return;
+                }
+
+                const product = products.find(p => p.sku.toLowerCase() === skuOrName.toLowerCase())
+                    ?? products.find(p => p.name.toLowerCase() === skuOrName.toLowerCase());
+                if (!product) {
+                    errors.push({ row: rowNum, label, message: `No product matches SKU/name "${skuOrName}"` });
+                    return;
+                }
+
+                const location = locations.find(l => l.name.toLowerCase() === locationName.toLowerCase());
+                if (!location) {
+                    errors.push({ row: rowNum, label, message: `No location matches "${locationName}"` });
+                    return;
+                }
+
+                const expiryRaw = raw['Expiry Date (YYYY-MM-DD)'] ?? raw['Expiry Date'];
+                const expiry = expiryRaw ? String(expiryRaw).trim().slice(0, 10) : '';
+
+                importedRows.push({
+                    key: crypto.randomUUID(),
+                    product_id: product.id,
+                    location_id: location.id,
+                    batch_number: String(raw['Batch Number'] ?? '').trim(),
+                    expiry_date: expiry,
+                    counted_qty: String(Number(qtyRaw)),
+                });
+            });
+
+            if (importedRows.length > 0) {
+                setRows(prev => {
+                    const prevIsBlank = prev.length === 1 && !prev[0].product_id && !prev[0].location_id && prev[0].counted_qty === '';
+                    return prevIsBlank ? importedRows : [...prev, ...importedRows];
+                });
+                // Fetch the currently-recorded quantity for each imported row so the
+                // delta preview matches what manual entry already shows.
+                importedRows.forEach(r => fetchRecordedStock(r.key, r.product_id, r.location_id, r.batch_number));
+            }
+            setImportErrors(errors);
+
+            if (errors.length === 0) {
+                toast.success(`Imported ${importedRows.length} row${importedRows.length === 1 ? '' : 's'}`);
+            } else if (importedRows.length > 0) {
+                toast.error(`Imported ${importedRows.length} row${importedRows.length === 1 ? '' : 's'}, ${errors.length} skipped — see details below`);
+            } else {
+                toast.error(`No rows could be imported — ${errors.length} error${errors.length === 1 ? '' : 's'}, see details below`);
+            }
+        } catch (err: any) {
+            toast.error('Failed to read file: ' + err.message);
+        } finally {
+            setImporting(false);
+            if (fileInputRef.current) fileInputRef.current.value = '';
+        }
     };
 
     const fetchRecordedStock = async (key: string, productId: string, locationId: string, batchNumber: string) => {
@@ -208,6 +331,42 @@ export default function OpeningStockModal({ isOpen, onClose, onSave }: OpeningSt
                     For all normal stock changes, go back to the standard workflow — GRN, Sales,
                     Transfers or Internal Use.
                 </p>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginBottom: 10 }}>
+                <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".xlsx,.xls,.csv"
+                    onChange={handleImportFile}
+                    style={{ display: 'none' }}
+                    disabled={importing}
+                />
+                <button
+                    type="button"
+                    onClick={handleDownloadTemplate}
+                    style={{
+                        display: 'flex', alignItems: 'center', gap: 6, padding: '7px 12px',
+                        borderRadius: 6, border: '1px solid var(--slate-200)', background: 'white',
+                        fontSize: 11.5, fontWeight: 600, color: 'var(--slate-600)', cursor: 'pointer',
+                    }}
+                >
+                    <Download size={13} /> Download Template
+                </button>
+                <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={importing}
+                    style={{
+                        display: 'flex', alignItems: 'center', gap: 6, padding: '7px 12px',
+                        borderRadius: 6, border: '1px solid var(--slate-200)', background: 'white',
+                        fontSize: 11.5, fontWeight: 600, color: 'var(--primary-600)',
+                        cursor: importing ? 'not-allowed' : 'pointer', opacity: importing ? 0.6 : 1,
+                    }}
+                >
+                    {importing ? <Loader2 size={13} className="animate-spin" /> : <Upload size={13} />}
+                    {importing ? 'Importing...' : 'Import Excel'}
+                </button>
             </div>
 
             <div ref={dropdownRef} style={{ border: '1px solid var(--slate-200)', borderRadius: 8, overflow: 'visible', marginBottom: 14 }}>
@@ -380,6 +539,22 @@ export default function OpeningStockModal({ isOpen, onClose, onSave }: OpeningSt
                     placeholder="e.g. Opening stock before go-live, year-end physical count..."
                 />
             </div>
+
+            {importErrors.length > 0 && (
+                <div style={{
+                    marginBottom: 14, padding: '10px 14px', borderRadius: 8,
+                    background: '#fef2f2', border: '1px solid #fecaca', maxHeight: 160, overflowY: 'auto',
+                }}>
+                    <p style={{ fontSize: 11, fontWeight: 700, color: '#b91c1c', margin: '0 0 6px' }}>
+                        {importErrors.length} row{importErrors.length === 1 ? '' : 's'} from the import could not be matched:
+                    </p>
+                    {importErrors.map((e, i) => (
+                        <p key={i} style={{ fontSize: 11, color: '#b91c1c', margin: '2px 0' }}>
+                            Row {e.row} ({e.label}) — {e.message}
+                        </p>
+                    ))}
+                </div>
+            )}
 
             {saveErrors.length > 0 && (
                 <div style={{
