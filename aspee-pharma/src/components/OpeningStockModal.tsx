@@ -87,28 +87,34 @@ export default function OpeningStockModal({ isOpen, onClose, onSave }: OpeningSt
         if (!locRes.error) setLocations(locRes.data || []);
     };
 
+    // One row per existing product, ready for a physical count: staff fill in
+    // Location/Batch/Expiry/Qty next to each product name instead of having to
+    // look up or type SKUs.
     const handleDownloadTemplate = async () => {
+        if (products.length === 0) {
+            toast.error('Products are still loading — try again in a moment');
+            return;
+        }
         const XLSX = await import('xlsx');
-        const sampleProduct = products[0];
         const sampleLocation = locations[0];
-        const templateRows = [{
-            'Product SKU*': sampleProduct?.sku || 'SKU-001',
+        const templateRows = products.map(p => ({
+            'Product*': p.name,
             'Location*': sampleLocation?.name || 'Main Warehouse',
             'Batch Number': '',
             'Expiry Date (YYYY-MM-DD)': '',
-            'Counted Qty*': 0,
-        }];
+            'Counted Qty*': '',
+        }));
         const worksheet = XLSX.utils.json_to_sheet(templateRows);
-        worksheet['!cols'] = [{ wch: 18 }, { wch: 22 }, { wch: 16 }, { wch: 22 }, { wch: 14 }];
+        worksheet['!cols'] = [{ wch: 34 }, { wch: 22 }, { wch: 16 }, { wch: 22 }, { wch: 14 }];
         const workbook = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(workbook, worksheet, 'Opening Stock');
         XLSX.writeFile(workbook, 'opening_stock_template.xlsx');
     };
 
     // Bulk-import counted quantities from Excel/CSV. Products are matched by
-    // SKU (falls back to exact product name), locations by exact name — both
-    // case-insensitive. Rows that don't match are reported, never silently
-    // dropped or guessed at.
+    // exact name (falls back to SKU, for older templates), locations by exact
+    // name — both case-insensitive. Rows that don't match are reported, never
+    // silently dropped or guessed at.
     const handleImportFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
         if (!file) return;
@@ -132,13 +138,27 @@ export default function OpeningStockModal({ isOpen, onClose, onSave }: OpeningSt
 
             data.forEach((raw, i) => {
                 const rowNum = i + 2; // +2 for header row and 1-based indexing
-                const skuOrName = String(raw['Product SKU*'] ?? raw['Product SKU'] ?? raw['Product Name'] ?? '').trim();
+                const nameOrSku = String(
+                    raw['Product*'] ?? raw['Product'] ?? raw['Product Name']
+                    ?? raw['Product SKU*'] ?? raw['Product SKU'] ?? ''
+                ).trim();
                 const locationName = String(raw['Location*'] ?? raw['Location'] ?? '').trim();
                 const qtyRaw = raw['Counted Qty*'] ?? raw['Counted Qty'];
-                const label = `${skuOrName || '(no product)'} @ ${locationName || '(no location)'}`;
+                const label = `${nameOrSku || '(no product)'} @ ${locationName || '(no location)'}`;
 
-                if (!skuOrName) {
-                    errors.push({ row: rowNum, label, message: 'Product SKU is required' });
+                // The template pre-fills every product's name and a default
+                // location, leaving only Counted Qty blank for staff to fill in
+                // while counting. An untouched row (that product wasn't counted
+                // this pass) still has Product/Location but no Qty — skip those
+                // quietly instead of flagging every one of the 231 products as an
+                // error; only rows where a quantity was actually entered are
+                // validated below.
+                if (qtyRaw === undefined || qtyRaw === '') {
+                    return;
+                }
+
+                if (!nameOrSku) {
+                    errors.push({ row: rowNum, label, message: 'Product is required' });
                     return;
                 }
                 if (!locationName) {
@@ -154,10 +174,10 @@ export default function OpeningStockModal({ isOpen, onClose, onSave }: OpeningSt
                     return;
                 }
 
-                const product = products.find(p => p.sku.toLowerCase() === skuOrName.toLowerCase())
-                    ?? products.find(p => p.name.toLowerCase() === skuOrName.toLowerCase());
+                const product = products.find(p => p.name.toLowerCase() === nameOrSku.toLowerCase())
+                    ?? products.find(p => p.sku.toLowerCase() === nameOrSku.toLowerCase());
                 if (!product) {
-                    errors.push({ row: rowNum, label, message: `No product matches SKU/name "${skuOrName}"` });
+                    errors.push({ row: rowNum, label, message: `No product matches "${nameOrSku}"` });
                     return;
                 }
 
