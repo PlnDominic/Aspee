@@ -19,10 +19,13 @@ export default function ResetPasswordPage() {
     const [loading, setLoading] = useState(false);
 
     // Establish the recovery session from whatever the email link delivered.
-    // Supabase reset links come in a few shapes depending on project config —
-    // handle each: a hash token (implicit, auto-detected by the client), a
-    // ?code= (PKCE), or a ?token_hash=&type=recovery. Any working one leaves us
-    // with a session; without one, the link is invalid or expired.
+    // The Supabase client is configured for the implicit flow (see
+    // src/lib/supabase.ts), so the expected shape is a hash-fragment token,
+    // auto-detected by the client and picked up via onAuthStateChange /
+    // the getSession() poll below. ?code= (PKCE) and ?token_hash=&type=
+    // are handled too, defensively, in case that ever changes or an older
+    // link is clicked. Any working path leaves us with a session; without
+    // one, the link is genuinely invalid or expired.
     useEffect(() => {
         let active = true;
 
@@ -59,8 +62,11 @@ export default function ResetPasswordPage() {
                     if (active) setPhase('ready');
                     return;
                 }
-            } catch {
-                if (active) { setPhase('invalid'); setError('This reset link is invalid or has expired.'); }
+            } catch (err: any) {
+                if (active) {
+                    setPhase('invalid');
+                    setError(err?.message || 'This reset link is invalid or has expired.');
+                }
                 return;
             }
 
