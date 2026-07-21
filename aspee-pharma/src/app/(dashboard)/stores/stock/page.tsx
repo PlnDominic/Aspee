@@ -11,6 +11,7 @@ import { formatWithBulk } from '@/lib/unitConversions';
 import { supabase } from '@/lib/supabase';
 import { useFetch, useAction } from '@/lib/hooks';
 import { logAudit } from '@/lib/auditLog';
+import { toast } from 'sonner';
 import SendToMDModal from '@/components/SendToMDModal';
 import OpeningStockModal from '@/components/OpeningStockModal';
 
@@ -130,78 +131,106 @@ export default function StockLevelsPage() {
     // product/location/batch directly, bypassing GRN/transfer/sales workflow.
     // Sets stock_levels.qty_on_hand to the counted value (not additive) and
     // logs the resulting delta as a normal stock movement so it stays auditable.
-    const saveOpeningStock = useAction<{
+    type OpeningStockInput = {
         product_id: string;
         location_id: string;
         batch_number: string;
         expiry_date: string | null;
         counted_qty: number;
         notes: string;
-    }, void>({
-        mutationFn: async (input) => {
-            const { data: existing, error: fetchError } = await supabase
+    };
+
+    const applyOpeningStockRow = async (input: OpeningStockInput) => {
+        const { data: existing, error: fetchError } = await supabase
+            .from('stock_levels')
+            .select('id, qty_on_hand')
+            .eq('product_id', input.product_id)
+            .eq('location_id', input.location_id)
+            .eq('batch_number', input.batch_number)
+            .maybeSingle();
+        if (fetchError) throw fetchError;
+
+        const oldQty = Number(existing?.qty_on_hand || 0);
+        const newQty = input.counted_qty;
+        const delta = newQty - oldQty;
+
+        if (existing) {
+            const { error } = await supabase
                 .from('stock_levels')
-                .select('id, qty_on_hand')
-                .eq('product_id', input.product_id)
-                .eq('location_id', input.location_id)
-                .eq('batch_number', input.batch_number)
-                .maybeSingle();
-            if (fetchError) throw fetchError;
+                .update({
+                    qty_on_hand: newQty,
+                    expiry_date: input.expiry_date,
+                    updated_at: new Date().toISOString(),
+                })
+                .eq('id', existing.id);
+            if (error) throw error;
+        } else {
+            const { error } = await supabase
+                .from('stock_levels')
+                .insert([{
+                    product_id: input.product_id,
+                    location_id: input.location_id,
+                    batch_number: input.batch_number,
+                    expiry_date: input.expiry_date,
+                    qty_on_hand: newQty,
+                }]);
+            if (error) throw error;
+        }
 
-            const oldQty = Number(existing?.qty_on_hand || 0);
-            const newQty = input.counted_qty;
-            const delta = newQty - oldQty;
+        if (delta !== 0) {
+            const { error: moveError } = await supabase
+                .from('stock_movements')
+                .insert([{
+                    product_id: input.product_id,
+                    movement_type: delta > 0 ? 'IN' : 'OUT',
+                    quantity: Math.abs(delta),
+                    reference_type: 'Adjustment',
+                    batch_number: input.batch_number,
+                    expiry_date: input.expiry_date,
+                    notes: `Opening stock entry: ${oldQty.toLocaleString()} → ${newQty.toLocaleString()}${input.notes ? ` — ${input.notes}` : ''}`,
+                }]);
+            if (moveError) throw moveError;
+        }
 
-            if (existing) {
-                const { error } = await supabase
-                    .from('stock_levels')
-                    .update({
-                        qty_on_hand: newQty,
-                        expiry_date: input.expiry_date,
-                        updated_at: new Date().toISOString(),
-                    })
-                    .eq('id', existing.id);
-                if (error) throw error;
-            } else {
-                const { error } = await supabase
-                    .from('stock_levels')
-                    .insert([{
-                        product_id: input.product_id,
-                        location_id: input.location_id,
-                        batch_number: input.batch_number,
-                        expiry_date: input.expiry_date,
-                        qty_on_hand: newQty,
-                    }]);
-                if (error) throw error;
+        await logAudit({
+            action: 'UPDATE',
+            module: 'Stock Inventory',
+            description: `Opening stock entry: set to ${newQty.toLocaleString()} (was ${oldQty.toLocaleString()})`,
+            record_id: existing?.id,
+            record_type: 'stock_levels',
+            old_values: { qty_on_hand: oldQty },
+            new_values: { qty_on_hand: newQty, batch_number: input.batch_number, notes: input.notes },
+        });
+    };
+
+    const saveOpeningStock = useAction<
+        OpeningStockInput[],
+        { succeeded: number; failed: { row: number; message: string }[] }
+    >({
+        mutationFn: async (rows) => {
+            const failed: { row: number; message: string }[] = [];
+            let succeeded = 0;
+
+            // Sequential, not Promise.all — rows can target the same
+            // product/location/batch (e.g. corrected twice in one batch), and
+            // concurrent writes to the same stock_levels row would race.
+            for (let i = 0; i < rows.length; i++) {
+                try {
+                    await applyOpeningStockRow(rows[i]);
+                    succeeded++;
+                } catch (err: any) {
+                    failed.push({ row: i, message: err.message || 'Failed to save' });
+                }
             }
 
-            if (delta !== 0) {
-                const { error: moveError } = await supabase
-                    .from('stock_movements')
-                    .insert([{
-                        product_id: input.product_id,
-                        movement_type: delta > 0 ? 'IN' : 'OUT',
-                        quantity: Math.abs(delta),
-                        reference_type: 'Adjustment',
-                        batch_number: input.batch_number,
-                        expiry_date: input.expiry_date,
-                        notes: `Opening stock entry: ${oldQty.toLocaleString()} → ${newQty.toLocaleString()}${input.notes ? ` — ${input.notes}` : ''}`,
-                    }]);
-                if (moveError) throw moveError;
-            }
-
-            await logAudit({
-                action: 'UPDATE',
-                module: 'Stock Inventory',
-                description: `Opening stock entry: set to ${newQty.toLocaleString()} (was ${oldQty.toLocaleString()})`,
-                record_id: existing?.id,
-                record_type: 'stock_levels',
-                old_values: { qty_on_hand: oldQty },
-                new_values: { qty_on_hand: newQty, batch_number: input.batch_number, notes: input.notes },
-            });
+            return { succeeded, failed };
         },
         invalidateKeys: ['stock-levels-matrix', 'stock_movements'],
-        successMessage: 'Opening stock recorded successfully',
+        onSuccess: (result) => {
+            if (result.failed.length === 0) {
+                toast.success(`Opening stock recorded for ${result.succeeded} item${result.succeeded === 1 ? '' : 's'}`);
+            }
+        },
     });
 
     const materialTypes = ['All', ...Array.from(new Set(stockRows.map(r => r.material_type).filter(Boolean)))];
