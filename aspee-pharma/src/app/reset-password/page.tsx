@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { Loader2, AlertCircle, Eye, EyeOff, ShieldCheck, ArrowLeft } from 'lucide-react';
-import { ResetStyles } from '../forgot-password/page';
+import { ResetPasswordStyles } from '@/components/ResetPasswordStyles';
 
 type Phase = 'verifying' | 'ready' | 'invalid' | 'done';
 
@@ -210,7 +210,7 @@ export default function ResetPasswordPage() {
                 )}
             </div>
 
-            <ResetStyles />
+            <ResetPasswordStyles />
         </div>
     );
 }
