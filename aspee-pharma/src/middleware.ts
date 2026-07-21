@@ -6,8 +6,8 @@ import { routePermissions } from '@/lib/routePermissions';
 export async function middleware(request: NextRequest) {
     const { pathname } = request.nextUrl;
 
-    // Skip auth check for landing page, login page, and API routes
-    if (pathname === '/' || pathname === '/login' || pathname.startsWith('/api') || pathname.startsWith('/_next') || pathname === '/favicon.ico') {
+    // Skip auth check for landing page, login page, password reset flow, and API routes
+    if (pathname === '/' || pathname === '/login' || pathname === '/forgot-password' || pathname === '/reset-password' || pathname.startsWith('/api') || pathname.startsWith('/_next') || pathname === '/favicon.ico') {
         // If logged-in user visits '/', send them straight to the dashboard
         if (pathname === '/') {
             const supabaseCheck = createServerClient(
