@@ -149,7 +149,7 @@ export default function LoginPage() {
                                 <input type="checkbox" className="lp-checkbox" />
                                 Remember me
                             </label>
-                            <a href="#" className="lp-forgot">Forgot password?</a>
+                            <a href="/forgot-password" className="lp-forgot">Forgot password?</a>
                         </div>
 
                         {/* Submit */}
