@@ -48,6 +48,15 @@ interface BOM {
     is_active: boolean;
     notes: string;
     items: BOMItem[];
+    // Combined weight/volume of all raw + packaging material components that
+    // go into one batch (e.g. 500 Kilograms) — a single figure the production
+    // manager states directly, since the line items above are in mixed units
+    // (grams of API, pieces of bottles, etc.) that can't be summed as-is.
+    batch_input_quantity: number;
+    batch_input_unit: string;
+    // How many finished units (bottles, tablets, skellets, ...) one batch yields.
+    batch_yield_quantity: number;
+    batch_yield_unit: string;
 }
 
 interface BOMModalProps {
@@ -76,6 +85,10 @@ export default function BOMModal({ isOpen, onClose, onSave, initialData, mode = 
     const [notes, setNotes] = useState('');
     const [rawItems, setRawItems] = useState<BOMItem[]>([]);
     const [packagingItems, setPackagingItems] = useState<BOMItem[]>([]);
+    const [batchInputQuantity, setBatchInputQuantity] = useState<number>(0);
+    const [batchInputUnit, setBatchInputUnit] = useState('');
+    const [batchYieldQuantity, setBatchYieldQuantity] = useState<number>(0);
+    const [batchYieldUnit, setBatchYieldUnit] = useState('');
 
     // Search state
     const [searchTerm, setSearchTerm] = useState('');
@@ -159,6 +172,10 @@ export default function BOMModal({ isOpen, onClose, onSave, initialData, mode = 
         setNotes('');
         setRawItems([]);
         setPackagingItems([]);
+        setBatchInputQuantity(0);
+        setBatchInputUnit('');
+        setBatchYieldQuantity(0);
+        setBatchYieldUnit('');
         setSearchTerm('');
     };
 
@@ -168,6 +185,10 @@ export default function BOMModal({ isOpen, onClose, onSave, initialData, mode = 
         setVersion(data.version || '1.0');
         setIsActive(data.is_active ?? true);
         setNotes(data.notes || '');
+        setBatchInputQuantity(Number(data.batch_input_quantity) || 0);
+        setBatchInputUnit(data.batch_input_unit || '');
+        setBatchYieldQuantity(Number(data.batch_yield_quantity) || 0);
+        setBatchYieldUnit(data.batch_yield_unit || '');
 
         // Find finished product
         const fp = finishedGoods.find(p => p.id === data.finished_product_id);
@@ -218,6 +239,12 @@ export default function BOMModal({ isOpen, onClose, onSave, initialData, mode = 
         // Auto-generate name if empty
         if (!name && product) {
             setName(`BOM for ${product.name}`);
+        }
+
+        // Pre-fill the yield unit from the finished product's own unit
+        // (e.g. Bottles, Tablets, Skellets) unless already set.
+        if (!batchYieldUnit && product?.unit) {
+            setBatchYieldUnit(product.unit);
         }
     };
 
@@ -318,7 +345,11 @@ export default function BOMModal({ isOpen, onClose, onSave, initialData, mode = 
                 version,
                 is_active: isActive,
                 notes,
-                items: allItems
+                items: allItems,
+                batch_input_quantity: batchInputQuantity,
+                batch_input_unit: batchInputUnit,
+                batch_yield_quantity: batchYieldQuantity,
+                batch_yield_unit: batchYieldUnit,
             });
             onClose();
         } catch (error: any) {
@@ -619,6 +650,95 @@ export default function BOMModal({ isOpen, onClose, onSave, initialData, mode = 
                         )}
                     </div>
 
+                    {/* Batch Details — combined input quantity and output yield for one batch */}
+                    <div className="section-title full-width" style={{ marginTop: 8 }}>
+                        Batch Details
+                    </div>
+
+                    <div className="form-field">
+                        <label>Total Combined Input Quantity *</label>
+                        <div className="input-wrapper">
+                            <Calculator size={16} className="icon" />
+                            {isViewOnly ? (
+                                <input type="text" value={`${batchInputQuantity} ${batchInputUnit}`.trim()} disabled />
+                            ) : (
+                                <input
+                                    type="number"
+                                    min="0"
+                                    step="0.001"
+                                    value={batchInputQuantity || ''}
+                                    onChange={(e) => setBatchInputQuantity(parseFloat(e.target.value) || 0)}
+                                    placeholder="e.g., 500"
+                                    required
+                                />
+                            )}
+                        </div>
+                        <p className="field-hint">Combined weight/volume of all raw + packaging materials used per batch</p>
+                    </div>
+
+                    <div className="form-field">
+                        <label>Input Unit *</label>
+                        <div className="input-wrapper">
+                            <select
+                                value={batchInputUnit}
+                                onChange={(e) => setBatchInputUnit(e.target.value)}
+                                disabled={isViewOnly}
+                                required
+                            >
+                                <option value="">Select unit</option>
+                                {GROUPED_UNIT_OPTIONS.map((g) => (
+                                    <optgroup key={g.label} label={g.label}>
+                                        {g.units.map((unit) => (
+                                            <option key={unit} value={unit}>{unit}</option>
+                                        ))}
+                                    </optgroup>
+                                ))}
+                            </select>
+                        </div>
+                    </div>
+
+                    <div className="form-field">
+                        <label>Batch Yield Quantity *</label>
+                        <div className="input-wrapper">
+                            <Package size={16} className="icon" />
+                            {isViewOnly ? (
+                                <input type="text" value={`${batchYieldQuantity} ${batchYieldUnit}`.trim()} disabled />
+                            ) : (
+                                <input
+                                    type="number"
+                                    min="0"
+                                    step="1"
+                                    value={batchYieldQuantity || ''}
+                                    onChange={(e) => setBatchYieldQuantity(parseFloat(e.target.value) || 0)}
+                                    placeholder="e.g., 10000"
+                                    required
+                                />
+                            )}
+                        </div>
+                        <p className="field-hint">Number of finished units (bottles, tablets, skellets, ...) one batch produces</p>
+                    </div>
+
+                    <div className="form-field">
+                        <label>Yield Unit *</label>
+                        <div className="input-wrapper">
+                            <select
+                                value={batchYieldUnit}
+                                onChange={(e) => setBatchYieldUnit(e.target.value)}
+                                disabled={isViewOnly}
+                                required
+                            >
+                                <option value="">Select unit</option>
+                                {GROUPED_UNIT_OPTIONS.map((g) => (
+                                    <optgroup key={g.label} label={g.label}>
+                                        {g.units.map((unit) => (
+                                            <option key={unit} value={unit}>{unit}</option>
+                                        ))}
+                                    </optgroup>
+                                ))}
+                            </select>
+                        </div>
+                    </div>
+
                     {/* Cost Summary */}
                     {totalComponents > 0 && (
                         <div className="cost-summary full-width">
@@ -697,6 +817,11 @@ export default function BOMModal({ isOpen, onClose, onSave, initialData, mode = 
                     font-weight: 600;
                     color: var(--slate-600);
                     margin-bottom: 6px;
+                }
+                .field-hint {
+                    font-size: 10px;
+                    color: var(--slate-400);
+                    margin: 6px 0 0;
                 }
                 .input-wrapper {
                     position: relative;

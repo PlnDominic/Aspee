@@ -159,6 +159,10 @@ export default function BOMPage() {
                 version: '1.0',
                 is_active: true,
                 notes: bom.notes,
+                batch_input_quantity: (bom as any).batch_input_quantity,
+                batch_input_unit: (bom as any).batch_input_unit,
+                batch_yield_quantity: (bom as any).batch_yield_quantity,
+                batch_yield_unit: (bom as any).batch_yield_unit,
                 items: items?.map((item: any) => ({
                     component_id: item.component_id,
                     quantity_required: item.quantity_required,
