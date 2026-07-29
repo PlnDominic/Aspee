@@ -59,6 +59,17 @@ export default function ProductionOrderModal({ isOpen, onClose, onSave, initialD
     const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
     const [quantity, setQuantity] = useState<number>(1);
     const [bomVersion, setBomVersion] = useState('1.0');
+
+    // Batch-based production quantity — mirrors the BOM's Batch Yield
+    // Quantity/Unit. Production is normally counted in whole batches (each
+    // yielding e.g. 5000 Bottles per the BOM) plus a leftover partial amount
+    // in the same yield unit, e.g. "2 batches + 298 bottles". `quantity`
+    // above stays the single source of truth for total finished units — it's
+    // kept in sync with batches/extra whenever the active BOM states a yield.
+    const [bomBatchYieldQuantity, setBomBatchYieldQuantity] = useState<number>(0);
+    const [bomBatchYieldUnit, setBomBatchYieldUnit] = useState('');
+    const [numberOfBatches, setNumberOfBatches] = useState<number>(0);
+    const [extraQuantity, setExtraQuantity] = useState<number>(0);
     const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
     const [dueDate, setDueDate] = useState('');
     const [notes, setNotes] = useState('');
@@ -66,6 +77,15 @@ export default function ProductionOrderModal({ isOpen, onClose, onSave, initialD
     // New Product Creation State
     const [isAddingNewProduct, setIsAddingNewProduct] = useState(false);
     const [newProductName, setNewProductName] = useState('');
+
+    // Keep `quantity` (total finished units — the value every downstream
+    // consumer reads, e.g. ProductionCompletionModal's completion target) in
+    // sync with batches/extra whenever the active BOM states a batch yield.
+    useEffect(() => {
+        if (bomBatchYieldQuantity > 0) {
+            setQuantity(numberOfBatches * bomBatchYieldQuantity + extraQuantity);
+        }
+    }, [numberOfBatches, extraQuantity, bomBatchYieldQuantity]);
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
     useEffect(() => {
@@ -107,10 +127,13 @@ export default function ProductionOrderModal({ isOpen, onClose, onSave, initialD
 
         setFetching(true);
         try {
-            // Step 1: Find the active BOM for this finished product
+            // Step 1: Find the active BOM for this finished product.
+            // select('*') rather than naming batch_yield_quantity/unit — those
+            // columns may not exist yet on older deployments, and this query
+            // must still succeed (falling back to plain quantity entry) either way.
             const { data: bom, error: bomError } = await supabase
                 .from('bill_of_materials')
-                .select('id')
+                .select('*')
                 .eq('finished_product_id', productId)
                 .eq('is_active', true)
                 .single();
@@ -118,8 +141,13 @@ export default function ProductionOrderModal({ isOpen, onClose, onSave, initialD
             if (bomError || !bom) {
                 console.log('No active BOM found for this product');
                 setBomItems([]);
+                setBomBatchYieldQuantity(0);
+                setBomBatchYieldUnit('');
                 return;
             }
+
+            setBomBatchYieldQuantity(Number(bom.batch_yield_quantity) || 0);
+            setBomBatchYieldUnit(bom.batch_yield_unit || '');
 
             // Step 2: Fetch BOM items with component details
             const { data: items, error: itemsError } = await supabase
@@ -163,6 +191,8 @@ export default function ProductionOrderModal({ isOpen, onClose, onSave, initialD
         } catch (error: any) {
             console.log('Error fetching BOM:', error.message);
             setBomItems([]);
+            setBomBatchYieldQuantity(0);
+            setBomBatchYieldUnit('');
         } finally {
             setFetching(false);
         }
@@ -186,6 +216,10 @@ export default function ProductionOrderModal({ isOpen, onClose, onSave, initialD
         setSelectedProduct(null);
         setQuantity(1);
         setBomVersion('1.0');
+        setBomBatchYieldQuantity(0);
+        setBomBatchYieldUnit('');
+        setNumberOfBatches(0);
+        setExtraQuantity(0);
         setStartDate(new Date().toISOString().split('T')[0]);
         setDueDate('');
         setNotes('');
@@ -199,6 +233,12 @@ export default function ProductionOrderModal({ isOpen, onClose, onSave, initialD
         setProductId(data.product_id || '');
         setQuantity(data.quantity || 1);
         setBomVersion(data.bom_version || '1.0');
+        // Orders created via the batches+extra flow have `batches` saved;
+        // older orders (plain quantity entry) don't — put the whole original
+        // quantity into "extra" so the total still matches if the user later
+        // switches this order to a BOM that now states a batch yield.
+        setNumberOfBatches(data.batches ?? 0);
+        setExtraQuantity(data.batches !== undefined && data.batches !== null ? (data.extra_quantity ?? 0) : (data.quantity || 0));
         setStartDate(data.start_date?.split('T')[0] || new Date().toISOString().split('T')[0]);
         setDueDate(data.due_date?.split('T')[0] || '');
         setNotes(data.notes || '');
@@ -282,11 +322,14 @@ export default function ProductionOrderModal({ isOpen, onClose, onSave, initialD
                 toast.success(`Registered new product: ${newProductName}`);
             }
 
+            const usingBatchYield = bomBatchYieldQuantity > 0;
             await onSave({
                 id: initialData?.id,
                 order_number: orderNumber,
                 product_id: finalProductId,
                 quantity: quantity,
+                batches: usingBatchYield ? numberOfBatches : null,
+                extra_quantity: usingBatchYield ? extraQuantity : null,
                 bom_version: bomVersion,
                 start_date: startDate,
                 due_date: dueDate || null,
@@ -384,20 +427,56 @@ export default function ProductionOrderModal({ isOpen, onClose, onSave, initialD
 
                     <div className="form-field">
                         <label>Production Quantity *</label>
-                        <div className="input-wrapper">
-                            <Factory size={16} className="icon" />
-                            <input 
-                                type="number" 
-                                min="1"
-                                value={quantity}
-                                onChange={(e) => setQuantity(parseInt(e.target.value) || 1)}
-                                disabled={isViewOnly}
-                                placeholder="Enter quantity"
-                            />
-                        </div>
+                        {bomBatchYieldQuantity > 0 ? (
+                            <>
+                                <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                                    <div className="input-wrapper" style={{ flex: 1 }}>
+                                        <Factory size={16} className="icon" />
+                                        <input
+                                            type="number"
+                                            min="0"
+                                            step="1"
+                                            value={numberOfBatches || ''}
+                                            onChange={(e) => setNumberOfBatches(parseInt(e.target.value) || 0)}
+                                            disabled={isViewOnly}
+                                            placeholder="Batches"
+                                        />
+                                    </div>
+                                    <span style={{ fontSize: 10, color: 'var(--slate-400)', flexShrink: 0 }}>batches +</span>
+                                </div>
+                                <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 6 }}>
+                                    <div className="input-wrapper" style={{ flex: 1 }}>
+                                        <input
+                                            type="number"
+                                            min="0"
+                                            step="0.001"
+                                            value={extraQuantity || ''}
+                                            onChange={(e) => setExtraQuantity(parseFloat(e.target.value) || 0)}
+                                            disabled={isViewOnly}
+                                            placeholder="Extra"
+                                            style={{ paddingLeft: 12 }}
+                                        />
+                                    </div>
+                                    <span style={{ fontSize: 10, color: 'var(--slate-400)', flexShrink: 0 }}>{bomBatchYieldUnit}</span>
+                                </div>
+                                <p className="field-hint">
+                                    1 batch = {bomBatchYieldQuantity.toLocaleString()} {bomBatchYieldUnit} · Total: <strong>{quantity.toLocaleString()} {bomBatchYieldUnit}</strong>
+                                </p>
+                            </>
+                        ) : (
+                            <div className="input-wrapper">
+                                <Factory size={16} className="icon" />
+                                <input
+                                    type="number"
+                                    min="1"
+                                    value={quantity}
+                                    onChange={(e) => setQuantity(parseInt(e.target.value) || 1)}
+                                    disabled={isViewOnly}
+                                    placeholder="Enter quantity"
+                                />
+                            </div>
+                        )}
                     </div>
-
-
 
                     <div className="form-field">
                         <label>Start Date</label>
@@ -641,6 +720,11 @@ export default function ProductionOrderModal({ isOpen, onClose, onSave, initialD
                     font-weight: 600;
                     color: var(--slate-600);
                     margin-bottom: 6px;
+                }
+                .field-hint {
+                    font-size: 10px;
+                    color: var(--slate-400);
+                    margin: 6px 0 0;
                 }
                 .input-wrapper {
                     position: relative;
