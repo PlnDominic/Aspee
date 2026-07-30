@@ -19,7 +19,19 @@ export default function ProductionCompletionModal({ isOpen, onClose, onSuccess, 
     const [fetching, setFetching] = useState(false);
     const [yieldQty, setYieldQty] = useState<number>(0);
     const [items, setItems] = useState<any[]>([]);
-    
+
+    // Each BOM component line's quantity_required is per ONE batch. Scale by
+    // the order's whole-batch count (set when it was created against a BOM
+    // with a stated batch yield), not the total finished quantity — matching
+    // the same formula used in the New Job Order modal's "Total Needed".
+    // Falls back to the order's plain quantity for orders with no batch/yield
+    // info (productionOrder.batches is null/undefined for those).
+    const materialMultiplier = productionOrder
+        ? (productionOrder.batches !== null && productionOrder.batches !== undefined
+            ? productionOrder.batches
+            : (productionOrder.quantity || 1))
+        : 1;
+
     useEffect(() => {
         if (isOpen && productionOrder) {
             setYieldQty(productionOrder.quantity || 0);
@@ -39,13 +51,17 @@ export default function ProductionCompletionModal({ isOpen, onClose, onSuccess, 
                 .eq('order_id', productionOrder.id);
 
             if (error) throw error;
-            
+
             const fetchedItems = (data || []).map(item => ({
                 ...item,
-                // Default consumed quantity is the originally required quantity
-                actual_consumed: item.quantity_required * (productionOrder.quantity || 1)
+                // Default consumed quantity: each BOM line's quantity_required
+                // is per one batch, so scale by the order's whole-batch count
+                // (productionOrder.batches) when the order was created against
+                // a BOM with a stated batch yield. Falls back to the total
+                // quantity for orders with no batch/yield info.
+                actual_consumed: item.quantity_required * materialMultiplier
             }));
-            
+
             setItems(fetchedItems);
         } catch (error: any) {
             toast.error('Failed to load job order materials: ' + error.message);
@@ -300,7 +316,7 @@ export default function ProductionCompletionModal({ isOpen, onClose, onSuccess, 
                                                         <div className="product-sku">{item.product?.sku}</div>
                                                     </td>
                                                     <td>{item.product?.unit}</td>
-                                                    <td>{(item.quantity_required * productionOrder.quantity).toLocaleString()}</td>
+                                                    <td>{(item.quantity_required * materialMultiplier).toLocaleString()}</td>
                                                     <td>
                                                         <input
                                                             type="number"
@@ -344,7 +360,7 @@ export default function ProductionCompletionModal({ isOpen, onClose, onSuccess, 
                                                         <div className="product-sku">{item.product?.sku}</div>
                                                     </td>
                                                     <td>{item.product?.unit}</td>
-                                                    <td>{(item.quantity_required * productionOrder.quantity).toLocaleString()}</td>
+                                                    <td>{(item.quantity_required * materialMultiplier).toLocaleString()}</td>
                                                     <td>
                                                         <input
                                                             type="number"
