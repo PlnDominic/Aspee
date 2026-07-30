@@ -337,6 +337,11 @@ export default function ProductionOrderModal({ isOpen, onClose, onSave, initialD
                 status: 'Draft',
                 items: bomItems.map(item => ({
                     product_id: item.product_id,
+                    // Store the raw per-batch BOM figure, not a pre-scaled
+                    // total — ProductionCompletionModal (and any other reader)
+                    // fetches this fresh and multiplies by the order's own
+                    // quantity/batches independently; pre-scaling here would
+                    // cause double-multiplication downstream.
                     quantity_required: item.quantity_required,
                     quantity_used: 0
                 }))
@@ -350,6 +355,14 @@ export default function ProductionOrderModal({ isOpen, onClose, onSave, initialD
     };
 
     const isViewOnly = mode === 'view';
+
+    // Each BOM line's Qty Required is the amount needed for ONE batch, so
+    // Total Needed = Qty Required × number of whole batches — not the total
+    // finished-unit quantity. The "extra" units beyond whole batches don't
+    // add to material requirements under this formula (a full batch's actual
+    // yield typically covers that overage). Falls back to `quantity` itself
+    // when there's no BOM batch-yield info (plain quantity entry mode).
+    const materialMultiplier = bomBatchYieldQuantity > 0 ? numberOfBatches : quantity;
 
     return (
         <Modal
@@ -531,7 +544,7 @@ export default function ProductionOrderModal({ isOpen, onClose, onSave, initialD
                                                 <td>
                                                     <div className="unit-display">{item.unit || item.product?.unit || '-'}</div>
                                                     {item.unit && item.product?.unit && item.unit !== item.product.unit && (
-                                                        <UnitConversionHint value={item.quantity_required * quantity} fromUnit={item.unit} toUnit={item.product.unit} compact />
+                                                        <UnitConversionHint value={item.quantity_required * materialMultiplier} fromUnit={item.unit} toUnit={item.product.unit} compact />
                                                     )}
                                                 </td>
                                                 <td>
@@ -546,12 +559,12 @@ export default function ProductionOrderModal({ isOpen, onClose, onSave, initialD
                                                     )}
                                                 </td>
                                                 <td>
-                                                    <div className="qty-total">{(item.quantity_required * quantity).toLocaleString()}</div>
+                                                    <div className="qty-total">{(item.quantity_required * materialMultiplier).toLocaleString()}</div>
                                                     {item.product?.bulk_unit && item.product?.bulk_to_base_ratio && (
                                                         <div style={{ fontSize: 10, color: 'var(--primary-600)', fontWeight: 500 }}>
-                                                            ≈ {((item.quantity_required * quantity) / item.product.bulk_to_base_ratio % 1 === 0
-                                                                ? ((item.quantity_required * quantity) / item.product.bulk_to_base_ratio).toLocaleString()
-                                                                : ((item.quantity_required * quantity) / item.product.bulk_to_base_ratio).toLocaleString(undefined, { maximumFractionDigits: 2 })
+                                                            ≈ {((item.quantity_required * materialMultiplier) / item.product.bulk_to_base_ratio % 1 === 0
+                                                                ? ((item.quantity_required * materialMultiplier) / item.product.bulk_to_base_ratio).toLocaleString()
+                                                                : ((item.quantity_required * materialMultiplier) / item.product.bulk_to_base_ratio).toLocaleString(undefined, { maximumFractionDigits: 2 })
                                                             )} {item.product.bulk_unit}
                                                         </div>
                                                     )}
@@ -559,7 +572,7 @@ export default function ProductionOrderModal({ isOpen, onClose, onSave, initialD
                                                 <td>
                                                     <div style={{
                                                         fontWeight: 700,
-                                                        color: (item.quantity_available || 0) >= (item.quantity_required * quantity) ? 'var(--success-600)' : 'var(--danger)',
+                                                        color: (item.quantity_available || 0) >= (item.quantity_required * materialMultiplier) ? 'var(--success-600)' : 'var(--danger)',
                                                         fontSize: 12
                                                     }}>
                                                         {(item.quantity_available || 0).toLocaleString()}
@@ -602,7 +615,7 @@ export default function ProductionOrderModal({ isOpen, onClose, onSave, initialD
                                                 <td>
                                                     <div className="unit-display">{item.unit || item.product?.unit || '-'}</div>
                                                     {item.unit && item.product?.unit && item.unit !== item.product.unit && (
-                                                        <UnitConversionHint value={item.quantity_required * quantity} fromUnit={item.unit} toUnit={item.product.unit} compact />
+                                                        <UnitConversionHint value={item.quantity_required * materialMultiplier} fromUnit={item.unit} toUnit={item.product.unit} compact />
                                                     )}
                                                 </td>
                                                 <td>
@@ -617,12 +630,12 @@ export default function ProductionOrderModal({ isOpen, onClose, onSave, initialD
                                                     )}
                                                 </td>
                                                 <td>
-                                                    <div className="qty-total">{(item.quantity_required * quantity).toLocaleString()}</div>
+                                                    <div className="qty-total">{(item.quantity_required * materialMultiplier).toLocaleString()}</div>
                                                     {item.product?.bulk_unit && item.product?.bulk_to_base_ratio && (
                                                         <div style={{ fontSize: 10, color: 'var(--primary-600)', fontWeight: 500 }}>
-                                                            ≈ {((item.quantity_required * quantity) / item.product.bulk_to_base_ratio % 1 === 0
-                                                                ? ((item.quantity_required * quantity) / item.product.bulk_to_base_ratio).toLocaleString()
-                                                                : ((item.quantity_required * quantity) / item.product.bulk_to_base_ratio).toLocaleString(undefined, { maximumFractionDigits: 2 })
+                                                            ≈ {((item.quantity_required * materialMultiplier) / item.product.bulk_to_base_ratio % 1 === 0
+                                                                ? ((item.quantity_required * materialMultiplier) / item.product.bulk_to_base_ratio).toLocaleString()
+                                                                : ((item.quantity_required * materialMultiplier) / item.product.bulk_to_base_ratio).toLocaleString(undefined, { maximumFractionDigits: 2 })
                                                             )} {item.product.bulk_unit}
                                                         </div>
                                                     )}
@@ -630,7 +643,7 @@ export default function ProductionOrderModal({ isOpen, onClose, onSave, initialD
                                                 <td>
                                                     <div style={{
                                                         fontWeight: 700, 
-                                                        color: (item.quantity_available || 0) >= (item.quantity_required * quantity) ? 'var(--success-600)' : 'var(--danger)',
+                                                        color: (item.quantity_available || 0) >= (item.quantity_required * materialMultiplier) ? 'var(--success-600)' : 'var(--danger)',
                                                         fontSize: 12
                                                     }}>
                                                         {(item.quantity_available || 0).toLocaleString()}
