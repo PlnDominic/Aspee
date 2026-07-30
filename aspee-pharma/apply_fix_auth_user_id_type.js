@@ -17,12 +17,12 @@ async function run() {
     console.log('Connected to DB.');
 
     const sql = fs.readFileSync(
-      path.join(__dirname, 'supabase/migrations/20260528000001_fix_auth_user_id_type.sql'),
+      path.join(__dirname, 'supabase/migrations/20260528000002_fix_auth_user_id_comparison.sql'),
       'utf8'
     );
     await client.query(sql);
 
-    console.log('Migration applied: auth_user_id column changed from text to uuid.');
+    console.log('Migration applied: all impl functions updated to cast auth_user_uuid::text.');
   } catch (err) {
     console.error('Migration failed:', err.message);
     process.exit(1);
