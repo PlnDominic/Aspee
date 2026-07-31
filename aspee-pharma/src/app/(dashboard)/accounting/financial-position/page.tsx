@@ -121,12 +121,11 @@ export default function FinancialPositionPage() {
 
     const fetchAPBySupplier = async () => {
         // Mirrors the Accounts Payable Ledger's basis exactly: a payable is only
-        // recognized once goods are received & QA-approved (matching the GRN
-        // QA Approved -> DR Inventory / CR Accounts Payable GL posting in
-        // autoPostJournal.ts), not off the full PO total. Using the PO total
-        // here previously made this drill-down double-count undelivered goods
-        // and drift from both the AP Ledger subledger total and the GL-driven
-        // "Trade Creditors & Accruals" figure above it.
+        // recognized once goods are received, QA-approved, and the underlying PO
+        // carries a Manager/Finance approval — not off the full PO total. Using
+        // the PO total here previously made this drill-down double-count
+        // undelivered goods and drift from both the AP Ledger subledger total
+        // and the GL-driven "Trade Creditors & Accruals" figure above it.
         try {
             const { data: grnItems, error } = await supabase
                 .from('grn_items')
@@ -134,7 +133,7 @@ export default function FinancialPositionPage() {
                     quantity_received, qa_status,
                     purchase_order_items:po_item_id ( unit_price ),
                     grn:grn_id ( received_date, qa_status,
-                        purchase_orders:po_id ( supplier_id ) )
+                        purchase_orders:po_id ( supplier_id, approved_by, approval_level ) )
                 `)
                 .eq('qa_status', 'Approved')
                 .lte('grn.received_date', endDate);
@@ -155,8 +154,10 @@ export default function FinancialPositionPage() {
 
             const billedMap: Record<string, number> = {};
             for (const gi of (grnItems || []) as any[]) {
-                const supplierId = gi.grn?.purchase_orders?.supplier_id;
+                const po = gi.grn?.purchase_orders;
+                const supplierId = po?.supplier_id;
                 if (!supplierId) continue;
+                if (!po.approved_by || !['Manager', 'Finance'].includes(po.approval_level)) continue;
                 const unitPrice = Number(gi.purchase_order_items?.unit_price) || 0;
                 const value = unitPrice * Number(gi.quantity_received || 0);
                 if (value <= 0) continue;
