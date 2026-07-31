@@ -98,12 +98,16 @@ export default function QARawMaterialModal({ isOpen, onClose, onSave, grn, mode 
                 if (itemError) throw itemError;
             }
 
-            // Only recognize the payable in the GL once the underlying PO carries
-            // Manager/Finance approval — mirrors the AP Ledger's Billed criteria so
-            // the subledger and GL control account stay reconciled.
+            // Only recognize the payable in the GL once the underlying PO has
+            // actually been approved (GRNModal allows receiving against a
+            // Pending PO) — mirrors the AP Ledger's Billed criteria, which
+            // checks status rather than approval_level/approved_by since those
+            // governance fields aren't guaranteed to be populated on every
+            // approved PO, so the subledger and GL control account stay
+            // reconciled.
             if (qaStatus === 'Approved') {
                 const po = grn.purchase_orders;
-                if (po?.approved_by && ['Manager', 'Finance'].includes(po.approval_level)) {
+                if (po && !['Pending', 'Draft', 'Cancelled', 'Rejected'].includes(po.status)) {
                     const value = itemInspections
                         .filter(item => item.qa_status === 'Approved')
                         .reduce((sum, item) => sum + (Number(item.unit_price) || 0) * Number(item.received_qty || 0), 0);

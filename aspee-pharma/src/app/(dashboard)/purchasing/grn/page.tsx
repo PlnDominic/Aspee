@@ -51,19 +51,23 @@ export default function GRNPage() {
 
             if (error) throw error;
 
-            // Only recognize the payable in the GL once the underlying PO carries
-            // Manager/Finance approval — mirrors the AP Ledger's Billed criteria so
-            // the subledger and GL control account stay reconciled.
+            // Only recognize the payable in the GL once the underlying PO has
+            // actually been approved (GRNModal allows receiving against a
+            // Pending PO) — mirrors the AP Ledger's Billed criteria, which
+            // checks status rather than approval_level/approved_by since those
+            // governance fields aren't guaranteed to be populated on every
+            // approved PO, so the subledger and GL control account stay
+            // reconciled.
             const approvedItems = (items || []).filter((i: any) => i.qa_status === 'Approved');
             if (header.qa_status === 'Approved' && approvedItems.length > 0) {
                 const { data: poRes } = await supabase
                     .from('purchase_orders')
-                    .select('approved_by, approval_level, suppliers:supplier_id(name)')
+                    .select('status, suppliers:supplier_id(name)')
                     .eq('id', header.po_id)
                     .single();
                 const po: any = poRes;
 
-                if (po?.approved_by && ['Manager', 'Finance'].includes(po.approval_level)) {
+                if (po && !['Pending', 'Draft', 'Cancelled', 'Rejected'].includes(po.status)) {
                     const poItemIds = approvedItems.map((i: any) => i.po_item_id).filter(Boolean);
                     const { data: poItemRows } = poItemIds.length > 0
                         ? await supabase.from('purchase_order_items').select('id, unit_price').in('id', poItemIds)
