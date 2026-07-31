@@ -10,6 +10,7 @@ import { Plus, Eye, Edit2, Trash2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { useFetch, useAction, useTableData } from '@/lib/hooks';
+import { autoPostJournal } from '@/lib/autoPostJournal';
 
 export default function GRNPage() {
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -41,7 +42,7 @@ export default function GRNPage() {
     const saveMutation = useAction<any>({
         mutationFn: async (saveData: any) => {
             const { items, id, ...header } = saveData;
-            
+
             // Scalability & Integrity Fix: Move complex logic to the server
             const { error } = await supabase.rpc('post_grn', {
                 grn_payload: id ? { ...header, id } : header,
@@ -49,6 +50,42 @@ export default function GRNPage() {
             });
 
             if (error) throw error;
+
+            // Only recognize the payable in the GL once the underlying PO carries
+            // Manager/Finance approval — mirrors the AP Ledger's Billed criteria so
+            // the subledger and GL control account stay reconciled.
+            const approvedItems = (items || []).filter((i: any) => i.qa_status === 'Approved');
+            if (header.qa_status === 'Approved' && approvedItems.length > 0) {
+                const { data: poRes } = await supabase
+                    .from('purchase_orders')
+                    .select('approved_by, approval_level, suppliers:supplier_id(name)')
+                    .eq('id', header.po_id)
+                    .single();
+                const po: any = poRes;
+
+                if (po?.approved_by && ['Manager', 'Finance'].includes(po.approval_level)) {
+                    const poItemIds = approvedItems.map((i: any) => i.po_item_id).filter(Boolean);
+                    const { data: poItemRows } = poItemIds.length > 0
+                        ? await supabase.from('purchase_order_items').select('id, unit_price').in('id', poItemIds)
+                        : { data: [] as any[] };
+                    const priceById: Record<string, number> = {};
+                    for (const r of poItemRows || []) priceById[r.id] = Number(r.unit_price) || 0;
+
+                    const value = approvedItems.reduce((sum: number, i: any) =>
+                        sum + (priceById[i.po_item_id] || 0) * Number(i.quantity_received || 0), 0);
+
+                    if (value > 0) {
+                        await autoPostJournal({
+                            event: 'GRN_APPROVED',
+                            amount: value,
+                            date: header.received_date,
+                            description: `Goods received from ${po.suppliers?.name || 'Supplier'} — GRN ${header.grn_number}`,
+                            refNumber: header.grn_number,
+                            counterparty: po.suppliers?.name,
+                        });
+                    }
+                }
+            }
         },
         invalidateKeys: ['grn', 'purchase_orders', 'stock_levels', 'stock-levels-matrix', 'stock_movements'],
         successMessage: 'GRN saved successfully!',

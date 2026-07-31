@@ -5,6 +5,7 @@ import Modal from './Modal';
 import { Save, ShieldCheck, AlertCircle, Calendar, User, ClipboardList, Package } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
+import { autoPostJournal } from '@/lib/autoPostJournal';
 
 interface QARawMaterialModalProps {
     isOpen: boolean;
@@ -45,7 +46,8 @@ export default function QARawMaterialModal({ isOpen, onClose, onSave, grn, mode 
                     unit: item.unit || 'pcs',
                     qa_status: item.qa_status || 'Pending',
                     item_condition: item.item_condition || 'Good',
-                    condition_notes: item.condition_notes || ''
+                    condition_notes: item.condition_notes || '',
+                    unit_price: Number(item.purchase_order_items?.unit_price) || 0
                 })));
             }
         }
@@ -95,7 +97,30 @@ export default function QARawMaterialModal({ isOpen, onClose, onSave, grn, mode 
                 
                 if (itemError) throw itemError;
             }
-            
+
+            // Only recognize the payable in the GL once the underlying PO carries
+            // Manager/Finance approval — mirrors the AP Ledger's Billed criteria so
+            // the subledger and GL control account stay reconciled.
+            if (qaStatus === 'Approved') {
+                const po = grn.purchase_orders;
+                if (po?.approved_by && ['Manager', 'Finance'].includes(po.approval_level)) {
+                    const value = itemInspections
+                        .filter(item => item.qa_status === 'Approved')
+                        .reduce((sum, item) => sum + (Number(item.unit_price) || 0) * Number(item.received_qty || 0), 0);
+
+                    if (value > 0) {
+                        await autoPostJournal({
+                            event: 'GRN_APPROVED',
+                            amount: value,
+                            date: qaDate,
+                            description: `Goods received from ${po.suppliers?.name || 'Supplier'} — GRN ${grn.grn_number}`,
+                            refNumber: grn.grn_number,
+                            counterparty: po.suppliers?.name,
+                        });
+                    }
+                }
+            }
+
             toast.success('All inspection records saved successfully');
             onSave();
         } catch (error: any) {
