@@ -129,7 +129,7 @@ export default function MaterialRequestModal({ isOpen, onClose, onSuccess, produ
         try {
             const { data, error } = await supabase
                 .from('production_orders')
-                .select('id, order_number, status, quantity, product_id, product:products(name)')
+                .select('id, order_number, status, quantity, batches, product_id, product:products(name)')
                 .in('status', ['Draft', 'Released', 'In Progress'])
                 .order('created_at', { ascending: false });
             
@@ -200,11 +200,20 @@ export default function MaterialRequestModal({ isOpen, onClose, onSuccess, produ
                 }
             }
 
+            // Same "Total Needed" formula as the Job Order Details screen:
+            // quantity_required is per one batch, scaled by the order's whole
+            // batch count when it was created against a BOM with a stated
+            // batch yield, falling back to the total finished quantity for
+            // orders with no batch/yield info.
+            const materialMultiplier = (pOrder.batches !== null && pOrder.batches !== undefined)
+                ? pOrder.batches
+                : (pOrder.quantity || 1);
+
             const requestItems = finalItems.map((item: any) => ({
                 product_id: item.product_id,
                 product: item.product,
-                quantity_required: item.quantity_required * (pOrder.quantity || 1),
-                quantity_requested: item.quantity_required * (pOrder.quantity || 1),
+                quantity_required: item.quantity_required * materialMultiplier,
+                quantity_requested: item.quantity_required * materialMultiplier,
                 quantity_available: 0,
                 unit: item.product?.unit
             }));

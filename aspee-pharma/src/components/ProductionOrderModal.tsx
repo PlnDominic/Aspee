@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Modal from './Modal';
 import { 
     Factory, 
@@ -50,6 +50,7 @@ interface ProductionOrderModalProps {
 export default function ProductionOrderModal({ isOpen, onClose, onSave, initialData, mode = 'create', onRequestMaterials }: ProductionOrderModalProps) {
     const [loading, setLoading] = useState(false);
     const [fetching, setFetching] = useState(false);
+    const isSubmittingRef = useRef(false);
     
     const [products, setProducts] = useState<Product[]>([]);
     const [bomItems, setBomItems] = useState<BOMItem[]>([]);
@@ -198,17 +199,26 @@ export default function ProductionOrderModal({ isOpen, onClose, onSave, initialD
         }
     };
 
-    const generateOrderNumber = () => {
+    // Includes a random suffix on top of the millisecond timestamp so two
+    // orders created in the same millisecond (double-click, or two managers
+    // submitting near-simultaneously) don't collide on the order_number
+    // unique constraint.
+    const buildOrderNumber = () => {
         const date = new Date();
         const year = date.getFullYear().toString().slice(-2);
         const month = (date.getMonth() + 1).toString().padStart(2, '0');
-    const day = date.getDate().toString().padStart(2, '0');
-    const hours = date.getHours().toString().padStart(2, '0');
-    const minutes = date.getMinutes().toString().padStart(2, '0');
-    const seconds = date.getSeconds().toString().padStart(2, '0');
-    const ms = date.getMilliseconds().toString().padStart(3, '0');
-    setOrderNumber(`PRD-${year}${month}${day}-${hours}${minutes}${seconds}${ms}`);
-  };
+        const day = date.getDate().toString().padStart(2, '0');
+        const hours = date.getHours().toString().padStart(2, '0');
+        const minutes = date.getMinutes().toString().padStart(2, '0');
+        const seconds = date.getSeconds().toString().padStart(2, '0');
+        const ms = date.getMilliseconds().toString().padStart(3, '0');
+        const random = Math.random().toString(36).slice(2, 5).toUpperCase();
+        return `PRD-${year}${month}${day}-${hours}${minutes}${seconds}${ms}-${random}`;
+    };
+
+    const generateOrderNumber = () => {
+        setOrderNumber(buildOrderNumber());
+    };
 
     const resetForm = () => {
         setOrderNumber('');
@@ -281,7 +291,12 @@ export default function ProductionOrderModal({ isOpen, onClose, onSave, initialD
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        
+
+        // Guards against a double-click firing two submits before React
+        // re-renders the disabled button — both would otherwise reuse the
+        // same orderNumber state and collide on the unique constraint.
+        if (isSubmittingRef.current) return;
+
         if (!isAddingNewProduct && !productId) {
             toast.error('Please select a finished product to produce');
             return;
@@ -297,9 +312,16 @@ export default function ProductionOrderModal({ isOpen, onClose, onSave, initialD
             return;
         }
 
+        isSubmittingRef.current = true;
         setLoading(true);
         try {
             let finalProductId = productId;
+
+            // Regenerate at the moment of submission (rather than reusing the
+            // value generated when the modal opened) so a modal left open for
+            // a while, or two near-simultaneous submits, don't end up with a
+            // stale/shared order_number.
+            const finalOrderNumber = mode === 'create' ? buildOrderNumber() : orderNumber;
 
             // Handle New Product Creation
             if (isAddingNewProduct) {
@@ -325,7 +347,7 @@ export default function ProductionOrderModal({ isOpen, onClose, onSave, initialD
             const usingBatchYield = bomBatchYieldQuantity > 0;
             await onSave({
                 id: initialData?.id,
-                order_number: orderNumber,
+                order_number: finalOrderNumber,
                 product_id: finalProductId,
                 quantity: quantity,
                 batches: usingBatchYield ? numberOfBatches : null,
@@ -351,6 +373,7 @@ export default function ProductionOrderModal({ isOpen, onClose, onSave, initialD
             console.error('Error saving job order:', error);
         } finally {
             setLoading(false);
+            isSubmittingRef.current = false;
         }
     };
 
