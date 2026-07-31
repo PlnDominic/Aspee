@@ -137,20 +137,14 @@ export default function PurchaseOrdersPage() {
 
     const approveMutation = useAction<{ poId: string; approvalLevel: string; notes?: string }>({
         mutationFn: async ({ poId, approvalLevel, notes }) => {
-            // Get current user (simplified - in production would come from auth)
-            const { data: { user } } = await supabase.auth.getUser();
-            
-            const { error } = await supabase
-                .from('purchase_orders')
-                .update({
-                    status: 'Approved',
-                    approved_by: user?.id || null,
-                    approved_at: new Date().toISOString(),
-                    approval_level: approvalLevel,
-                    approval_notes: notes || null,
-                    updated_at: new Date().toISOString()
-                })
-                .eq('id', poId);
+            // Server-side gated via the approve_purchase_order RPC (app_private impl)
+            // instead of a plain table update, so the Finance-level and amount-
+            // threshold checks can't be bypassed by calling Supabase directly.
+            const { error } = await supabase.rpc('approve_purchase_order', {
+                po_uuid: poId,
+                p_approval_level: approvalLevel,
+                p_notes: notes || null,
+            });
 
             if (error) throw error;
 
