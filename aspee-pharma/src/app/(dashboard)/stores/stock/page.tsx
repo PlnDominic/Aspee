@@ -356,14 +356,15 @@ export default function StockLevelsPage() {
                     <span style={{ fontWeight: 700, color: 'var(--slate-900)', fontSize: 12 }}>
                         {(v as number).toLocaleString()} {row.unit}
                     </span>
-                    {row.bulk_unit && row.bulk_to_base_ratio && (
-                        <span style={{ fontSize: 10, color: 'var(--primary-600)', fontWeight: 600 }}>
-                            ≈ {((v as number) / row.bulk_to_base_ratio % 1 === 0
-                                ? ((v as number) / row.bulk_to_base_ratio).toLocaleString()
-                                : ((v as number) / row.bulk_to_base_ratio).toLocaleString(undefined, { maximumFractionDigits: 2 })
-                            )} {row.bulk_unit}
-                        </span>
-                    )}
+                    {row.bulk_unit && row.bulk_to_base_ratio && (() => {
+                        const whole = Math.floor((v as number) / row.bulk_to_base_ratio);
+                        const remainder = Math.round((v as number) - whole * row.bulk_to_base_ratio);
+                        return (
+                            <span style={{ fontSize: 10, color: 'var(--primary-600)', fontWeight: 600 }}>
+                                ≈ {whole.toLocaleString()} {row.bulk_unit}{remainder > 0 ? `, ${remainder.toLocaleString()} ${row.unit}` : ''}
+                            </span>
+                        );
+                    })()}
                 </div>
             )
         },
