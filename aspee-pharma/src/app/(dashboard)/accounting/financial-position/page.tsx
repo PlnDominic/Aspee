@@ -122,10 +122,13 @@ export default function FinancialPositionPage() {
     const fetchAPBySupplier = async () => {
         // Mirrors the Accounts Payable Ledger's basis exactly: a payable is only
         // recognized once goods are received, QA-approved, and the underlying PO
-        // carries a Manager/Finance approval — not off the full PO total. Using
-        // the PO total here previously made this drill-down double-count
-        // undelivered goods and drift from both the AP Ledger subledger total
-        // and the GL-driven "Trade Creditors & Accruals" figure above it.
+        // has actually been approved (checked via status, not approval_level/
+        // approved_by — GRNModal allows receiving against a Pending PO, and those
+        // governance fields aren't guaranteed to be populated on every approved
+        // PO). Using the PO total here previously made this drill-down
+        // double-count undelivered goods and drift from both the AP Ledger
+        // subledger total and the GL-driven "Trade Creditors & Accruals" figure
+        // above it.
         try {
             const { data: grnItems, error } = await supabase
                 .from('grn_items')
@@ -133,7 +136,7 @@ export default function FinancialPositionPage() {
                     quantity_received, qa_status,
                     purchase_order_items:po_item_id ( unit_price ),
                     grn:grn_id ( received_date, qa_status,
-                        purchase_orders:po_id ( supplier_id, approved_by, approval_level ) )
+                        purchase_orders:po_id ( supplier_id, status ) )
                 `)
                 .eq('qa_status', 'Approved')
                 .lte('grn.received_date', endDate);
@@ -157,7 +160,7 @@ export default function FinancialPositionPage() {
                 const po = gi.grn?.purchase_orders;
                 const supplierId = po?.supplier_id;
                 if (!supplierId) continue;
-                if (!po.approved_by || !['Manager', 'Finance'].includes(po.approval_level)) continue;
+                if (['Pending', 'Draft', 'Cancelled', 'Rejected'].includes(po.status)) continue;
                 const unitPrice = Number(gi.purchase_order_items?.unit_price) || 0;
                 const value = unitPrice * Number(gi.quantity_received || 0);
                 if (value <= 0) continue;
