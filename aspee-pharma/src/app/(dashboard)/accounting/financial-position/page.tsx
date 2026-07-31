@@ -120,31 +120,65 @@ export default function FinancialPositionPage() {
     };
 
     const fetchAPBySupplier = async () => {
+        // Mirrors the Accounts Payable Ledger's basis exactly: a payable is only
+        // recognized once goods are received & QA-approved (matching the GRN
+        // QA Approved -> DR Inventory / CR Accounts Payable GL posting in
+        // autoPostJournal.ts), not off the full PO total. Using the PO total
+        // here previously made this drill-down double-count undelivered goods
+        // and drift from both the AP Ledger subledger total and the GL-driven
+        // "Trade Creditors & Accruals" figure above it.
         try {
-            const { data: orders, error } = await supabase
-                .from('purchase_orders')
-                .select('id, supplier_name, total_amount, status')
-                .lte('created_at', endDate + 'T23:59:59');
+            const { data: grnItems, error } = await supabase
+                .from('grn_items')
+                .select(`
+                    quantity_received, qa_status,
+                    purchase_order_items:po_item_id ( unit_price ),
+                    grn:grn_id ( received_date, qa_status,
+                        purchase_orders:po_id ( supplier_id ) )
+                `)
+                .eq('qa_status', 'Approved')
+                .lte('grn.received_date', endDate);
             if (error) throw error;
 
-            const ids = (orders || []).map((o: any) => o.id);
+            const supplierIds = Array.from(new Set(
+                (grnItems || [])
+                    .map((gi: any) => gi.grn?.purchase_orders?.supplier_id)
+                    .filter(Boolean)
+            ));
+
+            const { data: suppliers } = await supabase
+                .from('suppliers')
+                .select('id, name')
+                .in('id', supplierIds.length > 0 ? supplierIds : ['00000000-0000-0000-0000-000000000000']);
+            const nameById: Record<string, string> = {};
+            for (const s of suppliers || []) nameById[s.id] = s.name;
+
+            const billedMap: Record<string, number> = {};
+            for (const gi of grnItems || []) {
+                const supplierId = gi.grn?.purchase_orders?.supplier_id;
+                if (!supplierId) continue;
+                const unitPrice = Number(gi.purchase_order_items?.unit_price) || 0;
+                const value = unitPrice * Number(gi.quantity_received || 0);
+                if (value <= 0) continue;
+                billedMap[supplierId] = (billedMap[supplierId] || 0) + value;
+            }
+
+            const { data: payments } = await supabase
+                .from('supplier_payments')
+                .select('supplier_id, amount, payment_date, status')
+                .in('status', ['Approved', 'Completed'])
+                .lte('payment_date', endDate);
             const paidMap: Record<string, number> = {};
-            if (ids.length > 0) {
-                const { data: payments } = await supabase
-                    .from('supplier_payments')
-                    .select('po_id, amount')
-                    .in('po_id', ids);
-                for (const p of payments || []) {
-                    paidMap[p.po_id] = (paidMap[p.po_id] || 0) + Number(p.amount || 0);
-                }
+            for (const p of payments || []) {
+                if (!p.supplier_id) continue;
+                paidMap[p.supplier_id] = (paidMap[p.supplier_id] || 0) + Number(p.amount || 0);
             }
 
             const balanceMap: Record<string, number> = {};
-            for (const order of orders || []) {
-                if (['Draft', 'Cancelled', 'Rejected'].includes(order.status)) continue;
-                const outstanding = Number(order.total_amount) - (paidMap[order.id] || 0);
+            for (const supplierId of Object.keys(billedMap)) {
+                const outstanding = billedMap[supplierId] - (paidMap[supplierId] || 0);
                 if (outstanding > 0.01) {
-                    balanceMap[order.supplier_name] = (balanceMap[order.supplier_name] || 0) + outstanding;
+                    balanceMap[nameById[supplierId] || 'Unknown Supplier'] = outstanding;
                 }
             }
 
