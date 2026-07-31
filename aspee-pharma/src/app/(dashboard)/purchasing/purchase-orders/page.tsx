@@ -13,6 +13,7 @@ import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { formatCurrency } from '@/lib/formatCurrency';
 import { logAudit } from '@/lib/auditLog';
+import { autoPostJournal } from '@/lib/autoPostJournal';
 import { useSupabaseQuery, useAction } from '@/lib/hooks';
 import SendToMDModal from '@/components/SendToMDModal';
 import { Send } from 'lucide-react';
@@ -155,6 +156,27 @@ export default function PurchaseOrdersPage() {
                 record_id: poId,
                 record_type: 'purchase_orders',
             });
+
+            // Recognize the payable in the GL as soon as the PO is approved —
+            // GRNs aren't consistently recorded in this business, so waiting for
+            // a goods receipt left approved POs invisible to the GL. The
+            // GRN-approval posting checks for this entry first and skips itself
+            // if it's already here, so the liability is never double-counted.
+            const { data: po } = await supabase
+                .from('purchase_orders')
+                .select('po_number, total_amount, suppliers:supplier_id(name)')
+                .eq('id', poId)
+                .single();
+            if (po) {
+                await autoPostJournal({
+                    event: 'PO_APPROVED',
+                    amount: Number(po.total_amount) || 0,
+                    date: new Date().toISOString().split('T')[0],
+                    description: `Purchase Order ${po.po_number} approved (${approvalLevel} level)`,
+                    refNumber: po.po_number,
+                    counterparty: (po.suppliers as any)?.name,
+                });
+            }
         },
         invalidateKeys: ['purchase_orders'],
         successMessage: 'Purchase Order approved successfully!',

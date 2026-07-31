@@ -10,7 +10,7 @@ import { Plus, Eye, Edit2, Trash2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { useFetch, useAction, useTableData } from '@/lib/hooks';
-import { autoPostJournal } from '@/lib/autoPostJournal';
+import { autoPostJournal, hasAutoPostedNote } from '@/lib/autoPostJournal';
 
 export default function GRNPage() {
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -51,23 +51,23 @@ export default function GRNPage() {
 
             if (error) throw error;
 
-            // Only recognize the payable in the GL once the underlying PO has
-            // actually been approved (GRNModal allows receiving against a
-            // Pending PO) — mirrors the AP Ledger's Billed criteria, which
-            // checks status rather than approval_level/approved_by since those
-            // governance fields aren't guaranteed to be populated on every
-            // approved PO, so the subledger and GL control account stay
-            // reconciled.
+            // Backstop only: the payable is normally recognized in the GL at PO
+            // approval time (see purchase-orders/page.tsx), covering every PO
+            // whether or not a GRN is ever created. This still fires for POs
+            // approved through some other/legacy path, but skips itself if that
+            // PO's payable was already recognized at approval — otherwise it
+            // would double-count the same liability in the GL.
             const approvedItems = (items || []).filter((i: any) => i.qa_status === 'Approved');
             if (header.qa_status === 'Approved' && approvedItems.length > 0) {
                 const { data: poRes } = await supabase
                     .from('purchase_orders')
-                    .select('status, suppliers:supplier_id(name)')
+                    .select('po_number, status, suppliers:supplier_id(name)')
                     .eq('id', header.po_id)
                     .single();
                 const po: any = poRes;
 
-                if (po && !['Pending', 'Draft', 'Cancelled', 'Rejected'].includes(po.status)) {
+                if (po && !['Pending', 'Draft', 'Cancelled', 'Rejected'].includes(po.status)
+                    && !(await hasAutoPostedNote(`Auto-posted from PO ${po.po_number}`))) {
                     const poItemIds = approvedItems.map((i: any) => i.po_item_id).filter(Boolean);
                     const { data: poItemRows } = poItemIds.length > 0
                         ? await supabase.from('purchase_order_items').select('id, unit_price').in('id', poItemIds)

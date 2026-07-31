@@ -8,7 +8,9 @@
  *   Invoice Issued    → DR Accounts Receivable   / CR Sales Revenue
  *   Receipt Received  → DR Cash at Bank           / CR Accounts Receivable
  *   Supplier Paid     → DR Accounts Payable       / CR Cash at Bank
+ *   PO Approved       → DR Inventory              / CR Accounts Payable
  *   GRN QA Approved   → DR Inventory              / CR Accounts Payable
+ *                        (skipped if the PO was already recognized at approval)
  *   Credit Note       → DR Sales Revenue           / CR Accounts Receivable
  *   Expense Approved  → DR [Expense COA Account]  / CR Cash at Bank / Petty Cash
  */
@@ -19,6 +21,7 @@ export type AutoJournalEvent =
     | 'INVOICE_ISSUED'
     | 'RECEIPT_RECEIVED'
     | 'SUPPLIER_PAYMENT'
+    | 'PO_APPROVED'
     | 'GRN_APPROVED'
     | 'CREDIT_NOTE_ISSUED'
     | 'EXPENSE_APPROVED';
@@ -179,6 +182,20 @@ function buildEntry(payload: AutoJournalPayload): {
                 notes: `Auto-posted from Supplier Payment ${refNumber}`,
             };
 
+        case 'PO_APPROVED':
+            return {
+                entry_number: generateEntryNumber('PO'),
+                date,
+                description,
+                ref_type: 'Purchase',
+                debit_account: 'Inventory - Raw Materials',
+                debit_amount: amt,
+                credit_account: 'Accounts Payable',
+                credit_amount: amt,
+                created_by: 'System',
+                notes: `Auto-posted from PO ${refNumber}`,
+            };
+
         case 'GRN_APPROVED':
             return {
                 entry_number: generateEntryNumber('GRN'),
@@ -226,6 +243,19 @@ function buildEntry(payload: AutoJournalPayload): {
 }
 
 // ── Public API ─────────────────────────────────────────────────────────────────
+
+/**
+ * Checks whether a journal entry with the given exact `notes` signature has
+ * already been posted. Used to pre-empt a secondary recognition trigger —
+ * e.g. skipping GRN-approval posting when the same PO's payable was already
+ * recognized at PO-approval time (`Auto-posted from PO ${po_number}`) —
+ * since that pair uses different refNumbers (PO number vs. GRN number) and
+ * so isn't caught by autoPostJournal's own same-event duplicate guard.
+ */
+export async function hasAutoPostedNote(notes: string): Promise<boolean> {
+    const { data } = await supabase.from('journal_entries').select('id').eq('notes', notes).limit(1);
+    return !!(data && data.length > 0);
+}
 
 /**
  * Posts an auto-generated balanced journal entry.

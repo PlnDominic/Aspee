@@ -120,31 +120,21 @@ export default function FinancialPositionPage() {
     };
 
     const fetchAPBySupplier = async () => {
-        // Mirrors the Accounts Payable Ledger's basis exactly: a payable is only
-        // recognized once goods are received, QA-approved, and the underlying PO
-        // has actually been approved (checked via status, not approval_level/
-        // approved_by — GRNModal allows receiving against a Pending PO, and those
-        // governance fields aren't guaranteed to be populated on every approved
-        // PO). Using the PO total here previously made this drill-down
-        // double-count undelivered goods and drift from both the AP Ledger
-        // subledger total and the GL-driven "Trade Creditors & Accruals" figure
-        // above it.
+        // Mirrors the Accounts Payable Ledger's basis exactly: a payable is
+        // recognized directly off Purchase Order approval/receipt status
+        // (Approved/Shipped/Received), valued at the PO total — not off GRN
+        // receipts, since GRNs aren't consistently recorded in this business.
+        // Excludes Pending/Draft/Cancelled/Rejected, which aren't a commitment yet.
         try {
-            const { data: grnItems, error } = await supabase
-                .from('grn_items')
-                .select(`
-                    quantity_received, qa_status,
-                    purchase_order_items:po_item_id ( unit_price ),
-                    grn:grn_id ( received_date, qa_status,
-                        purchase_orders:po_id ( supplier_id, status ) )
-                `)
-                .eq('qa_status', 'Approved')
-                .lte('grn.received_date', endDate);
+            const { data: orders, error } = await supabase
+                .from('purchase_orders')
+                .select('id, supplier_id, total_amount, status')
+                .lte('created_at', endDate + 'T23:59:59');
             if (error) throw error;
 
             const supplierIds = Array.from(new Set(
-                (grnItems || [])
-                    .map((gi: any) => gi.grn?.purchase_orders?.supplier_id)
+                (orders || [])
+                    .map((po: any) => po.supplier_id)
                     .filter(Boolean)
             ));
 
@@ -156,13 +146,11 @@ export default function FinancialPositionPage() {
             for (const s of suppliers || []) nameById[s.id] = s.name;
 
             const billedMap: Record<string, number> = {};
-            for (const gi of (grnItems || []) as any[]) {
-                const po = gi.grn?.purchase_orders;
-                const supplierId = po?.supplier_id;
+            for (const po of (orders || []) as any[]) {
+                const supplierId = po.supplier_id;
                 if (!supplierId) continue;
                 if (['Pending', 'Draft', 'Cancelled', 'Rejected'].includes(po.status)) continue;
-                const unitPrice = Number(gi.purchase_order_items?.unit_price) || 0;
-                const value = unitPrice * Number(gi.quantity_received || 0);
+                const value = Number(po.total_amount) || 0;
                 if (value <= 0) continue;
                 billedMap[supplierId] = (billedMap[supplierId] || 0) + value;
             }

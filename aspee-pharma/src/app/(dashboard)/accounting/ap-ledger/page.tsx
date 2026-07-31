@@ -57,23 +57,17 @@ function AccountsPayableLedgerContent() {
 
     const { data, isLoading: loading } = useFetch<{
         suppliers: any[];
-        grnItems: any[];
+        purchaseOrders: any[];
         payments: any[];
         glEntries: any[];
     }>(
         ['ap_ledger'],
         async () => {
-            const [suppliersRes, grnItemsRes, paymentsRes, glRes] = await Promise.all([
+            const [suppliersRes, poRes, paymentsRes, glRes] = await Promise.all([
                 supabase.from('suppliers').select('id, name, category, status').order('name'),
                 supabase
-                    .from('grn_items')
-                    .select(`
-                        quantity_received, qa_status,
-                        purchase_order_items:po_item_id ( unit_price ),
-                        grn:grn_id ( grn_number, received_date, qa_status,
-                            purchase_orders:po_id ( po_number, supplier_id, currency, status ) )
-                    `)
-                    .eq('qa_status', 'Approved'),
+                    .from('purchase_orders')
+                    .select('id, po_number, supplier_id, total_amount, currency, status, approved_at, created_at'),
                 supabase
                     .from('supplier_payments')
                     .select('id, supplier_id, payment_number, payment_date, amount, status, po_id, purchase_orders:po_id(po_number, currency)')
@@ -85,14 +79,14 @@ function AccountsPayableLedgerContent() {
             ]);
 
             if (suppliersRes.error) return { data: null, error: suppliersRes.error };
-            if (grnItemsRes.error) return { data: null, error: grnItemsRes.error };
+            if (poRes.error) return { data: null, error: poRes.error };
             if (paymentsRes.error) return { data: null, error: paymentsRes.error };
             if (glRes.error) return { data: null, error: glRes.error };
 
             return {
                 data: {
                     suppliers: suppliersRes.data || [],
-                    grnItems: grnItemsRes.data || [],
+                    purchaseOrders: poRes.data || [],
                     payments: paymentsRes.data || [],
                     glEntries: glRes.data || [],
                 },
@@ -102,17 +96,15 @@ function AccountsPayableLedgerContent() {
     );
 
     // ── Build independent subsidiary ledger, one per supplier ──────────────────
-    // Bills are recognized off GRN receipts (goods actually received & QA-approved),
-    // valued at the linked PO item's unit price — not from GL narration text —
-    // so this ledger can be reconciled against, rather than derived from, the GL.
-    // GRNModal allows receiving against a Pending (not yet approved) PO, so a
-    // receipt only counts as Billed once the underlying PO has actually been
-    // approved — checked via status rather than approval_level/approved_by,
-    // since those governance fields aren't guaranteed to be populated on every
-    // approved PO (e.g. ones approved before that feature existed).
+    // Bills are recognized directly off Purchase Order approval/receipt status
+    // (Approved/Shipped/Received), valued at the PO total — not off GRN receipts —
+    // since GRNs aren't consistently recorded in this business and a supplier
+    // shouldn't disappear from Billed just because no goods-receipt document was
+    // created. Excludes Pending/Draft/Cancelled/Rejected, which aren't a
+    // commitment yet.
     const ledgers = useMemo((): SupplierLedger[] => {
         if (!data) return [];
-        const { suppliers, grnItems, payments } = data;
+        const { suppliers, purchaseOrders, payments } = data;
 
         const bySupplier = new Map<string, SupplierLedger>();
         for (const s of suppliers) {
@@ -128,24 +120,21 @@ function AccountsPayableLedgerContent() {
             });
         }
 
-        for (const gi of grnItems) {
-            const grn = gi.grn;
-            const po = grn?.purchase_orders;
-            const supplierId = po?.supplier_id;
+        for (const po of purchaseOrders) {
+            const supplierId = po.supplier_id;
             if (!supplierId || !bySupplier.has(supplierId)) continue;
             if (['Pending', 'Draft', 'Cancelled', 'Rejected'].includes(po.status)) continue;
 
-            const unitPrice = Number(gi.purchase_order_items?.unit_price) || 0;
-            const value = unitPrice * Number(gi.quantity_received || 0);
+            const value = Number(po.total_amount) || 0;
             if (value <= 0) continue;
 
             const ledger = bySupplier.get(supplierId)!;
             ledger.totalBilled += value;
             ledger.lines.push({
-                date: grn.received_date,
+                date: po.approved_at || po.created_at,
                 type: 'Bill',
-                ref: grn.grn_number,
-                description: `Goods received against PO ${po.po_number || '—'}`,
+                ref: po.po_number,
+                description: `Purchase Order ${po.po_number || '—'} (${po.status})`,
                 debit: 0,
                 credit: value,
                 runningBalance: 0,

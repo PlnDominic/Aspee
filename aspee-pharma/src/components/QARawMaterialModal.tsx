@@ -5,7 +5,7 @@ import Modal from './Modal';
 import { Save, ShieldCheck, AlertCircle, Calendar, User, ClipboardList, Package } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
-import { autoPostJournal } from '@/lib/autoPostJournal';
+import { autoPostJournal, hasAutoPostedNote } from '@/lib/autoPostJournal';
 
 interface QARawMaterialModalProps {
     isOpen: boolean;
@@ -98,16 +98,16 @@ export default function QARawMaterialModal({ isOpen, onClose, onSave, grn, mode 
                 if (itemError) throw itemError;
             }
 
-            // Only recognize the payable in the GL once the underlying PO has
-            // actually been approved (GRNModal allows receiving against a
-            // Pending PO) — mirrors the AP Ledger's Billed criteria, which
-            // checks status rather than approval_level/approved_by since those
-            // governance fields aren't guaranteed to be populated on every
-            // approved PO, so the subledger and GL control account stay
-            // reconciled.
+            // Backstop only: the payable is normally recognized in the GL at PO
+            // approval time (see purchase-orders/page.tsx), covering every PO
+            // whether or not a GRN is ever created. This still fires for POs
+            // approved through some other/legacy path, but skips itself if that
+            // PO's payable was already recognized at approval — otherwise it
+            // would double-count the same liability in the GL.
             if (qaStatus === 'Approved') {
                 const po = grn.purchase_orders;
-                if (po && !['Pending', 'Draft', 'Cancelled', 'Rejected'].includes(po.status)) {
+                if (po && !['Pending', 'Draft', 'Cancelled', 'Rejected'].includes(po.status)
+                    && !(await hasAutoPostedNote(`Auto-posted from PO ${po.po_number}`))) {
                     const value = itemInspections
                         .filter(item => item.qa_status === 'Approved')
                         .reduce((sum, item) => sum + (Number(item.unit_price) || 0) * Number(item.received_qty || 0), 0);
