@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Modal from './Modal';
-import { Building2, User, Phone, Mail, MapPin, Tag, CreditCard, Activity } from 'lucide-react';
+import { Building2, User, Phone, Mail, MapPin, Tag, CreditCard, Activity, Wallet } from 'lucide-react';
 
 interface Supplier {
     id?: string;
@@ -14,6 +14,7 @@ interface Supplier {
     category: 'Local' | 'Imported' | 'Other';
     payment_terms: string;
     status: 'Active' | 'Inactive';
+    opening_balance: number;
 }
 
 interface SupplierModalProps {
@@ -32,6 +33,7 @@ const initialSupplier: Supplier = {
     category: 'Local',
     payment_terms: 'Net 30',
     status: 'Active',
+    opening_balance: 0,
 };
 
 export default function SupplierModal({ isOpen, onClose, onSave, supplier }: SupplierModalProps) {
@@ -187,17 +189,34 @@ export default function SupplierModal({ isOpen, onClose, onSave, supplier }: Sup
                         <span>Address & Payment</span>
                     </div>
 
-                    <div className="supplier-form-field full-width">
-                        <label className="supplier-form-label">Payment Terms</label>
-                        <div className="supplier-form-input-wrapper">
-                            <CreditCard size={16} className="supplier-form-input-icon" />
-                            <input
-                                type="text"
-                                value={formData.payment_terms}
-                                onChange={(e) => setFormData({ ...formData, payment_terms: e.target.value })}
-                                placeholder="e.g. Net 30, Net 60, COD"
-                                className="supplier-form-input has-icon"
-                            />
+                    <div className="supplier-form-row">
+                        <div className="supplier-form-field">
+                            <label className="supplier-form-label">Payment Terms</label>
+                            <div className="supplier-form-input-wrapper">
+                                <CreditCard size={16} className="supplier-form-input-icon" />
+                                <input
+                                    type="text"
+                                    value={formData.payment_terms}
+                                    onChange={(e) => setFormData({ ...formData, payment_terms: e.target.value })}
+                                    placeholder="e.g. Net 30, Net 60, COD"
+                                    className="supplier-form-input has-icon"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="supplier-form-field">
+                            <label className="supplier-form-label">Opening Balance (GH₵)</label>
+                            <div className="supplier-form-input-wrapper">
+                                <Wallet size={16} className="supplier-form-input-icon" />
+                                <input
+                                    type="number"
+                                    step="0.01"
+                                    value={formData.opening_balance}
+                                    onChange={(e) => setFormData({ ...formData, opening_balance: parseFloat(e.target.value) || 0 })}
+                                    placeholder="0.00"
+                                    className="supplier-form-input has-icon"
+                                />
+                            </div>
                         </div>
                     </div>
 

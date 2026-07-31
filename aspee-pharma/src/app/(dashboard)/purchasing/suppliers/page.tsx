@@ -5,12 +5,14 @@ import PageHeader from '@/components/PageHeader';
 import DataTable from '@/components/DataTable';
 import StatusBadge from '@/components/StatusBadge';
 import SupplierModal from '@/components/SupplierModal';
+import SupplierProfileModal from '@/components/SupplierProfileModal';
 import EntityLink from '@/components/EntityLink';
-import { Plus, Download, Edit2, Trash2, Mail, Phone, BookOpen } from 'lucide-react';
+import { Plus, Download, Edit2, Trash2, Mail, Phone, BookOpen, Eye } from 'lucide-react';
 import { useSupabaseQuery, useSave, useDelete } from '@/lib/hooks';
 
 export default function SuppliersPage() {
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [isProfileOpen, setIsProfileOpen] = useState(false);
     const [selectedSupplier, setSelectedSupplier] = useState<any | null>(null);
 
     const { data, isLoading: loading } = useSupabaseQuery<any>('suppliers', {
@@ -117,6 +119,16 @@ export default function SuppliersPage() {
             label: 'Actions',
             render: (_: any, row: any) => (
                 <div style={{ display: 'flex', gap: 8 }}>
+                    <button
+                        onClick={() => {
+                            setSelectedSupplier(row);
+                            setIsProfileOpen(true);
+                        }}
+                        title="View Supplier Profile"
+                        style={actionButtonStyle}
+                    >
+                        <Eye size={14} />
+                    </button>
                     <EntityLink href={`/accounting/ap-ledger?search=${encodeURIComponent(row.name)}`} title="View A/P Ledger">
                         <span style={{ ...actionButtonStyle, display: 'inline-flex' }}>
                             <BookOpen size={14} />
@@ -127,6 +139,7 @@ export default function SuppliersPage() {
                             setSelectedSupplier(row);
                             setIsModalOpen(true);
                         }}
+                        title="Edit Supplier"
                         style={actionButtonStyle}
                     >
                         <Edit2 size={14} />
@@ -195,6 +208,12 @@ export default function SuppliersPage() {
                 isOpen={isModalOpen}
                 onClose={() => setIsModalOpen(false)}
                 onSave={handleSave}
+                supplier={selectedSupplier}
+            />
+
+            <SupplierProfileModal
+                isOpen={isProfileOpen}
+                onClose={() => setIsProfileOpen(false)}
                 supplier={selectedSupplier}
             />
         </div>
