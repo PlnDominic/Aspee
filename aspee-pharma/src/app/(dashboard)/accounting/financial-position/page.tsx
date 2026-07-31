@@ -328,7 +328,7 @@ export default function FinancialPositionPage() {
                 shareDeposit: { ledger: ledgerShareDeposit, debitAcc: 'Cash from Sales', creditAcc: 'Shares Deposit' },
                 incomeSurplus: { ledger: ledgerIncomeSurplus, debitAcc: 'Cash from Sales', creditAcc: 'Appropriated Retained Earnings (Income Surplus)' },
                 directors: { ledger: ledgerDirectors, debitAcc: 'Director Current Account', creditAcc: 'Cash for Expenses' },
-                tradeCreditors: { ledger: ledgerTradeCreditors, debitAcc: 'Cash for Expenses', creditAcc: 'Accounts payable' },
+                tradeCreditors: { ledger: ledgerTradeCreditors, debitAcc: 'Cash for Expenses', creditAcc: 'Accounts Payable' },
                 taxation: { ledger: ledgerTaxation, debitAcc: 'Cash for Expenses', creditAcc: 'PAYE Payable' },
                 overdraft: { ledger: ledgerOverdraft, debitAcc: 'Cash for Expenses', creditAcc: 'Bank Overdraft' },
             };
