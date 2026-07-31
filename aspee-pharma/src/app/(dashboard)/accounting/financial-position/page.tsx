@@ -154,7 +154,7 @@ export default function FinancialPositionPage() {
             for (const s of suppliers || []) nameById[s.id] = s.name;
 
             const billedMap: Record<string, number> = {};
-            for (const gi of grnItems || []) {
+            for (const gi of (grnItems || []) as any[]) {
                 const supplierId = gi.grn?.purchase_orders?.supplier_id;
                 if (!supplierId) continue;
                 const unitPrice = Number(gi.purchase_order_items?.unit_price) || 0;
