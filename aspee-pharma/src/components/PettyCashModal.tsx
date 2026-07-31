@@ -14,14 +14,17 @@ import {
     ArrowUpCircle,
     CheckSquare,
     StickyNote,
+    Landmark,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { CURRENCY_SYMBOL } from '@/lib/currency';
+import { autoPostJournal } from '@/lib/autoPostJournal';
 
 const CATEGORIES = ['Transport', 'Office Supplies', 'Cleaning', 'Refreshments', 'Postage', 'Miscellaneous'];
 const STATUSES = ['Pending', 'Approved', 'Rejected'];
 const TYPES = ['Disbursement', 'Replenishment'];
+const FUNDING_SOURCES = ['Bank Transfer', 'Cash'];
 
 interface PettyCashModalProps {
     isOpen: boolean;
@@ -44,6 +47,7 @@ export default function PettyCashModal({ isOpen, onClose, onSuccess, record }: P
     const [receiptAttached, setReceiptAttached] = useState(false);
     const [status, setStatus] = useState('Pending');
     const [notes, setNotes] = useState('');
+    const [fundingSource, setFundingSource] = useState('');
 
     const isEdit = !!record;
 
@@ -61,6 +65,7 @@ export default function PettyCashModal({ isOpen, onClose, onSuccess, record }: P
                 setReceiptAttached(record.receipt_attached || false);
                 setStatus(record.status || 'Pending');
                 setNotes(record.notes || '');
+                setFundingSource(record.funding_source || '');
             } else {
                 resetForm();
                 generateVoucherNumber();
@@ -79,6 +84,7 @@ export default function PettyCashModal({ isOpen, onClose, onSuccess, record }: P
         setReceiptAttached(false);
         setStatus('Pending');
         setNotes('');
+        setFundingSource('');
     };
 
     const generateVoucherNumber = () => {
@@ -139,6 +145,10 @@ export default function PettyCashModal({ isOpen, onClose, onSuccess, record }: P
             toast.error('Please enter a custodian');
             return;
         }
+        if (type === 'Replenishment' && !fundingSource) {
+            toast.error('Please select how the float was funded');
+            return;
+        }
 
         setLoading(true);
         try {
@@ -157,7 +167,16 @@ export default function PettyCashModal({ isOpen, onClose, onSuccess, record }: P
                 balance_after: balanceAfter,
                 status,
                 notes: notes.trim() || null,
+                funding_source: type === 'Replenishment' ? fundingSource : null,
             };
+
+            // A bank-transfer replenishment moves real cash from the bank into
+            // the float — post that movement to the GL once the voucher is
+            // Approved (on creation, or when an edit transitions it into
+            // Approved), same as EXPENSE_APPROVED does for expenses.
+            const shouldPostReplenishment =
+                type === 'Replenishment' && fundingSource === 'Bank Transfer' && status === 'Approved'
+                && (!isEdit || record.status !== 'Approved');
 
             if (isEdit) {
                 const { error } = await supabase
@@ -174,6 +193,17 @@ export default function PettyCashModal({ isOpen, onClose, onSuccess, record }: P
 
                 if (error) throw error;
                 toast.success('Voucher created successfully');
+            }
+
+            if (shouldPostReplenishment) {
+                await autoPostJournal({
+                    event: 'PETTY_CASH_REPLENISHMENT',
+                    amount,
+                    date,
+                    description: `Petty cash replenished via bank transfer — ${description.trim()}`,
+                    refNumber: voucherNumber,
+                    counterparty: custodian.trim(),
+                });
             }
 
             onSuccess();
@@ -237,6 +267,29 @@ export default function PettyCashModal({ isOpen, onClose, onSuccess, record }: P
                             </select>
                         </div>
                     </div>
+
+                    {/* Funding Source — only meaningful for Replenishment */}
+                    {type === 'Replenishment' && (
+                        <div className="pcm-field">
+                            <label>Funding Source *</label>
+                            <div className="pcm-input-wrap">
+                                <Landmark size={15} className="pcm-icon" />
+                                <select
+                                    value={fundingSource}
+                                    onChange={(e) => setFundingSource(e.target.value)}
+                                    required
+                                >
+                                    <option value="">Select source...</option>
+                                    {FUNDING_SOURCES.map(s => (
+                                        <option key={s} value={s}>{s}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            {fundingSource === 'Bank Transfer' && (
+                                <p className="pcm-hint">Posts to the GL once Approved: DR Petty Cash / CR Cash at Bank.</p>
+                            )}
+                        </div>
+                    )}
 
                     {/* Amount */}
                     <div className="pcm-field">
@@ -385,6 +438,11 @@ export default function PettyCashModal({ isOpen, onClose, onSuccess, record }: P
                     font-weight: 600;
                     color: var(--slate-600);
                     margin-bottom: 6px;
+                }
+                .pcm-hint {
+                    margin: 6px 0 0;
+                    font-size: 10px;
+                    color: var(--primary-600);
                 }
                 .pcm-input-wrap { position: relative; }
                 .pcm-input-wrap .pcm-icon {

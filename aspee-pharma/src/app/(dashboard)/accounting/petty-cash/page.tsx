@@ -109,6 +109,24 @@ export default function PettyCashPage() {
             ),
         },
         { key: 'category', label: 'Category' },
+        {
+            key: 'funding_source',
+            label: 'Source',
+            render: (v: unknown, row: any) => {
+                if (row.type !== 'Replenishment') return <span style={{ color: 'var(--slate-300)' }}>—</span>;
+                const isBank = v === 'Bank Transfer';
+                return (
+                    <span style={{
+                        display: 'inline-block', padding: '3px 10px', borderRadius: 20, fontSize: 10, fontWeight: 600,
+                        background: isBank ? 'rgba(37, 99, 235, 0.08)' : 'rgba(100, 116, 139, 0.08)',
+                        color: isBank ? '#2563eb' : '#64748b',
+                        border: `1px solid ${isBank ? 'rgba(37, 99, 235, 0.15)' : 'rgba(100, 116, 139, 0.15)'}`,
+                    }}>
+                        {(v as string) || 'Cash'}
+                    </span>
+                );
+            },
+        },
         { key: 'custodian', label: 'Custodian' },
         { key: 'approved_by', label: 'Approved By' },
         {

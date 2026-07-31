@@ -13,6 +13,7 @@
  *                        (skipped if the PO was already recognized at approval)
  *   Credit Note       → DR Sales Revenue           / CR Accounts Receivable
  *   Expense Approved  → DR [Expense COA Account]  / CR Cash at Bank / Petty Cash
+ *   Petty Cash Replenished (via Bank Transfer) → DR Petty Cash / CR Cash at Bank
  */
 
 import { supabase } from '@/lib/supabase';
@@ -24,7 +25,8 @@ export type AutoJournalEvent =
     | 'PO_APPROVED'
     | 'GRN_APPROVED'
     | 'CREDIT_NOTE_ISSUED'
-    | 'EXPENSE_APPROVED';
+    | 'EXPENSE_APPROVED'
+    | 'PETTY_CASH_REPLENISHMENT';
 
 export interface AutoJournalPayload {
     event: AutoJournalEvent;
@@ -239,6 +241,20 @@ function buildEntry(payload: AutoJournalPayload): {
                 notes: `Auto-posted from Expense ${refNumber} (${expenseCategory})`,
             };
         }
+
+        case 'PETTY_CASH_REPLENISHMENT':
+            return {
+                entry_number: generateEntryNumber('PCR'),
+                date,
+                description,
+                ref_type: 'Petty Cash',
+                debit_account: 'Petty Cash',
+                debit_amount: amt,
+                credit_account: 'Cash at Bank',
+                credit_amount: amt,
+                created_by: 'System',
+                notes: `Auto-posted from Petty Cash Voucher ${refNumber}`,
+            };
     }
 }
 
