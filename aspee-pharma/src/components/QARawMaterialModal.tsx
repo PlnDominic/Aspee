@@ -108,9 +108,12 @@ export default function QARawMaterialModal({ isOpen, onClose, onSave, grn, mode 
                 const po = grn.purchase_orders;
                 if (po && !['Pending', 'Draft', 'Cancelled', 'Rejected'].includes(po.status)
                     && !(await hasAutoPostedNote(`Auto-posted from PO ${po.po_number}`))) {
-                    const value = itemInspections
+                    // unit_price is in the PO's native currency — convert to GHS
+                    // using the exchange rate locked in on this PO, not a live rate.
+                    const nativeValue = itemInspections
                         .filter(item => item.qa_status === 'Approved')
                         .reduce((sum, item) => sum + (Number(item.unit_price) || 0) * Number(item.received_qty || 0), 0);
+                    const value = nativeValue * (Number(po.exchange_rate) || 1);
 
                     if (value > 0) {
                         await autoPostJournal({

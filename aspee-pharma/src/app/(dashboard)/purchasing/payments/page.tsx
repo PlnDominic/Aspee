@@ -66,13 +66,18 @@ export default function SupplierPaymentsPage() {
 
                 const { data: poData2 } = await supabase
                     .from('purchase_orders')
-                    .select('po_number')
+                    .select('po_number, exchange_rate')
                     .eq('id', paymentData.po_id)
                     .single();
 
+                // paymentData.amount is entered in the PO's native currency (see
+                // SupplierPaymentModal) — convert to GHS using the exchange rate
+                // locked in on that PO, not a live rate.
+                const ghsAmount = Number(paymentData.amount) * (Number(poData2?.exchange_rate) || 1);
+
                 await autoPostJournal({
                     event: 'SUPPLIER_PAYMENT',
-                    amount: Number(paymentData.amount),
+                    amount: ghsAmount,
                     date: paymentData.payment_date || new Date().toISOString().split('T')[0],
                     description: `Payment to ${supplierData?.name || 'Supplier'} — PO ${poData2?.po_number || paymentData.po_id}`,
                     refNumber: paymentData.payment_number,

@@ -30,7 +30,7 @@ export default function QAIncomingMaterialsPage() {
     const { data: grns, isLoading, refetch } = useSupabaseQuery<any>(
         'grn',
         {
-            columns: '*, purchase_orders:po_id(po_number, supplier_id, status, suppliers:supplier_id(name)), items:grn_items(*, product:products(name, sku, unit), purchase_order_items:po_item_id(unit_price))',
+            columns: '*, purchase_orders:po_id(po_number, supplier_id, status, currency, exchange_rate, suppliers:supplier_id(name)), items:grn_items(*, product:products(name, sku, unit), purchase_order_items:po_item_id(unit_price))',
             orderBy: 'created_at',
             ascending: false
         }

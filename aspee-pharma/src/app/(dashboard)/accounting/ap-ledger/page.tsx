@@ -21,9 +21,14 @@ interface LedgerLine {
     type: 'Bill' | 'Payment';
     ref: string;
     description: string;
-    debit: number;   // reduces payable (payment)
-    credit: number;  // increases payable (goods received / billed)
+    debit: number;   // GHS — reduces payable (payment)
+    credit: number;  // GHS — increases payable (goods received / billed)
     runningBalance: number;
+    // Original transaction currency, before conversion to GHS below — kept so
+    // USD purchases stay visible instead of disappearing into a GHS-only figure.
+    nativeCurrency: string;
+    nativeAmount: number;
+    exchangeRate: number;
 }
 
 interface SupplierLedger {
@@ -34,6 +39,7 @@ interface SupplierLedger {
     totalBilled: number;
     totalPaid: number;
     balanceDue: number;
+    hasForeignCurrency: boolean;
     lines: LedgerLine[];
 }
 
@@ -67,10 +73,10 @@ function AccountsPayableLedgerContent() {
                 supabase.from('suppliers').select('id, name, category, status').order('name'),
                 supabase
                     .from('purchase_orders')
-                    .select('id, po_number, supplier_id, total_amount, currency, status, approved_at, created_at'),
+                    .select('id, po_number, supplier_id, total_amount, currency, exchange_rate, status, approved_at, created_at'),
                 supabase
                     .from('supplier_payments')
-                    .select('id, supplier_id, payment_number, payment_date, amount, status, po_id, purchase_orders:po_id(po_number, currency)')
+                    .select('id, supplier_id, payment_number, payment_date, amount, status, po_id, purchase_orders:po_id(po_number, currency, exchange_rate)')
                     .in('status', ['Approved', 'Completed']),
                 supabase
                     .from('journal_entries')
@@ -102,6 +108,12 @@ function AccountsPayableLedgerContent() {
     // shouldn't disappear from Billed just because no goods-receipt document was
     // created. Excludes Pending/Draft/Cancelled/Rejected, which aren't a
     // commitment yet.
+    //
+    // Accounting figures (totals, GL reconciliation) are always in GHS — every
+    // Billed/Paid amount is converted using the exchange_rate locked in on that
+    // PO at the time it was raised, not a live rate. The original USD amount and
+    // rate are kept on each line (nativeCurrency/nativeAmount/exchangeRate) so a
+    // dollar purchase stays visible instead of just disappearing into a GHS figure.
     const ledgers = useMemo((): SupplierLedger[] => {
         if (!data) return [];
         const { suppliers, purchaseOrders, payments } = data;
@@ -116,6 +128,7 @@ function AccountsPayableLedgerContent() {
                 totalBilled: 0,
                 totalPaid: 0,
                 balanceDue: 0,
+                hasForeignCurrency: false,
                 lines: [],
             });
         }
@@ -125,11 +138,14 @@ function AccountsPayableLedgerContent() {
             if (!supplierId || !bySupplier.has(supplierId)) continue;
             if (['Pending', 'Draft', 'Cancelled', 'Rejected'].includes(po.status)) continue;
 
-            const value = Number(po.total_amount) || 0;
+            const nativeAmount = Number(po.total_amount) || 0;
+            const rate = Number(po.exchange_rate) || 1;
+            const value = nativeAmount * rate;
             if (value <= 0) continue;
 
             const ledger = bySupplier.get(supplierId)!;
             ledger.totalBilled += value;
+            if (po.currency && po.currency !== 'GHS') ledger.hasForeignCurrency = true;
             ledger.lines.push({
                 date: po.approved_at || po.created_at,
                 type: 'Bill',
@@ -138,6 +154,9 @@ function AccountsPayableLedgerContent() {
                 debit: 0,
                 credit: value,
                 runningBalance: 0,
+                nativeCurrency: po.currency || 'GHS',
+                nativeAmount,
+                exchangeRate: rate,
             });
         }
 
@@ -145,9 +164,12 @@ function AccountsPayableLedgerContent() {
             const supplierId = p.supplier_id;
             if (!supplierId || !bySupplier.has(supplierId)) continue;
 
-            const amount = Number(p.amount) || 0;
+            const nativeAmount = Number(p.amount) || 0;
+            const rate = Number(p.purchase_orders?.exchange_rate) || 1;
+            const amount = nativeAmount * rate;
             const ledger = bySupplier.get(supplierId)!;
             ledger.totalPaid += amount;
+            if (p.purchase_orders?.currency && p.purchase_orders.currency !== 'GHS') ledger.hasForeignCurrency = true;
             ledger.lines.push({
                 date: p.payment_date,
                 type: 'Payment',
@@ -156,6 +178,9 @@ function AccountsPayableLedgerContent() {
                 debit: amount,
                 credit: 0,
                 runningBalance: 0,
+                nativeCurrency: p.purchase_orders?.currency || 'GHS',
+                nativeAmount,
+                exchangeRate: rate,
             });
         }
 
@@ -219,9 +244,10 @@ function AccountsPayableLedgerContent() {
             [
                 { header: 'Supplier', accessor: r => r.supplierName },
                 { header: 'Category', accessor: r => r.category },
-                { header: 'Total Billed', accessor: r => r.totalBilled },
-                { header: 'Total Paid', accessor: r => r.totalPaid },
-                { header: 'Balance Due', accessor: r => r.balanceDue },
+                { header: 'Total Billed (GH₵)', accessor: r => r.totalBilled },
+                { header: 'Total Paid (GH₵)', accessor: r => r.totalPaid },
+                { header: 'Balance Due (GH₵)', accessor: r => r.balanceDue },
+                { header: 'Includes USD', accessor: r => r.hasForeignCurrency ? 'Yes' : 'No' },
             ]
         );
         toast.success('Exported to CSV successfully');
@@ -306,16 +332,24 @@ function AccountsPayableLedgerContent() {
                                     <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--slate-500)', background: 'var(--slate-100)', padding: '2px 10px', borderRadius: 20 }}>
                                         {ledger.category}
                                     </span>
+                                    {ledger.hasForeignCurrency && (
+                                        <span
+                                            title="Includes USD transactions, converted to GH₵ at each purchase's own exchange rate"
+                                            style={{ fontSize: 10, fontWeight: 700, color: '#1d4ed8', background: '#dbeafe', padding: '2px 10px', borderRadius: 20 }}
+                                        >
+                                            $ USD
+                                        </span>
+                                    )}
                                     <div style={{ textAlign: 'right', minWidth: 120 }}>
-                                        <div style={{ fontSize: 10, color: 'var(--slate-400)', fontWeight: 600 }}>BILLED</div>
+                                        <div style={{ fontSize: 10, color: 'var(--slate-400)', fontWeight: 600 }}>BILLED (GH₵)</div>
                                         <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--slate-700)' }}>{formatCurrency(ledger.totalBilled, currency)}</div>
                                     </div>
                                     <div style={{ textAlign: 'right', minWidth: 120 }}>
-                                        <div style={{ fontSize: 10, color: 'var(--slate-400)', fontWeight: 600 }}>PAID</div>
+                                        <div style={{ fontSize: 10, color: 'var(--slate-400)', fontWeight: 600 }}>PAID (GH₵)</div>
                                         <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--slate-700)' }}>{formatCurrency(ledger.totalPaid, currency)}</div>
                                     </div>
                                     <div style={{ textAlign: 'right', minWidth: 140 }}>
-                                        <div style={{ fontSize: 10, color: 'var(--slate-400)', fontWeight: 600 }}>BALANCE DUE</div>
+                                        <div style={{ fontSize: 10, color: 'var(--slate-400)', fontWeight: 600 }}>BALANCE DUE (GH₵)</div>
                                         <div style={{ fontSize: 14, fontWeight: 800, color: ledger.balanceDue > 0 ? '#b91c1c' : '#15803d' }}>
                                             {formatCurrency(Math.abs(ledger.balanceDue), currency)}
                                         </div>
@@ -350,9 +384,19 @@ function AccountsPayableLedgerContent() {
                                                 <span style={{ color: 'var(--slate-700)' }}>{line.description}</span>
                                                 <span style={{ textAlign: 'right', fontWeight: 600, color: line.credit > 0 ? 'var(--slate-800)' : 'var(--slate-300)' }}>
                                                     {line.credit > 0 ? formatCurrency(line.credit, currency) : '—'}
+                                                    {line.credit > 0 && line.nativeCurrency !== 'GHS' && (
+                                                        <div style={{ fontSize: 10, fontWeight: 600, color: '#1d4ed8' }}>
+                                                            {formatCurrency(line.nativeAmount, line.nativeCurrency)} @ {line.exchangeRate}
+                                                        </div>
+                                                    )}
                                                 </span>
                                                 <span style={{ textAlign: 'right', fontWeight: 600, color: line.debit > 0 ? 'var(--slate-800)' : 'var(--slate-300)' }}>
                                                     {line.debit > 0 ? formatCurrency(line.debit, currency) : '—'}
+                                                    {line.debit > 0 && line.nativeCurrency !== 'GHS' && (
+                                                        <div style={{ fontSize: 10, fontWeight: 600, color: '#1d4ed8' }}>
+                                                            {formatCurrency(line.nativeAmount, line.nativeCurrency)} @ {line.exchangeRate}
+                                                        </div>
+                                                    )}
                                                 </span>
                                                 <span style={{ textAlign: 'right', fontWeight: 700, fontFamily: 'var(--font-mono)', fontSize: 12, color: line.runningBalance > 0 ? '#b91c1c' : '#15803d' }}>
                                                     {formatCurrency(Math.abs(line.runningBalance), currency)}

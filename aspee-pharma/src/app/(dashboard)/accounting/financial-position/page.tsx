@@ -125,10 +125,13 @@ export default function FinancialPositionPage() {
         // (Approved/Shipped/Received), valued at the PO total — not off GRN
         // receipts, since GRNs aren't consistently recorded in this business.
         // Excludes Pending/Draft/Cancelled/Rejected, which aren't a commitment yet.
+        // Amounts are converted to GHS using the exchange rate locked in on each
+        // PO at creation time (not a live rate) — this drill-down is GHS-only,
+        // no per-line currency breakdown (see AP Ledger for that).
         try {
             const { data: orders, error } = await supabase
                 .from('purchase_orders')
-                .select('id, supplier_id, total_amount, status')
+                .select('id, supplier_id, total_amount, exchange_rate, status')
                 .lte('created_at', endDate + 'T23:59:59');
             if (error) throw error;
 
@@ -145,25 +148,28 @@ export default function FinancialPositionPage() {
             const nameById: Record<string, string> = {};
             for (const s of suppliers || []) nameById[s.id] = s.name;
 
+            const rateByPoId: Record<string, number> = {};
             const billedMap: Record<string, number> = {};
             for (const po of (orders || []) as any[]) {
+                rateByPoId[po.id] = Number(po.exchange_rate) || 1;
                 const supplierId = po.supplier_id;
                 if (!supplierId) continue;
                 if (['Pending', 'Draft', 'Cancelled', 'Rejected'].includes(po.status)) continue;
-                const value = Number(po.total_amount) || 0;
+                const value = (Number(po.total_amount) || 0) * rateByPoId[po.id];
                 if (value <= 0) continue;
                 billedMap[supplierId] = (billedMap[supplierId] || 0) + value;
             }
 
             const { data: payments } = await supabase
                 .from('supplier_payments')
-                .select('supplier_id, amount, payment_date, status')
+                .select('supplier_id, amount, payment_date, status, po_id')
                 .in('status', ['Approved', 'Completed'])
                 .lte('payment_date', endDate);
             const paidMap: Record<string, number> = {};
             for (const p of payments || []) {
                 if (!p.supplier_id) continue;
-                paidMap[p.supplier_id] = (paidMap[p.supplier_id] || 0) + Number(p.amount || 0);
+                const value = Number(p.amount || 0) * (rateByPoId[p.po_id] || 1);
+                paidMap[p.supplier_id] = (paidMap[p.supplier_id] || 0) + value;
             }
 
             const balanceMap: Record<string, number> = {};

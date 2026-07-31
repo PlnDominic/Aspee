@@ -61,7 +61,7 @@ export default function GRNPage() {
             if (header.qa_status === 'Approved' && approvedItems.length > 0) {
                 const { data: poRes } = await supabase
                     .from('purchase_orders')
-                    .select('po_number, status, suppliers:supplier_id(name)')
+                    .select('po_number, status, currency, exchange_rate, suppliers:supplier_id(name)')
                     .eq('id', header.po_id)
                     .single();
                 const po: any = poRes;
@@ -75,8 +75,11 @@ export default function GRNPage() {
                     const priceById: Record<string, number> = {};
                     for (const r of poItemRows || []) priceById[r.id] = Number(r.unit_price) || 0;
 
-                    const value = approvedItems.reduce((sum: number, i: any) =>
+                    // unit_price is in the PO's native currency — convert to GHS
+                    // using the exchange rate locked in on this PO, not a live rate.
+                    const nativeValue = approvedItems.reduce((sum: number, i: any) =>
                         sum + (priceById[i.po_item_id] || 0) * Number(i.quantity_received || 0), 0);
+                    const value = nativeValue * (Number(po.exchange_rate) || 1);
 
                     if (value > 0) {
                         await autoPostJournal({

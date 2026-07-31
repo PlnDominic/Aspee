@@ -164,15 +164,19 @@ export default function PurchaseOrdersPage() {
             // if it's already here, so the liability is never double-counted.
             const { data: po } = await supabase
                 .from('purchase_orders')
-                .select('po_number, total_amount, suppliers:supplier_id(name)')
+                .select('po_number, total_amount, currency, exchange_rate, suppliers:supplier_id(name)')
                 .eq('id', poId)
                 .single();
             if (po) {
+                // GL entries are always in GHS — convert using the exchange rate
+                // locked in on this PO at creation time, not a live rate, so a
+                // USD PO always posts the same GHS liability it was raised at.
+                const ghsAmount = (Number(po.total_amount) || 0) * (Number(po.exchange_rate) || 1);
                 await autoPostJournal({
                     event: 'PO_APPROVED',
-                    amount: Number(po.total_amount) || 0,
+                    amount: ghsAmount,
                     date: new Date().toISOString().split('T')[0],
-                    description: `Purchase Order ${po.po_number} approved (${approvalLevel} level)`,
+                    description: `Purchase Order ${po.po_number} approved (${approvalLevel} level)${po.currency && po.currency !== 'GHS' ? ` — ${po.currency} ${Number(po.total_amount).toFixed(2)} @ ${po.exchange_rate}` : ''}`,
                     refNumber: po.po_number,
                     counterparty: (po.suppliers as any)?.name,
                 });
