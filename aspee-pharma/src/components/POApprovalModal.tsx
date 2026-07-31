@@ -2,11 +2,16 @@
 
 import React, { useEffect, useState } from 'react';
 import Modal from './Modal';
-import { ShieldCheck, Landmark, StickyNote, AlertTriangle, FileText, Truck } from 'lucide-react';
+import { ShieldCheck, Landmark, StickyNote, AlertTriangle, FileText, Truck, Lock } from 'lucide-react';
 import { formatCurrency } from '@/lib/formatCurrency';
+import { useCurrentUser } from '@/lib/hooks';
 
 const APPROVAL_LEVELS = ['Manager', 'Finance'] as const;
 const FINANCE_THRESHOLD = 10000;
+// Only these roles carry Finance sign-off authority — a Purchasing Manager or
+// other approver-page role can still clear the "Manager" tier, but must hand
+// high-value POs to one of these roles rather than self-approving them.
+const FINANCE_APPROVER_ROLES = ['Accountant', 'Managing Director', 'Super Admin'];
 
 interface POApprovalModalProps {
     isOpen: boolean;
@@ -16,22 +21,27 @@ interface POApprovalModalProps {
 }
 
 export default function POApprovalModal({ isOpen, onClose, po, onApprove }: POApprovalModalProps) {
+    const { data: currentUser } = useCurrentUser();
     const [approvalLevel, setApprovalLevel] = useState<string>('Manager');
     const [notes, setNotes] = useState('');
     const [submitting, setSubmitting] = useState(false);
 
     const amount = Number(po?.total_amount) || 0;
-    const suggestedLevel = amount > FINANCE_THRESHOLD ? 'Finance' : 'Manager';
+    const financeRequired = amount > FINANCE_THRESHOLD;
+    const suggestedLevel = financeRequired ? 'Finance' : 'Manager';
+    const canApproveFinance = FINANCE_APPROVER_ROLES.includes(currentUser?.role);
+    const blocked = financeRequired && !canApproveFinance;
 
     useEffect(() => {
         if (isOpen) {
-            setApprovalLevel(suggestedLevel);
+            setApprovalLevel(canApproveFinance ? suggestedLevel : 'Manager');
             setNotes('');
         }
-    }, [isOpen, po?.id]);
+    }, [isOpen, po?.id, canApproveFinance]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (blocked) return;
         setSubmitting(true);
         try {
             await onApprove(approvalLevel, notes.trim());
@@ -70,7 +80,16 @@ export default function POApprovalModal({ isOpen, onClose, po, onApprove }: POAp
                     </div>
                 </div>
 
-                {amount > FINANCE_THRESHOLD && (
+                {blocked ? (
+                    <div className="poa-warning poa-warning-blocked">
+                        <Lock size={14} />
+                        <span>
+                            This PO exceeds {formatCurrency(FINANCE_THRESHOLD, po.currency)} and requires Finance-level
+                            approval. Your role ({currentUser?.role || 'Unknown'}) can't grant that — ask an Accountant,
+                            Managing Director, or Super Admin to approve it.
+                        </span>
+                    </div>
+                ) : financeRequired && (
                     <div className="poa-warning">
                         <AlertTriangle size={14} />
                         <span>This PO exceeds {formatCurrency(FINANCE_THRESHOLD, po.currency)} and requires Finance-level approval.</span>
@@ -80,17 +99,22 @@ export default function POApprovalModal({ isOpen, onClose, po, onApprove }: POAp
                 <div className="poa-field">
                     <label>Approval Level *</label>
                     <div className="poa-level-group">
-                        {APPROVAL_LEVELS.map(level => (
-                            <button
-                                key={level}
-                                type="button"
-                                className={`poa-level-btn${approvalLevel === level ? ' active' : ''}`}
-                                onClick={() => setApprovalLevel(level)}
-                            >
-                                <ShieldCheck size={14} />
-                                {level}
-                            </button>
-                        ))}
+                        {APPROVAL_LEVELS.map(level => {
+                            const disabled = level === 'Finance' && !canApproveFinance;
+                            return (
+                                <button
+                                    key={level}
+                                    type="button"
+                                    disabled={disabled}
+                                    title={disabled ? 'Only Accountant, Managing Director, or Super Admin can approve at Finance level' : undefined}
+                                    className={`poa-level-btn${approvalLevel === level ? ' active' : ''}${disabled ? ' disabled' : ''}`}
+                                    onClick={() => !disabled && setApprovalLevel(level)}
+                                >
+                                    {disabled ? <Lock size={14} /> : <ShieldCheck size={14} />}
+                                    {level}
+                                </button>
+                            );
+                        })}
                     </div>
                 </div>
 
@@ -109,9 +133,9 @@ export default function POApprovalModal({ isOpen, onClose, po, onApprove }: POAp
 
                 <div className="poa-actions">
                     <button type="button" onClick={onClose} className="poa-btn-secondary">Cancel</button>
-                    <button type="submit" disabled={submitting} className="poa-btn-primary">
-                        <ShieldCheck size={16} />
-                        {submitting ? 'Approving...' : `Approve as ${approvalLevel}`}
+                    <button type="submit" disabled={submitting || blocked} className="poa-btn-primary">
+                        {blocked ? <Lock size={16} /> : <ShieldCheck size={16} />}
+                        {blocked ? 'Finance approval required' : submitting ? 'Approving...' : `Approve as ${approvalLevel}`}
                     </button>
                 </div>
             </form>
@@ -159,6 +183,12 @@ export default function POApprovalModal({ isOpen, onClose, po, onApprove }: POAp
                     font-weight: 600;
                     margin-bottom: 16px;
                 }
+                .poa-warning-blocked {
+                    background: #fef2f2;
+                    border-color: #fecaca;
+                    color: #b91c1c;
+                    align-items: flex-start;
+                }
                 .poa-field { margin-bottom: 16px; }
                 .poa-field label {
                     display: block;
@@ -194,6 +224,14 @@ export default function POApprovalModal({ isOpen, onClose, po, onApprove }: POAp
                     border-color: var(--primary-500);
                     background: var(--primary-50);
                     color: var(--primary-700);
+                }
+                .poa-level-btn.disabled {
+                    opacity: 0.5;
+                    cursor: not-allowed;
+                    background: var(--slate-50);
+                }
+                .poa-level-btn.disabled:hover {
+                    border-color: var(--slate-200);
                 }
                 .poa-input-wrap { position: relative; }
                 .poa-input-wrap .poa-icon {
