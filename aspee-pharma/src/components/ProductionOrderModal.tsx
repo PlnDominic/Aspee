@@ -56,6 +56,7 @@ export default function ProductionOrderModal({ isOpen, onClose, onSave, initialD
     const [bomItems, setBomItems] = useState<BOMItem[]>([]);
     
     const [orderNumber, setOrderNumber] = useState('');
+    const [batchNumber, setBatchNumber] = useState('');
     const [productId, setProductId] = useState('');
     const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
     const [quantity, setQuantity] = useState<number>(1);
@@ -222,6 +223,7 @@ export default function ProductionOrderModal({ isOpen, onClose, onSave, initialD
 
     const resetForm = () => {
         setOrderNumber('');
+        setBatchNumber('');
         setProductId('');
         setSelectedProduct(null);
         setQuantity(1);
@@ -240,6 +242,7 @@ export default function ProductionOrderModal({ isOpen, onClose, onSave, initialD
 
     const populateForm = async (data: any) => {
         setOrderNumber(data.order_number || '');
+        setBatchNumber(data.batch_number || '');
         setProductId(data.product_id || '');
         setQuantity(data.quantity || 1);
         setBomVersion(data.bom_version || '1.0');
@@ -348,6 +351,7 @@ export default function ProductionOrderModal({ isOpen, onClose, onSave, initialD
             await onSave({
                 id: initialData?.id,
                 order_number: finalOrderNumber,
+                batch_number: batchNumber.trim() || null,
                 product_id: finalProductId,
                 quantity: quantity,
                 batches: usingBatchYield ? numberOfBatches : null,
@@ -405,6 +409,20 @@ export default function ProductionOrderModal({ isOpen, onClose, onSave, initialD
                         <div className="input-wrapper disabled">
                             <Hash size={16} className="icon" />
                             <input value={orderNumber} readOnly />
+                        </div>
+                    </div>
+
+                    <div className="form-field">
+                        <label>Batch Number</label>
+                        <div className={`input-wrapper${isViewOnly ? ' disabled' : ''}`}>
+                            <Hash size={16} className="icon" />
+                            <input
+                                type="text"
+                                value={batchNumber}
+                                onChange={(e) => setBatchNumber(e.target.value)}
+                                placeholder="e.g. BATCH-2026-001"
+                                readOnly={isViewOnly}
+                            />
                         </div>
                     </div>
 

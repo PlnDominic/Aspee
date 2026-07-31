@@ -95,7 +95,10 @@ export default function ProductionCompletionModal({ isOpen, onClose, onSuccess, 
 
         setLoading(true);
         try {
-            const yieldBatchNo = `BATCH-${productionOrder.order_number}`;
+            // Use the batch number the production manager entered on the Job
+            // Order itself when present; only fall back to the auto-generated
+            // one for older orders that never had one set.
+            const yieldBatchNo = productionOrder.batch_number?.trim() || `BATCH-${productionOrder.order_number}`;
 
             // 1. Get Stock Locations
             const { data: locations } = await supabase.from('stock_locations').select('id, name');
