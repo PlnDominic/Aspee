@@ -18,7 +18,8 @@ import {
     ShieldCheck,
     XCircle,
     Trash2,
-    Pencil
+    Pencil,
+    PackageCheck
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
@@ -105,6 +106,15 @@ export default function ProductionMaterialRequestsPage() {
         }
     };
 
+    const usageStatusVariant = (status: string): 'success' | 'warning' | 'danger' | 'default' => {
+        switch (status) {
+            case 'Fully Used': return 'success';
+            case 'Partially Used': return 'warning';
+            case 'Not Used': return 'danger';
+            default: return 'default';
+        }
+    };
+
     const columns = [
         {
             key: 'request_number',
@@ -143,6 +153,14 @@ export default function ProductionMaterialRequestsPage() {
             render: (v: string) => {
                 if (!v || v === 'Not Required') return <span style={{ fontSize: 11, color: 'var(--slate-400)' }}>—</span>;
                 return <StatusBadge status={v} variant={qaStatusVariant(v)} />;
+            }
+        },
+        {
+            key: 'usage_status',
+            label: 'Materials Used',
+            render: (v: string, row: any) => {
+                if (row.status !== 'Issued') return <span style={{ fontSize: 11, color: 'var(--slate-400)' }}>—</span>;
+                return <StatusBadge status={v || 'Not Recorded'} variant={usageStatusVariant(v || 'Not Recorded')} />;
             }
         },
         {
@@ -193,7 +211,17 @@ export default function ProductionMaterialRequestsPage() {
                         </button>
                     )}
                     
-                    {row.status === 'Issued' && (
+                    {row.status === 'Issued' && (!row.usage_status || row.usage_status === 'Not Recorded') && (
+                        <button
+                            onClick={() => { setSelectedRequest(row); setIsViewModalOpen(true); }}
+                            style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '5px 10px', borderRadius: 6, border: '1px solid #fde68a', background: '#fffbeb', color: '#92400e', cursor: 'pointer', fontSize: 10, fontWeight: 600 }}
+                            title="Confirm how much of the received materials was used"
+                        >
+                            <PackageCheck size={12} /> Record Usage
+                        </button>
+                    )}
+
+                    {row.status === 'Issued' && row.usage_status && row.usage_status !== 'Not Recorded' && (
                         <div style={{ display: 'flex', alignItems: 'center', gap: 4, color: '#16a34a', fontSize: 10, fontWeight: 600 }}>
                             <CheckCircle size={12} /> Issued
                         </div>
@@ -206,6 +234,7 @@ export default function ProductionMaterialRequestsPage() {
     const stats = {
         pending: requests.filter(r => r.status === 'Pending').length,
         issued: requests.filter(r => r.status === 'Issued').length,
+        pendingUsage: requests.filter(r => r.status === 'Issued' && (!r.usage_status || r.usage_status === 'Not Recorded')).length,
         pendingQA: requests.filter(r => r.qa_status === 'Pending QA').length,
         qaApproved: requests.filter(r => r.qa_status === 'QA Approved').length,
     };
@@ -235,6 +264,7 @@ export default function ProductionMaterialRequestsPage() {
             <div className="animate-stagger" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 16, marginBottom: 24 }}>
                 <StatCard title="Awaiting Stores" value={stats.pending} icon={<Clock size={20} />} color="amber" />
                 <StatCard title="Issued by Stores" value={stats.issued} icon={<CheckCircle size={20} />} color="green" />
+                <StatCard title="Awaiting Usage Confirmation" value={stats.pendingUsage} icon={<PackageCheck size={20} />} color="amber" />
                 <StatCard title="Pending QA Check" value={stats.pendingQA} icon={<ShieldCheck size={20} />} color="blue" />
                 <StatCard title="QA Approved" value={stats.qaApproved} icon={<AlertTriangle size={20} />} color="green" />
             </div>
@@ -257,6 +287,8 @@ export default function ProductionMaterialRequestsPage() {
                 isOpen={isViewModalOpen}
                 onClose={() => setIsViewModalOpen(false)}
                 request={selectedRequest}
+                allowUsageEntry
+                onUsageSaved={fetchRequests}
             />
         </div>
     );
