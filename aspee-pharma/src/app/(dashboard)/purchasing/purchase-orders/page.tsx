@@ -6,6 +6,7 @@ import DataTable from '@/components/DataTable';
 import StatCard from '@/components/StatCard';
 import StatusBadge from '@/components/StatusBadge';
 import PurchaseOrderModal from '@/components/PurchaseOrderModal';
+import POApprovalModal from '@/components/POApprovalModal';
 import EntityLink from '@/components/EntityLink';
 import { Plus, ClipboardList, Clock, CheckCircle, AlertTriangle, FileText, Download, Eye, Edit2, Trash2, MoreHorizontal, Check } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
@@ -21,6 +22,8 @@ export default function PurchaseOrdersPage() {
     const [modalMode, setModalMode] = useState<'create' | 'edit' | 'view'>('create');
     const [selectedPO, setSelectedPO] = useState<any>(null);
     const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+    const [isApprovalModalOpen, setIsApprovalModalOpen] = useState(false);
+    const [poToApprove, setPoToApprove] = useState<any>(null);
 
     const { data: purchaseOrders, isLoading: loading } = useSupabaseQuery<any>('purchase_orders', {
         columns: '*, suppliers(name)',
@@ -405,12 +408,8 @@ export default function PurchaseOrdersPage() {
                                 {row.status === 'Pending' && (
                                     <button
                                         onClick={() => {
-                                            const amount = row.total_amount || 0;
-                                            const isHighValue = amount > 10000;
-                                            const level = isHighValue ? 'Finance' : 'Manager';
-                                            if (confirm(`Approve this PO for ${level} review?\n\nAmount: ${formatCurrency(amount, row.currency)}${isHighValue ? `\n\nNote: POs over ${formatCurrency(10000, row.currency)} require Finance approval` : ''}`)) {
-                                                approveMutation.mutate({ poId: row.id, approvalLevel: level });
-                                            }
+                                            setPoToApprove(row);
+                                            setIsApprovalModalOpen(true);
                                         }}
                                         title="Approve PO"
                                         style={{
@@ -472,10 +471,19 @@ export default function PurchaseOrdersPage() {
                 initialData={selectedPO}
             />
 
-            <SendToMDModal 
-                isOpen={isReportModalOpen} 
-                onClose={() => setIsReportModalOpen(false)} 
-                department="Purchasing" 
+            <SendToMDModal
+                isOpen={isReportModalOpen}
+                onClose={() => setIsReportModalOpen(false)}
+                department="Purchasing"
+            />
+
+            <POApprovalModal
+                isOpen={isApprovalModalOpen}
+                onClose={() => setIsApprovalModalOpen(false)}
+                po={poToApprove}
+                onApprove={async (approvalLevel, notes) => {
+                    await approveMutation.mutateAsync({ poId: poToApprove.id, approvalLevel, notes });
+                }}
             />
         </div>
     );
