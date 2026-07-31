@@ -71,7 +71,7 @@ function AccountsPayableLedgerContent() {
                         quantity_received, qa_status,
                         purchase_order_items:po_item_id ( unit_price ),
                         grn:grn_id ( grn_number, received_date, qa_status,
-                            purchase_orders:po_id ( po_number, supplier_id, currency ) )
+                            purchase_orders:po_id ( po_number, supplier_id, currency, approved_by, approval_level ) )
                     `)
                     .eq('qa_status', 'Approved'),
                 supabase
@@ -105,6 +105,8 @@ function AccountsPayableLedgerContent() {
     // Bills are recognized off GRN receipts (goods actually received & QA-approved),
     // valued at the linked PO item's unit price — not from GL narration text —
     // so this ledger can be reconciled against, rather than derived from, the GL.
+    // A receipt only counts as Billed once the underlying PO carries a Manager or
+    // Finance/Accountant approval — i.e. the amount was sign off on, not just ordered.
     const ledgers = useMemo((): SupplierLedger[] => {
         if (!data) return [];
         const { suppliers, grnItems, payments } = data;
@@ -128,6 +130,7 @@ function AccountsPayableLedgerContent() {
             const po = grn?.purchase_orders;
             const supplierId = po?.supplier_id;
             if (!supplierId || !bySupplier.has(supplierId)) continue;
+            if (!po.approved_by || !['Manager', 'Finance'].includes(po.approval_level)) continue;
 
             const unitPrice = Number(gi.purchase_order_items?.unit_price) || 0;
             const value = unitPrice * Number(gi.quantity_received || 0);
