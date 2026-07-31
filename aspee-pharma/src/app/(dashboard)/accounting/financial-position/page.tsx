@@ -322,8 +322,8 @@ export default function FinancialPositionPage() {
             const adjustmentMap: Record<string, { ledger: number; debitAcc: string; creditAcc: string }> = {
                 ppe: { ledger: ledgerPPE, debitAcc: 'Buildings', creditAcc: 'Cash for Expenses' },
                 inventories: { ledger: ledgerInventories, debitAcc: 'Inventories', creditAcc: 'Cash for Expenses' },
-                receivables: { ledger: ledgerReceivables, debitAcc: 'Accounts receivable', creditAcc: 'Cash for Expenses' },
-                cash: { ledger: ledgerCash, debitAcc: 'Cash from Sales', creditAcc: 'Accounts receivable' },
+                receivables: { ledger: ledgerReceivables, debitAcc: 'Accounts Receivable', creditAcc: 'Cash for Expenses' },
+                cash: { ledger: ledgerCash, debitAcc: 'Cash from Sales', creditAcc: 'Accounts Receivable' },
                 statedCapital: { ledger: ledgerStatedCapital, debitAcc: 'Cash from Sales', creditAcc: 'Capital Stated' },
                 shareDeposit: { ledger: ledgerShareDeposit, debitAcc: 'Cash from Sales', creditAcc: 'Shares Deposit' },
                 incomeSurplus: { ledger: ledgerIncomeSurplus, debitAcc: 'Cash from Sales', creditAcc: 'Appropriated Retained Earnings (Income Surplus)' },
