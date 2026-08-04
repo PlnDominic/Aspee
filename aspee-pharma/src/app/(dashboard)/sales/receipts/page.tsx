@@ -97,16 +97,16 @@ export default function ReceiptsPage() {
     };
 
     const handleDeleteReceipt = async (receipt: any) => {
-        if (receipt.status === 'Confirmed' || receipt.status === 'Cleared') {
-            toast.error('Cannot delete a confirmed receipt. Void it instead.');
-            return;
-        }
-        if (!confirm(`Delete receipt ${receipt.receipt_number}? This cannot be undone.`)) return;
+        const warning = receipt.confirmation_status === 'confirmed'
+            ? `Receipt ${receipt.receipt_number} has been confirmed by Accounts. Delete it anyway? This reverses its GL entry and any invoice it was allocated to.`
+            : `Delete receipt ${receipt.receipt_number}? This reverses its GL entry and any invoice it was allocated to. This cannot be undone.`;
+        if (!confirm(warning)) return;
         try {
-            const { error } = await supabase.from('sales_receipts').delete().eq('id', receipt.id);
+            const { error } = await supabase.rpc('delete_sales_receipt', { receipt_uuid: receipt.id });
             if (error) throw error;
             toast.success('Receipt deleted');
             queryClient.invalidateQueries({ queryKey: ['sales_receipts'] });
+            queryClient.invalidateQueries({ queryKey: ['sales_invoices'] });
         } catch (err: any) {
             toast.error('Failed to delete receipt: ' + err.message);
         }
@@ -178,15 +178,13 @@ export default function ReceiptsPage() {
                     >
                         <Pencil size={14} />
                     </button>
-                    {row.status !== 'Confirmed' && row.status !== 'Cleared' && (
-                        <button
-                            onClick={() => handleDeleteReceipt(row)}
-                            title="Delete Receipt"
-                            style={{ padding: 6, borderRadius: 6, border: '1px solid var(--slate-200)', background: 'var(--card-bg)', color: 'var(--danger)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                        >
-                            <Trash2 size={14} />
-                        </button>
-                    )}
+                    <button
+                        onClick={() => handleDeleteReceipt(row)}
+                        title={row.confirmation_status === 'confirmed' ? 'Delete Receipt (confirmed by Accounts — Accounts role required)' : 'Delete Receipt'}
+                        style={{ padding: 6, borderRadius: 6, border: '1px solid var(--slate-200)', background: 'var(--card-bg)', color: 'var(--danger)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                    >
+                        <Trash2 size={14} />
+                    </button>
                 </div>
             )
         },
