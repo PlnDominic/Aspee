@@ -5,8 +5,9 @@ import PageHeader from '@/components/PageHeader';
 import WaybillModal from '@/components/WaybillModal';
 import DataTable from '@/components/DataTable';
 import StatCard from '@/components/StatCard';
-import { FileText, Plus, Eye } from 'lucide-react';
+import { FileText, Plus, Eye, Trash2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { toast } from 'sonner';
 import { formatCurrency } from '@/lib/formatCurrency';
 
 export default function WaybillPage() {
@@ -99,6 +100,19 @@ export default function WaybillPage() {
         }
     };
 
+    const handleDeleteWaybill = async (row: any) => {
+        if (!confirm(`Delete waybill ${row.waybill_number}? This does not reverse any van stock it already loaded — adjust that manually in Stores if needed. This cannot be undone.`)) return;
+        try {
+            // waybill_items cascades on delete, no separate cleanup needed.
+            const { error } = await supabase.from('waybills').delete().eq('id', row.id);
+            if (error) throw error;
+            toast.success('Waybill deleted');
+            fetchWaybills();
+        } catch (err: any) {
+            toast.error('Failed to delete waybill: ' + err.message);
+        }
+    };
+
     const columns = [
         {
             key: 'waybill_number',
@@ -139,6 +153,15 @@ export default function WaybillPage() {
                     >
                         <Eye size={14} />
                     </button>
+                    {row.source !== 'sales_request' && (
+                        <button
+                            onClick={() => handleDeleteWaybill(row)}
+                            style={{ padding: 6, borderRadius: 6, border: '1px solid var(--slate-200)', background: 'var(--card-bg)', color: 'var(--danger)', cursor: 'pointer' }}
+                            title="Delete Waybill"
+                        >
+                            <Trash2 size={14} />
+                        </button>
+                    )}
                 </div>
             )
         }
