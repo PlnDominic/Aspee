@@ -23,7 +23,7 @@ interface CollectionRow {
     payment_method: string;
     date: string;
     registered_at: string | null;
-    sales_person_id?: string | null;
+    sales_rep_id?: string | null;
     route_id?: string | null;
     sales_person_name?: string | null;
     route_label?: string | null;
@@ -45,21 +45,21 @@ export default function CollectionsPage() {
                 .select(`
                     id, receipt_number, customer_name, amount, amount_collected,
                     status, confirmation_status, variance_reason, payment_method, date,
-                    registered_at, sales_person_id, route_id, invoice_id
+                    registered_at, sales_rep_id, route_id, invoice_id
                 `)
                 .order('registered_at', { ascending: false });
 
             if (receiptsError) return { data: null, error: receiptsError };
 
-            // Resolve sales person directly from sales_person_id (new path)
-            const directSalesIds = Array.from(
-                new Set((receipts || []).map((r: any) => r.sales_person_id).filter(Boolean)),
+            // Resolve sales rep directly from sales_rep_id (current path)
+            const directRepIds = Array.from(
+                new Set((receipts || []).map((r: any) => r.sales_rep_id).filter(Boolean)),
             );
 
-            // Fallback: derive from invoice for legacy rows
+            // Fallback: derive from invoice for legacy rows (still system_users-based)
             const legacyInvoiceIds = Array.from(
                 new Set((receipts || [])
-                    .filter((r: any) => !r.sales_person_id && r.invoice_id)
+                    .filter((r: any) => !r.sales_rep_id && r.invoice_id)
                     .map((r: any) => r.invoice_id)),
             );
 
@@ -74,21 +74,28 @@ export default function CollectionsPage() {
                 });
             }
 
-            const allSalesIds = new Set<string>(directSalesIds as string[]);
+            const legacySystemUserIds = new Set<string>();
             const allRouteIds = new Set<string>(
                 (receipts || []).map((r: any) => r.route_id).filter(Boolean),
             );
             invoiceSalesMap.forEach(v => {
-                if (v.sales_id) allSalesIds.add(v.sales_id);
+                if (v.sales_id) legacySystemUserIds.add(v.sales_id);
                 if (v.route_id) allRouteIds.add(v.route_id);
             });
 
             const salesNameMap = new Map<string, string>();
-            if (allSalesIds.size > 0) {
+            if (directRepIds.length > 0) {
+                const { data: reps } = await supabase
+                    .from('sales_reps')
+                    .select('id, name')
+                    .in('id', directRepIds as string[]);
+                (reps || []).forEach((u: any) => salesNameMap.set(u.id, u.name));
+            }
+            if (legacySystemUserIds.size > 0) {
                 const { data: users } = await supabase
                     .from('system_users')
                     .select('id, name')
-                    .in('id', Array.from(allSalesIds));
+                    .in('id', Array.from(legacySystemUserIds));
                 (users || []).forEach((u: any) => salesNameMap.set(u.id, u.name));
             }
 
@@ -105,8 +112,8 @@ export default function CollectionsPage() {
             }
 
             const mapped: CollectionRow[] = (receipts || []).map((r: any) => {
-                const fallback = !r.sales_person_id && r.invoice_id ? invoiceSalesMap.get(r.invoice_id) : null;
-                const sId = r.sales_person_id || fallback?.sales_id || null;
+                const fallback = !r.sales_rep_id && r.invoice_id ? invoiceSalesMap.get(r.invoice_id) : null;
+                const sId = r.sales_rep_id || fallback?.sales_id || null;
                 const rId = r.route_id || fallback?.route_id || null;
                 return {
                     ...r,

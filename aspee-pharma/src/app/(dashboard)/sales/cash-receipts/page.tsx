@@ -70,9 +70,9 @@ export default function CashReceiptRegistrationPage() {
 
     const { data: salesPersons = [] } = useFetch<SalesPerson[]>(['sales_persons_for_receipts'], async () => {
         const { data, error } = await supabase
-            .from('system_users')
-            .select('id, name, role')
-            .in('role', ['Van Sales Rep', 'Sales Manager'])
+            .from('sales_reps')
+            .select('id, name')
+            .eq('status', 'Active')
             .order('name', { ascending: true });
         return { data: data as SalesPerson[] | null, error };
     });
@@ -140,7 +140,7 @@ export default function CashReceiptRegistrationPage() {
                     receipt_number: r.receipt_number,
                     customer_id: r.customer_id,
                     customer_name: r.customer_name,
-                    sales_person_id: r.sales_person_id || null,
+                    sales_rep_id: r.sales_person_id || null,
                     route_id: r.route_id || null,
                     date: r.date,
                     payment_method: r.payment_method,

@@ -62,10 +62,9 @@ export default function CustomerModal({ isOpen, onClose, onSuccess, record, read
             setRoutes(areas);
         });
         supabase
-            .from('system_users')
+            .from('sales_reps')
             .select('name')
             .eq('status', 'Active')
-            .in('role', ['Van Sales Rep', 'Sales Manager'])
             .order('name', { ascending: true })
             .then(({ data }) => {
                 const names = [...new Set((data || []).map((u: any) => u.name).filter(Boolean))].sort() as string[];

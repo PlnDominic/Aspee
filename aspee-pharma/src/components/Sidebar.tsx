@@ -43,6 +43,7 @@ import {
     CalendarDays,
     Eye,
     Scale,
+    Contact,
     Briefcase,
     Clock,
 } from 'lucide-react';
@@ -60,6 +61,7 @@ const ROUTE_ROLES: Record<string, string[]> = {
     '/sales/requests':      ['Super Admin', 'Sales Manager', 'Van Sales Rep', 'Store Manager', 'Accountant'],
     '/sales/cash-receipts':       ['Super Admin', 'Sales Manager', 'Van Sales Rep', 'Accountant'],
     '/sales/cash-reconciliation': ['Super Admin', 'Sales Manager', 'Van Sales Rep', 'Accountant', 'Managing Director'],
+    '/sales/sales-reps':          ['Super Admin', 'Sales Manager', 'Accountant'],
     '/sales':               ['Super Admin', 'Sales Manager', 'Van Sales Rep', 'Accountant'],
     '/accounting/collections': ['Super Admin', 'Accountant'],
     '/customers':           ['Super Admin', 'Sales Manager', 'Van Sales Rep', 'Accountant'],
@@ -166,6 +168,7 @@ const navigation: NavItem[] = [
         icon: <Receipt size={20} />,
         children: [
             { label: 'Customers',           href: '/sales/customers',    icon: <Users size={18} /> },
+            { label: 'Sales Reps',          href: '/sales/sales-reps',   icon: <Contact size={18} /> },
             { label: 'Routes & Vans',       href: '/sales/routes',       icon: <Truck size={18} /> },
             { label: 'Invoices',            href: '/sales/invoices',          icon: <FileText size={18} /> },
             { label: 'Sales Request',       href: '/sales/requests',          icon: <ClipboardList size={18} /> },

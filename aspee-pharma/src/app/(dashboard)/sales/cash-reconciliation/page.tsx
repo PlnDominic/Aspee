@@ -15,8 +15,8 @@ interface ReconRow {
     receipt_number: string;
     date: string;
     customer_name: string | null;
-    sales_person_id: string | null;
-    sales_person_name: string | null;
+    sales_rep_id: string | null;
+    sales_rep_name: string | null;
     route_id: string | null;
     route_name: string | null;
     payment_method: string;
@@ -45,9 +45,9 @@ export default function CashReconciliationPage() {
 
     const { data: salesPersons = [] } = useFetch<any[]>(['recon_sales_persons'], async () => {
         const { data, error } = await supabase
-            .from('system_users')
-            .select('id, name, role')
-            .in('role', ['Van Sales Rep', 'Sales Manager'])
+            .from('sales_reps')
+            .select('id, name')
+            .eq('status', 'Active')
             .order('name');
         return { data, error };
     });
@@ -65,12 +65,12 @@ export default function CashReconciliationPage() {
         async () => {
             let q = supabase
                 .from('v_sales_receipt_reconciliation')
-                .select('id, receipt_number, date, customer_name, sales_person_id, sales_person_name, route_id, route_name, payment_method, amount_registered, amount_confirmed, variance, confirmation_status, variance_reason')
+                .select('id, receipt_number, date, customer_name, sales_rep_id, sales_rep_name, route_id, route_name, payment_method, amount_registered, amount_confirmed, variance, confirmation_status, variance_reason')
                 .gte('date', fromDate)
                 .lte('date', toDate)
                 .order('date', { ascending: false });
 
-            if (salesPersonId) q = q.eq('sales_person_id', salesPersonId);
+            if (salesPersonId) q = q.eq('sales_rep_id', salesPersonId);
             if (routeId) q = q.eq('route_id', routeId);
             if (statusFilter !== 'all') q = q.eq('confirmation_status', statusFilter);
 
@@ -109,8 +109,8 @@ export default function CashReconciliationPage() {
             let key: string;
             let label: string;
             if (groupBy === 'sales_person') {
-                key = r.sales_person_id ?? 'unassigned';
-                label = r.sales_person_name ?? '— Unassigned —';
+                key = r.sales_rep_id ?? 'unassigned';
+                label = r.sales_rep_name ?? '— Unassigned —';
             } else if (groupBy === 'route') {
                 key = r.route_id ?? 'unassigned';
                 label = r.route_name ?? '— No Route —';
@@ -134,7 +134,7 @@ export default function CashReconciliationPage() {
                 { header: 'Receipt No.', accessor: r => r.receipt_number },
                 { header: 'Date', accessor: r => r.date },
                 { header: 'Customer', accessor: r => r.customer_name ?? '' },
-                { header: 'Sales Person', accessor: r => r.sales_person_name ?? '' },
+                { header: 'Sales Person', accessor: r => r.sales_rep_name ?? '' },
                 { header: 'Route', accessor: r => r.route_name ?? '' },
                 { header: 'Method', accessor: r => r.payment_method },
                 { header: 'Registered (GHS)', accessor: r => r.amount_registered.toFixed(2) },
@@ -383,7 +383,7 @@ function ReconTable({ rows }: { rows: ReconRow[] }) {
                             <td><span className="rec-mono">{r.receipt_number}</span></td>
                             <td>{new Date(r.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' })}</td>
                             <td>{r.customer_name || '—'}</td>
-                            <td>{r.sales_person_name || '—'}</td>
+                            <td>{r.sales_rep_name || '—'}</td>
                             <td>{r.route_name || '—'}</td>
                             <td>{r.payment_method}</td>
                             <td style={{ textAlign: 'right', fontWeight: 600 }}>{formatCurrency(r.amount_registered)}</td>

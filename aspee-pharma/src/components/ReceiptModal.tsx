@@ -101,7 +101,7 @@ export default function ReceiptModal({ isOpen, onClose, onSuccess, record }: Rec
             setPaymentReference(record.payment_reference || '');
             setAmount(Number(record.amount) || 0);
             setNotes(record.notes || '');
-            setSalesPersonId(record.sales_person_id || '');
+            setSalesPersonId(record.sales_rep_id || '');
             setRouteId(record.route_id || '');
             if (record.customer_id) {
                 loadCustomerById(record.customer_id);
@@ -178,9 +178,9 @@ export default function ReceiptModal({ isOpen, onClose, onSuccess, record }: Rec
 
     const fetchSalesPersons = async () => {
         const { data } = await supabase
-            .from('system_users')
-            .select('id, name, role')
-            .in('role', ['Van Sales Rep', 'Sales Manager'])
+            .from('sales_reps')
+            .select('id, name')
+            .eq('status', 'Active')
             .order('name');
         setSalesPersons((data as any) || []);
     };
@@ -449,7 +449,7 @@ export default function ReceiptModal({ isOpen, onClose, onSuccess, record }: Rec
                 receipt_number: receiptNumber,
                 customer_id: selectedCustomer.id,
                 customer_name: selectedCustomer.name,
-                sales_person_id: salesPersonId || null,
+                sales_rep_id: salesPersonId || null,
                 route_id: routeId || null,
                 date: receiptDate,
                 payment_method: paymentMethod,

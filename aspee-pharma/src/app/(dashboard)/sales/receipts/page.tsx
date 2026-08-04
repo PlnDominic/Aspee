@@ -33,10 +33,12 @@ export default function ReceiptsPage() {
                 return { data: null, error: receiptsError };
             }
 
-            // Direct sales_person_id from receipt (new), fallback to invoice (legacy)
-            const directSalesIds = (receipts || []).map((r: any) => r.sales_person_id).filter(Boolean);
+            // Direct sales_rep_id from receipt (current), fallback to the linked
+            // invoice's salesperson_id (legacy receipts predating the sales_reps
+            // roster — that column still points at system_users).
+            const directRepIds = (receipts || []).map((r: any) => r.sales_rep_id).filter(Boolean);
             const legacyInvoiceIds = (receipts || [])
-                .filter((r: any) => !r.sales_person_id && r.invoice_id)
+                .filter((r: any) => !r.sales_rep_id && r.invoice_id)
                 .map((r: any) => r.invoice_id);
 
             const invoiceSalespersonMap = new Map<string, string | null>();
@@ -50,24 +52,30 @@ export default function ReceiptsPage() {
                 });
             }
 
-            const allSalesIds = Array.from(new Set([
-                ...directSalesIds,
-                ...Array.from(invoiceSalespersonMap.values()).filter(Boolean) as string[],
-            ]));
+            const legacySystemUserIds = Array.from(invoiceSalespersonMap.values()).filter(Boolean) as string[];
 
             const salespersonNameMap = new Map<string, string>();
-            if (allSalesIds.length > 0) {
+            if (directRepIds.length > 0) {
+                const { data: reps } = await supabase
+                    .from('sales_reps')
+                    .select('id, name')
+                    .in('id', directRepIds);
+                (reps || []).forEach((p: any) => {
+                    if (p.name) salespersonNameMap.set(p.id, p.name);
+                });
+            }
+            if (legacySystemUserIds.length > 0) {
                 const { data: salespeople } = await supabase
                     .from('system_users')
                     .select('id, name')
-                    .in('id', allSalesIds);
+                    .in('id', legacySystemUserIds);
                 (salespeople || []).forEach((p: any) => {
                     if (p.name) salespersonNameMap.set(p.id, p.name);
                 });
             }
 
             const mapped = (receipts || []).map((r: any) => {
-                const sId = r.sales_person_id ?? (r.invoice_id ? invoiceSalespersonMap.get(r.invoice_id) : null);
+                const sId = r.sales_rep_id ?? (r.invoice_id ? invoiceSalespersonMap.get(r.invoice_id) : null);
                 return {
                     ...r,
                     salesperson_name: sId ? salespersonNameMap.get(sId) ?? null : null,
