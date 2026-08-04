@@ -7,8 +7,9 @@ import DataTable from '@/components/DataTable';
 import StatCard from '@/components/StatCard';
 import StatusBadge from '@/components/StatusBadge';
 import SalesRepModal from '@/components/SalesRepModal';
-import { Plus, Users, UserCheck, UserX, Edit2 } from 'lucide-react';
-import { useSupabaseQuery } from '@/lib/hooks';
+import { Plus, Users, UserCheck, UserX, Edit2, Trash2, Power, PowerOff } from 'lucide-react';
+import { useSupabaseQuery, useAction, useDelete } from '@/lib/hooks';
+import { supabase } from '@/lib/supabase';
 
 export default function SalesRepsPage() {
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -27,6 +28,17 @@ export default function SalesRepsPage() {
         return { total: rows.length, active, inactive };
     }, [rows]);
 
+    const toggleStatusMutation = useAction<{ id: string; status: string }>({
+        mutationFn: async ({ id, status }) => {
+            const { error } = await supabase.from('sales_reps').update({ status }).eq('id', id);
+            if (error) throw error;
+        },
+        invalidateKeys: ['sales_reps'],
+        successMessage: 'Sales rep status updated',
+    });
+
+    const deleteMutation = useDelete('sales_reps');
+
     const handleOpenCreate = () => {
         setEditingRecord(null);
         setIsModalOpen(true);
@@ -35,6 +47,15 @@ export default function SalesRepsPage() {
     const handleOpenEdit = (record: any) => {
         setEditingRecord(record);
         setIsModalOpen(true);
+    };
+
+    const handleToggleStatus = (row: any) => {
+        toggleStatusMutation.mutate({ id: row.id, status: row.status === 'Active' ? 'Inactive' : 'Active' });
+    };
+
+    const handleDelete = (row: any) => {
+        if (!confirm(`Remove ${row.name} from the sales reps roster? This cannot be undone.`)) return;
+        deleteMutation.mutate(row.id);
     };
 
     const columns = [
@@ -57,27 +78,35 @@ export default function SalesRepsPage() {
         { key: 'notes', label: 'Notes', wrap: true },
         {
             key: 'actions',
-            label: '',
+            label: 'Actions',
             render: (_v: unknown, row: any) => (
-                <button
-                    onClick={(e) => { e.stopPropagation(); handleOpenEdit(row); }}
-                    style={{
-                        border: 'none',
-                        background: 'var(--primary-50)',
-                        color: 'var(--primary-600)',
-                        width: '30px',
-                        height: '30px',
-                        borderRadius: '6px',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        transition: 'all 0.15s',
-                    }}
-                    title="Edit sales rep"
-                >
-                    <Edit2 size={14} />
-                </button>
+                <div style={{ display: 'flex', gap: 8 }}>
+                    <button
+                        onClick={(e) => { e.stopPropagation(); handleOpenEdit(row); }}
+                        style={actionButtonStyle}
+                        title="Edit sales rep"
+                    >
+                        <Edit2 size={14} />
+                    </button>
+                    <button
+                        onClick={(e) => { e.stopPropagation(); handleToggleStatus(row); }}
+                        style={{
+                            ...actionButtonStyle,
+                            background: row.status === 'Active' ? 'var(--amber-50, #fffbeb)' : 'var(--success-50, #f0fdf4)',
+                            color: row.status === 'Active' ? '#b45309' : '#15803d',
+                        }}
+                        title={row.status === 'Active' ? 'Deactivate' : 'Activate'}
+                    >
+                        {row.status === 'Active' ? <PowerOff size={14} /> : <Power size={14} />}
+                    </button>
+                    <button
+                        onClick={(e) => { e.stopPropagation(); handleDelete(row); }}
+                        style={{ ...actionButtonStyle, color: 'var(--danger)' }}
+                        title="Remove sales rep"
+                    >
+                        <Trash2 size={14} />
+                    </button>
+                </div>
             ),
         },
     ];
@@ -132,3 +161,16 @@ export default function SalesRepsPage() {
         </div>
     );
 }
+
+const actionButtonStyle: React.CSSProperties = {
+    padding: '6px',
+    borderRadius: '6px',
+    border: '1px solid var(--slate-200)',
+    background: 'var(--card-bg)',
+    color: 'var(--slate-600)',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    transition: 'all 0.15s ease',
+};
