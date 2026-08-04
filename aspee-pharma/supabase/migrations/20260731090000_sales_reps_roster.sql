@@ -285,8 +285,12 @@ BEGIN
 END;
 $$;
 
--- 5. Reconciliation view now joins sales_reps instead of system_users
-CREATE OR REPLACE VIEW public.v_sales_receipt_reconciliation AS
+-- 5. Reconciliation view now joins sales_reps instead of system_users.
+-- DROP first: CREATE OR REPLACE VIEW cannot rename an existing column
+-- (sales_person_id -> sales_rep_id), only DROP + CREATE can.
+DROP VIEW IF EXISTS public.v_sales_receipt_reconciliation;
+
+CREATE VIEW public.v_sales_receipt_reconciliation AS
 SELECT
     sr.id,
     sr.receipt_number,
