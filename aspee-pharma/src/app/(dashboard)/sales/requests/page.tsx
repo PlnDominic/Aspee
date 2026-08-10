@@ -37,7 +37,7 @@ export default function SalesRequestsPage() {
                     notes,
                     created_at,
                     updated_at,
-                    salesperson:system_users!requisitions_salesperson_id_fkey(id, name, email),
+                    salesperson:sales_reps!requisitions_salesperson_id_fkey(id, name, email),
                     route:vans!route_id(id, van_id, route_area),
                     items:requisition_items(
                         id,

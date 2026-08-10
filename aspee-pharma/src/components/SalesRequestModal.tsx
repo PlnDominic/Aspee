@@ -19,9 +19,10 @@ interface SalesRequestModalProps {
 
 interface SalesProfile {
     id: string;
-    full_name: string;
-    name?: string | null;
+    name: string;
     email?: string | null;
+    phone?: string | null;
+    status?: string | null;
 }
 
 interface SalesRoute {
@@ -115,7 +116,7 @@ export default function SalesRequestModal({
         setFetching(true);
         try {
             const [{ data: salesProfiles, error: profilesError }, { data: vanRoutes, error: routesError }, { data: finishedGoods, error: productsError }] = await Promise.all([
-                supabase.from('system_users').select('id, name, email').eq('status', 'Active').in('role', ['Van Sales Rep', 'Sales Manager']).order('name'),
+                supabase.from('sales_reps').select('id, name, email, phone, status').eq('status', 'Active').order('name'),
                 supabase.from('vans').select('id, van_id, driver_name, route_area').neq('status', 'Maintenance').order('van_id'),
                 supabase.from('products').select('id, name, sku, unit, material_type, cash_price, units_per_carton, unit_label').eq('material_type', 'Finished Good').order('name'),
             ]);
@@ -126,8 +127,6 @@ export default function SalesRequestModal({
 
             const nextSalespeople = (salesProfiles || []).map((profile: any) => ({
                 ...profile,
-                name: profile.name || profile.full_name || '',
-                full_name: profile.name || profile.full_name || '',
             }));
             const nextRoutes = vanRoutes || [];
 
@@ -138,14 +137,14 @@ export default function SalesRequestModal({
             if (!editingRequest) {
                 const matchedSalesperson = nextSalespeople.find((profile: any) =>
                     (normalizeSearchText(currentUser?.email) && normalizeSearchText(profile.email) === normalizeSearchText(currentUser?.email)) ||
-                    (normalizeSearchText(currentUser?.name) && normalizeSearchText(profile.full_name) === normalizeSearchText(currentUser?.name))
+                    (normalizeSearchText(currentUser?.name) && normalizeSearchText(profile.name) === normalizeSearchText(currentUser?.name))
                 );
 
                 if (matchedSalesperson) {
                     setSalespersonId(matchedSalesperson.id);
 
                     const matchedRoute = nextRoutes.find((route) =>
-                        normalizeSearchText(route.driver_name) && normalizeSearchText(route.driver_name) === normalizeSearchText(matchedSalesperson.full_name)
+                        normalizeSearchText(route.driver_name) && normalizeSearchText(route.driver_name) === normalizeSearchText(matchedSalesperson.name)
                     );
 
                     if (matchedRoute) {
@@ -319,7 +318,7 @@ export default function SalesRequestModal({
                         route_id: routeId || null,
                         notes,
                         status: finalStatus,
-                        created_by: salespersonId,
+                        created_by: currentUser?.id || null,
                     }])
                     .select('id')
                     .single();
@@ -350,7 +349,7 @@ export default function SalesRequestModal({
                 
                 // 1. Resolve Sales Person Name
                 const salesperson = salespeople.find(sp => sp.id === salespersonId);
-                const salesPersonName = salesperson?.name || salesperson?.full_name || getSingleRelation<any>(editingRequest?.salesperson)?.name || getSingleRelation<any>(editingRequest?.salesperson)?.full_name || 'Unknown Rep';
+                const salesPersonName = salesperson?.name || getSingleRelation<any>(editingRequest?.salesperson)?.name || 'Unknown Rep';
 
                 // 2. Generate a stable waybill number from the approved request.
                 const autoWaybillNumber = `WB-${requestNumber}`;
@@ -646,7 +645,7 @@ export default function SalesRequestModal({
     if (readOnly) {
         const totalApproved = items.reduce((sum, item) => sum + (Number(item.quantity_approved) || 0), 0);
         const totalIssued = items.reduce((sum, item) => sum + (Number(item.quantity_issued) || 0), 0);
-        const repName = selectedSalesperson?.name || selectedSalesperson?.full_name || getSingleRelation<any>(editingRequest?.salesperson)?.name || getSingleRelation<any>(editingRequest?.salesperson)?.full_name || 'Unknown Rep';
+        const repName = selectedSalesperson?.name || getSingleRelation<any>(editingRequest?.salesperson)?.name || 'Unknown Rep';
         const repEmail = selectedSalesperson?.email || getSingleRelation<any>(editingRequest?.salesperson)?.email || '';
         const vanIdStr = selectedRoute?.van_id || getSingleRelation<any>(editingRequest?.route)?.van_id || '';
         const routeAreaStr = selectedRoute?.route_area || getSingleRelation<any>(editingRequest?.route)?.route_area || '';
@@ -851,7 +850,7 @@ export default function SalesRequestModal({
                                     <option value="">Select salesperson</option>
                                     {salespeople.map((profile: any) => (
                                         <option key={profile.id} value={profile.id}>
-                                            {profile.name || profile.full_name}
+                                            {profile.name}
                                         </option>
                                     ))}
                                 </select>
@@ -890,7 +889,7 @@ export default function SalesRequestModal({
                     </div>
 
                     <div className="sales-request-meta">
-                        <span>{selectedSalesperson?.name || selectedSalesperson?.full_name || 'No salesperson selected'}</span>
+                        <span>{selectedSalesperson?.name || 'No salesperson selected'}</span>
                         <span>{selectedRoute ? `${selectedRoute.van_id}${selectedRoute.route_area ? ` • ${selectedRoute.route_area}` : ''}` : 'No route selected'}</span>
                     </div>
                 </div>
