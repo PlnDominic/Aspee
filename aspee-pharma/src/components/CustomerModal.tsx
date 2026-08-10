@@ -58,7 +58,13 @@ export default function CustomerModal({ isOpen, onClose, onSuccess, record, read
 
     useEffect(() => {
         supabase.from('vans').select('route_area').then(({ data }) => {
-            const areas = [...new Set((data || []).map((v: any) => v.route_area).filter(Boolean))].sort() as string[];
+            const areas = [...new Set((data || [])
+                .flatMap((v: any) => String(v.route_area || '')
+                    .split(/\s*(?:\/|,|\||\band\b)\s*/i)
+                    .map((area) => area.trim())
+                    .filter(Boolean)
+                )
+            )].sort() as string[];
             setRoutes(areas);
         });
         supabase

@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Modal from './Modal';
-import { Truck, User, Phone, MapPin, Hash, Banknote, Activity, FileText } from 'lucide-react';
+import { Route, User, Phone, MapPin, Hash, Banknote, Activity, FileText } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { ensureVanStockLocation } from '@/lib/vanStock';
 
@@ -19,6 +19,8 @@ const initialForm = {
     plate_number: '',
     driver_name: '',
     driver_phone: '',
+    location_one: '',
+    location_two: '',
     route_area: '',
     loaded_value: 0,
     customer_count: 0,
@@ -35,13 +37,28 @@ export default function VanModal({ isOpen, onClose, onSuccess, record, readOnly 
 
     const isEditing = !!record;
 
+    const splitRouteLocations = (routeArea = '') => {
+        const [locationOne = '', locationTwo = ''] = routeArea
+            .split(/\s*(?:\/|,|\||\band\b)\s*/i)
+            .map((part) => part.trim())
+            .filter(Boolean);
+
+        return { locationOne, locationTwo };
+    };
+
+    const buildRouteArea = (locationOne: string, locationTwo: string) =>
+        [locationOne, locationTwo].map((location) => location.trim()).filter(Boolean).join(' / ');
+
     useEffect(() => {
         if (record) {
+            const { locationOne, locationTwo } = splitRouteLocations(record.route_area || '');
             setFormData({
                 van_id: record.van_id || '',
                 plate_number: record.plate_number || '',
                 driver_name: record.driver_name || '',
                 driver_phone: record.driver_phone || '',
+                location_one: locationOne,
+                location_two: locationTwo,
                 route_area: record.route_area || '',
                 loaded_value: record.loaded_value || 0,
                 customer_count: record.customer_count || 0,
@@ -84,15 +101,15 @@ export default function VanModal({ isOpen, onClose, onSuccess, record, readOnly 
             let nextNum = 1;
             if (!error && data && data.length > 0) {
                 const lastId = data[0].van_id;
-                const match = lastId?.match(/VAN-(\d+)/);
+                const match = lastId?.match(/(?:Route|VAN)-?\s*(\d+)/i);
                 if (match) {
                     nextNum = parseInt(match[1], 10) + 1;
                 }
             }
-            const newId = `VAN-${String(nextNum).padStart(3, '0')}`;
+            const newId = `Route ${nextNum}`;
             setFormData({ ...initialForm, van_id: newId });
         } catch {
-            setFormData({ ...initialForm, van_id: 'VAN-001' });
+            setFormData({ ...initialForm, van_id: 'Route 1' });
         }
     };
 
@@ -100,16 +117,18 @@ export default function VanModal({ isOpen, onClose, onSuccess, record, readOnly 
         e.preventDefault();
         setLoading(true);
         try {
+            const routeArea = buildRouteArea(formData.location_one, formData.location_two);
+            const { location_one, location_two, ...dbFormData } = formData;
             const payload = {
-                ...formData,
+                ...dbFormData,
+                route_area: routeArea,
                 assigned_customer_ids: selectedCustomerIds,
                 customer_count: selectedCustomerIds.length,
             };
             if (isEditing) {
-                const { van_id, ...updateData } = payload;
                 const { error } = await supabase
                     .from('vans')
-                    .update(updateData)
+                    .update(payload)
                     .eq('id', record.id);
                 if (error) throw error;
             } else {
@@ -129,14 +148,21 @@ export default function VanModal({ isOpen, onClose, onSuccess, record, readOnly 
             onSuccess();
             onClose();
         } catch (error) {
-            console.error('Error saving van:', error);
+            console.error('Error saving route:', error);
         } finally {
             setLoading(false);
         }
     };
 
     const routeMatchedCustomers = customers.filter(
-        (c) => c.route && formData.route_area && c.route.toLowerCase().trim() === formData.route_area.toLowerCase().trim()
+        (c) => {
+            const customerRoute = c.route?.toLowerCase().trim();
+            const assignedLocations = [formData.location_one, formData.location_two]
+                .map((location) => location.toLowerCase().trim())
+                .filter(Boolean);
+
+            return customerRoute && assignedLocations.includes(customerRoute);
+        }
     );
 
     const toggleCustomer = (customerId: string) => {
@@ -149,22 +175,22 @@ export default function VanModal({ isOpen, onClose, onSuccess, record, readOnly 
         <Modal
             isOpen={isOpen}
             onClose={onClose}
-            title={readOnly ? 'View Van' : isEditing ? 'Edit Van' : 'Add New Van'}
-            subtitle={readOnly ? 'Van and sales person details' : isEditing ? 'Update the van and sales person details below' : 'Register a new van for route operations'}
+            title={readOnly ? 'View Route' : isEditing ? 'Edit Route' : 'Add New Route'}
+            subtitle={readOnly ? 'Route and sales person details' : isEditing ? 'Update the route and sales person details below' : 'Assign a sales person to two route locations'}
             width={640}
         >
             <form onSubmit={handleSubmit}>
-                {/* Van Details */}
+                {/* Route Details */}
                 <div className="van-form-section">
                     <div className="van-form-section-header">
-                        <Truck size={15} />
-                        <span>Van Details</span>
+                        <Route size={15} />
+                        <span>Route Details</span>
                     </div>
 
                     <div className="van-form-row">
                         <div className="van-form-field">
                             <label className="van-form-label">
-                                Van ID <span className="van-form-required">*</span>
+                                Route Heading <span className="van-form-required">*</span>
                             </label>
                             <div className="van-form-input-wrapper">
                                 <Hash size={16} className="van-form-input-icon" />
@@ -172,21 +198,19 @@ export default function VanModal({ isOpen, onClose, onSuccess, record, readOnly 
                                     required
                                     type="text"
                                     value={formData.van_id}
-                                    readOnly
+                                    onChange={(e) => setFormData({ ...formData, van_id: e.target.value })}
+                                    placeholder="e.g. Route 1"
                                     className="van-form-input has-icon"
-                                    style={{ background: 'var(--slate-50)', cursor: 'not-allowed' }}
+                                    readOnly={readOnly}
                                 />
                             </div>
                         </div>
 
                         <div className="van-form-field">
-                            <label className="van-form-label">
-                                Plate Number <span className="van-form-required">*</span>
-                            </label>
+                            <label className="van-form-label">Vehicle Plate Number</label>
                             <div className="van-form-input-wrapper">
-                                <Truck size={16} className="van-form-input-icon" />
+                                <Route size={16} className="van-form-input-icon" />
                                 <input
-                                    required
                                     type="text"
                                     value={formData.plate_number}
                                     onChange={(e) => setFormData({ ...formData, plate_number: e.target.value })}
@@ -253,26 +277,44 @@ export default function VanModal({ isOpen, onClose, onSuccess, record, readOnly 
                     </div>
                 </div>
 
-                {/* Route & Operations */}
+                {/* Route Locations & Operations */}
                 <div className="van-form-section" style={{ borderBottom: 'none', paddingBottom: 0 }}>
                     <div className="van-form-section-header">
                         <MapPin size={15} />
-                        <span>Route & Operations</span>
+                        <span>Route Locations & Operations</span>
                     </div>
 
                     <div className="van-form-row">
-                        <div className={`van-form-field ${!(isEditing || readOnly) ? 'full-width' : ''}`}>
+                        <div className="van-form-field">
                             <label className="van-form-label">
-                                Route Area <span className="van-form-required">*</span>
+                                Location 1 <span className="van-form-required">*</span>
                             </label>
                             <div className="van-form-input-wrapper">
                                 <MapPin size={16} className="van-form-input-icon" />
                                 <input
                                     required
                                     type="text"
-                                    value={formData.route_area}
-                                    onChange={(e) => setFormData({ ...formData, route_area: e.target.value })}
-                                    placeholder="e.g. Kumasi Central"
+                                    value={formData.location_one}
+                                    onChange={(e) => setFormData({ ...formData, location_one: e.target.value })}
+                                    placeholder="e.g. Oda"
+                                    className="van-form-input has-icon"
+                                    readOnly={readOnly}
+                                />
+                            </div>
+                        </div>
+
+                        <div className="van-form-field">
+                            <label className="van-form-label">
+                                Location 2 <span className="van-form-required">*</span>
+                            </label>
+                            <div className="van-form-input-wrapper">
+                                <MapPin size={16} className="van-form-input-icon" />
+                                <input
+                                    required
+                                    type="text"
+                                    value={formData.location_two}
+                                    onChange={(e) => setFormData({ ...formData, location_two: e.target.value })}
+                                    placeholder="e.g. Enchi"
                                     className="van-form-input has-icon"
                                     readOnly={readOnly}
                                 />
@@ -339,7 +381,7 @@ export default function VanModal({ isOpen, onClose, onSuccess, record, readOnly 
 
                     <div className="van-form-row" style={{ marginTop: 14, gridTemplateColumns: '1fr' }}>
                         <div className="van-form-field">
-                            <label className="van-form-label">Assigned Customers (Route Matched)</label>
+                            <label className="van-form-label">Assigned Customers (Location Matched)</label>
                             <div
                                 style={{
                                     maxHeight: 160,
@@ -352,7 +394,7 @@ export default function VanModal({ isOpen, onClose, onSuccess, record, readOnly 
                             >
                                 {routeMatchedCustomers.length === 0 ? (
                                     <div style={{ fontSize: 11, color: 'var(--slate-500)', padding: 6 }}>
-                                        No active customers found for this route.
+                                        No active customers found for these locations.
                                     </div>
                                 ) : (
                                     routeMatchedCustomers.map((customer) => (
@@ -406,7 +448,7 @@ export default function VanModal({ isOpen, onClose, onSuccess, record, readOnly 
                                     <span className="van-btn-spinner" />
                                     Saving...
                                 </>
-                            ) : isEditing ? 'Update Van' : 'Add Van'}
+                            ) : isEditing ? 'Update Route' : 'Add Route'}
                         </button>
                     )}
                 </div>

@@ -6,7 +6,7 @@ import DataTable from '@/components/DataTable';
 import StatCard from '@/components/StatCard';
 import StatusBadge from '@/components/StatusBadge';
 import VanModal from '@/components/VanModal';
-import { Plus, Truck, Banknote, MapPin, Users, Edit2, Trash2, Eye } from 'lucide-react';
+import { Plus, Route, Banknote, MapPin, Users, Edit2, Trash2, Eye } from 'lucide-react';
 import { useSupabaseQuery, useDelete } from '@/lib/hooks';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
@@ -110,7 +110,7 @@ export default function RoutesPage() {
     const deleteMutation = useDelete('vans');
 
     const handleDelete = async (id: string) => {
-        if (!confirm('Are you sure you want to delete this van?')) return;
+        if (!confirm('Are you sure you want to delete this route?')) return;
         deleteMutation.mutate(id);
     };
 
@@ -125,7 +125,7 @@ export default function RoutesPage() {
     };
 
     // Stats
-    const activeVans = vansWithLoadedValue.filter(v => v.status !== 'Maintenance').length;
+    const activeRouteCount = vansWithLoadedValue.filter(v => v.status !== 'Maintenance').length;
     const todaysRevenue = vansWithLoadedValue.reduce((sum, v) => sum + (parseFloat(v.today_sales) || 0), 0);
     const activeRoutes = new Set(vansWithLoadedValue.filter(v => v.status === 'On Route').map(v => v.route_area)).size;
     const totalCustomers = vansWithLoadedValue.reduce((sum, v) => sum + (parseInt(v.customer_count) || 0), 0);
@@ -133,16 +133,37 @@ export default function RoutesPage() {
     const columns = [
         {
             key: 'van_id',
-            label: 'Van ID',
+            label: 'Route Heading',
             render: (v: unknown) => <span style={{ fontWeight: 700, color: 'var(--primary-600)' }}>{v as string}</span>
         },
         {
             key: 'plate_number',
-            label: 'Plate No.',
-            render: (v: unknown) => <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>{v as string}</span>
+            label: 'Vehicle Plate',
+            render: (v: unknown) => <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>{(v as string) || '-'}</span>
         },
         { key: 'driver_name', label: 'Sales Person' },
-        { key: 'route_area', label: 'Route Area' },
+        {
+            key: 'route_area',
+            label: 'Locations',
+            render: (v: unknown) => {
+                const locations = String(v || '')
+                    .split(/\s*(?:\/|,|\||\band\b)\s*/i)
+                    .map((location) => location.trim())
+                    .filter(Boolean);
+
+                if (locations.length === 0) return <span>-</span>;
+
+                return (
+                    <div style={{ display: 'grid', gap: 3 }}>
+                        {locations.map((location, index) => (
+                            <span key={`${location}-${index}`} style={{ fontSize: 11, color: 'var(--slate-700)' }}>
+                                {location}
+                            </span>
+                        ))}
+                    </div>
+                );
+            }
+        },
         {
             key: 'loaded_value',
             label: 'Loaded Value',
@@ -171,21 +192,21 @@ export default function RoutesPage() {
                     <button
                         onClick={() => { setSelectedVan(row); setViewOnly(true); setIsModalOpen(true); }}
                         style={{ padding: 6, borderRadius: 6, border: '1px solid var(--slate-200)', background: 'var(--card-bg)', color: 'var(--slate-600)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                        title="View Van"
+                        title="View Route"
                     >
                         <Eye size={14} />
                     </button>
                     <button
                         onClick={() => { setSelectedVan(row); setViewOnly(false); setIsModalOpen(true); }}
                         style={{ padding: 6, borderRadius: 6, border: '1px solid var(--slate-200)', background: 'var(--card-bg)', color: 'var(--primary-600)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                        title="Edit Van"
+                        title="Edit Route"
                     >
                         <Edit2 size={14} />
                     </button>
                     <button
                         onClick={() => handleDelete(row.id)}
                         style={{ padding: 6, borderRadius: 6, border: '1px solid var(--slate-200)', background: 'var(--card-bg)', color: 'var(--danger)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                        title="Delete Van"
+                        title="Delete Route"
                     >
                         <Trash2 size={14} />
                     </button>
@@ -197,23 +218,23 @@ export default function RoutesPage() {
     return (
         <div className="animate-fade-in">
             <PageHeader
-                title="Routes & Vans"
-                subtitle="Van inventory, route plans, and daily operations"
-                breadcrumbs={[{ label: 'Routes & Vans' }]}
+                title="Routes"
+                subtitle="Sales person route assignments, locations, and daily operations"
+                breadcrumbs={[{ label: 'Routes' }]}
                 actions={
                     <button
                         onClick={() => { setSelectedVan(null); setViewOnly(false); setIsModalOpen(true); }}
                         style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 18px', borderRadius: 8, border: 'none', background: 'linear-gradient(135deg, var(--primary-600), var(--primary-500))', fontSize: 11, fontWeight: 600, color: 'white', cursor: 'pointer' }}
                     >
-                        <Plus size={16} /> Add Van
+                        <Plus size={16} /> Add Route
                     </button>
                 }
             />
 
             <div className="animate-stagger" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 24 }}>
-                <StatCard title="Active Vans" value={activeVans} icon={<Truck size={20} />} color="blue" />
+                <StatCard title="Active Routes" value={activeRouteCount} icon={<Route size={20} />} color="blue" />
                 <StatCard title="Today's Revenue" value={formatCurrency(todaysRevenue)} icon={<Banknote size={20} />} color="green" />
-                <StatCard title="Active Routes" value={activeRoutes} icon={<MapPin size={20} />} color="teal" />
+                <StatCard title="Routes On Road" value={activeRoutes} icon={<MapPin size={20} />} color="teal" />
                 <StatCard title="Total Customers" value={totalCustomers} icon={<Users size={20} />} color="purple" />
             </div>
 
@@ -221,13 +242,13 @@ export default function RoutesPage() {
                 columns={columns}
                 data={vansWithLoadedValue}
                 loading={loading}
-                searchPlaceholder="Search vans or routes..."
+                searchPlaceholder="Search routes or locations..."
             />
 
             <VanModal
                 isOpen={isModalOpen}
                 onClose={() => { setIsModalOpen(false); setViewOnly(false); }}
-                onSuccess={() => { toast.success(selectedVan ? 'Van updated successfully' : 'Van added successfully'); queryClient.invalidateQueries({ queryKey: ['vans'] }); }}
+                onSuccess={() => { toast.success(selectedVan ? 'Route updated successfully' : 'Route added successfully'); queryClient.invalidateQueries({ queryKey: ['vans'] }); }}
                 record={selectedVan}
                 readOnly={viewOnly}
             />
