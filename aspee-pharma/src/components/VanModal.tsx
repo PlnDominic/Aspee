@@ -81,10 +81,9 @@ export default function VanModal({ isOpen, onClose, onSuccess, record, readOnly 
             .then(({ data }) => setCustomers(data || []));
 
         supabase
-            .from('system_users')
-            .select('id, name')
+            .from('sales_reps')
+            .select('id, name, phone')
             .eq('status', 'Active')
-            .in('role', ['Van Sales Rep', 'Sales Manager'])
             .not('name', 'is', null)
             .order('name', { ascending: true })
             .then(({ data }) => setSalesUsers((data || []).filter((u: any) => u.name?.trim())));
@@ -248,7 +247,14 @@ export default function VanModal({ isOpen, onClose, onSuccess, record, readOnly 
                                     <select
                                         required
                                         value={formData.driver_name}
-                                        onChange={(e) => setFormData({ ...formData, driver_name: e.target.value })}
+                                        onChange={(e) => {
+                                            const selectedRep = salesUsers.find((user) => user.name === e.target.value);
+                                            setFormData({
+                                                ...formData,
+                                                driver_name: e.target.value,
+                                                driver_phone: selectedRep?.phone || formData.driver_phone,
+                                            });
+                                        }}
                                         className="van-form-input has-icon"
                                     >
                                         <option value="">Select sales person</option>
