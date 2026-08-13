@@ -918,7 +918,7 @@ export default function SalesRequestModal({
                                 {showDropdown && (
                                     <div className="sales-request-dropdown">
                                         {filteredProducts.length > 0 ? (
-                                            filteredProducts.slice(0, 10).map((product) => (
+                                            filteredProducts.map((product) => (
                                                 <button
                                                     key={product.id}
                                                     type="button"

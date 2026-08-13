@@ -61,7 +61,8 @@ export default function TransferModal({ isOpen, onClose, onSave, initialData, mo
     
     const [products, setProducts] = useState<Product[]>([]);
     const [locations, setLocations] = useState<Location[]>([]);
-    const [validSalespersonLocNames, setValidSalespersonLocNames] = useState<Set<string>>(new Set());
+    const [salesReps, setSalesReps] = useState<{ id: string; name: string }[]>([]);
+    const [repLocationIds, setRepLocationIds] = useState<Record<string, string>>({});
     
     const [transferNumber, setTransferNumber] = useState('');
     const [fromLocationId, setFromLocationId] = useState('');
@@ -147,20 +148,27 @@ export default function TransferModal({ isOpen, onClose, onSave, initialData, mo
         if (isSalesVanLoadFlow) {
             return isVanStockLocation(loc);
         }
-        // Finished Goods Store → only salesperson locations for actual sales-role staff
-        if (fromLocation && isFinishedGoodsLocation(fromLocation)) {
-            return isSalespersonStockLocation(loc) && validSalespersonLocNames.has(loc.name);
-        }
         // Vans are valid destinations from Sales Department only
         if (isVanStockLocation(loc)) {
             return fromLocation ? isSalesDepartmentLocation(fromLocation) : false;
         }
-        // Salesperson locations are only reachable from Finished Goods (handled above)
+        // Salesperson locations are only reachable from Finished Goods, which is
+        // handled by the sales-rep destination dropdown below.
         if (isSalespersonStockLocation(loc)) {
             return false;
         }
         return true;
     });
+
+    // When transferring out of Finished Goods, the destination is a sales rep
+    // from the Sales Reps roster — mapped to that rep's personal stock location.
+    const fromIsFinishedGoods = !!(fromLocation && isFinishedGoodsLocation(fromLocation));
+    const selectedToRepId = fromIsFinishedGoods
+        ? (salesReps.find(r => toLocation?.name === getSalespersonLocationName(r.name))?.id || '')
+        : '';
+    const handleToRepChange = (repId: string) => {
+        setToLocationId(repLocationIds[repId] || '');
+    };
 
     useEffect(() => {
         if (isOpen) {
@@ -187,24 +195,31 @@ export default function TransferModal({ isOpen, onClose, onSave, initialData, mo
                 ? supabase.from('products').select('id, name, sku, unit, bulk_unit, bulk_to_base_ratio').eq('material_type', 'Finished Good').order('name')
                 : supabase.from('products').select('id, name, sku, unit, bulk_unit, bulk_to_base_ratio').order('name');
 
-            const [prodRes, vanRes, profilesRes] = await Promise.all([
+            const [prodRes, vanRes, repsRes] = await Promise.all([
                 productsQuery,
                 supabase.from('vans').select('id, van_id, driver_name, route_area').order('van_id'),
-                supabase.from('system_users').select('id, name, role').eq('status', 'Active').in('role', ['Van Sales Rep', 'Sales Manager']).not('name', 'is', null).order('name'),
+                supabase.from('sales_reps').select('id, name').eq('status', 'Active').not('name', 'is', null).order('name'),
             ]);
 
             if (prodRes.error) throw prodRes.error;
             if (vanRes.error) throw vanRes.error;
+            if (repsRes.error) throw repsRes.error;
 
-            const salesProfiles = (profilesRes.data || []).map((p: any) => ({
-                ...p,
-                full_name: p.name || p.full_name || '',
-            })).filter((p: any) => p.full_name?.trim());
-            setValidSalespersonLocNames(new Set(salesProfiles.map((p: any) => getSalespersonLocationName(p.full_name))));
+            // Active sales reps from the Sales Reps roster — the destination picker
+            // for stock leaving Finished Goods. Ensure each rep has a personal
+            // stock location so the transfer has a concrete destination.
+            const activeReps = (repsRes.data || [])
+                .map((r: any) => ({ id: r.id, name: (r.name || '').trim() }))
+                .filter(r => r.name);
+            setSalesReps(activeReps);
 
             await ensureSalesDepartmentLocation();
             await Promise.all((vanRes.data || []).map((van: any) => ensureVanStockLocation(van)));
-            await Promise.all(salesProfiles.map((p: any) => ensureSalespersonStockLocation({ id: p.id, full_name: p.full_name })));
+            const ensured = await Promise.all(activeReps.map(async (rep) => {
+                const loc = await ensureSalespersonStockLocation({ id: rep.id, full_name: rep.name });
+                return [rep.id, loc?.id] as const;
+            }));
+            setRepLocationIds(Object.fromEntries(ensured.filter(([, locId]) => locId)));
 
             const { data: locationsData, error: locationsError } = await supabase
                 .from('stock_locations')
@@ -557,10 +572,9 @@ export default function TransferModal({ isOpen, onClose, onSave, initialData, mo
                                     setFromLocationId(newId);
                                     // Clear destination if it is now excluded by the new source rules
                                     const currentTo = locations.find(l => l.id === toLocationId);
-                                    const toIsVan = currentTo ? isVanStockLocation(currentTo) : false;
                                     if (
                                         toLocationId === newId ||
-                                        (newLoc && isFinishedGoodsLocation(newLoc) && !toIsVan)
+                                        (newLoc && isFinishedGoodsLocation(newLoc) && !(currentTo && isSalespersonStockLocation(currentTo)))
                                     ) {
                                         setToLocationId('');
                                     }
@@ -584,24 +598,42 @@ export default function TransferModal({ isOpen, onClose, onSave, initialData, mo
                         <label>Destination Location (To) *</label>
                         <div className="input-wrapper">
                             <MapPin size={16} className="icon" />
-                            <select 
-                                required 
-                                value={toLocationId} 
-                                onChange={(e) => setToLocationId(e.target.value)}
-                                disabled={isViewOnly}
-                            >
-                                <option value="">Select destination</option>
-                                {filteredToLocations.map(loc => (
-                                    <option key={loc.id} value={loc.id}>{loc.name} ({loc.type})</option>
-                                ))}
-                            </select>
+                            {fromIsFinishedGoods ? (
+                                <select
+                                    required
+                                    value={selectedToRepId}
+                                    onChange={(e) => handleToRepChange(e.target.value)}
+                                    disabled={isViewOnly}
+                                >
+                                    <option value="">
+                                        {toLocation && isSalespersonStockLocation(toLocation) && !selectedToRepId
+                                            ? toLocation.name
+                                            : 'Select sales rep'}
+                                    </option>
+                                    {salesReps.map(rep => (
+                                        <option key={rep.id} value={rep.id}>{rep.name}</option>
+                                    ))}
+                                </select>
+                            ) : (
+                                <select 
+                                    required 
+                                    value={toLocationId} 
+                                    onChange={(e) => setToLocationId(e.target.value)}
+                                    disabled={isViewOnly}
+                                >
+                                    <option value="">Select destination</option>
+                                    {filteredToLocations.map(loc => (
+                                        <option key={loc.id} value={loc.id}>{loc.name} ({loc.type})</option>
+                                    ))}
+                                </select>
+                            )}
                         </div>
                         {!isViewOnly && (
                             <div style={{ fontSize: 10, color: 'var(--slate-500)', marginTop: 4 }}>
                                 {isSalesVanLoadFlow
                                     ? 'Use this page only for Sales Department to van loading.'
-                                    : fromLocation && isFinishedGoodsLocation(fromLocation)
-                                        ? 'Stock from Finished Goods is assigned to a salesperson, not a van.'
+                                    : fromIsFinishedGoods
+                                        ? 'Stock leaving Finished Goods is assigned to a sales rep from the Sales Reps roster.'
                                         : 'Select any warehouse as the destination.'}
                             </div>
                         )}
