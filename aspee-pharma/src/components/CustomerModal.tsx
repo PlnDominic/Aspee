@@ -40,6 +40,7 @@ const initialForm = {
     sales_person: '',
     route: '',
     credit_limit: 0,
+    opening_balance: 0,
 };
 
 const BUCKET = 'compliance-documents';
@@ -92,7 +93,7 @@ export default function CustomerModal({ isOpen, onClose, onSuccess, record, read
     const [txnSummary, setTxnSummary] = useState({ totalInvoices: 0, totalPayments: 0, balance: 0 });
     const [loadingTxns, setLoadingTxns] = useState(false);
 
-    const fetchTransactions = async (customerName: string) => {
+    const fetchTransactions = async (customerName: string, openingBalance: number) => {
         setLoadingTxns(true);
         try {
             const [invoicesRes, receiptsRes] = await Promise.all([
@@ -127,7 +128,17 @@ export default function CustomerModal({ isOpen, onClose, onSuccess, record, read
                 credit: Number(rec.amount) || 0,
             }));
 
-            const allTxns = [...invoiceTxns, ...receiptTxns].sort(
+            const openingTxns = openingBalance !== 0 ? [{
+                date: null,
+                reference: 'BALANCE B/F',
+                type: 'Opening Balance' as const,
+                description: 'Opening balance (imported)',
+                debit: openingBalance > 0 ? openingBalance : 0,
+                credit: openingBalance < 0 ? -openingBalance : 0,
+            }] : [];
+
+            // Sort by date — the opening balance row (null date) sorts first
+            const allTxns = [...openingTxns, ...invoiceTxns, ...receiptTxns].sort(
                 (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
             );
 
@@ -163,6 +174,7 @@ export default function CustomerModal({ isOpen, onClose, onSuccess, record, read
                 sales_person: record.sales_person || '',
                 route: record.route || '',
                 credit_limit: Number(record.credit_limit) || 0,
+                opening_balance: Number(record.opening_balance) || 0,
             });
             // Load existing Ghana Card doc
             if (record.id) {
@@ -201,7 +213,7 @@ export default function CustomerModal({ isOpen, onClose, onSuccess, record, read
             }
             // Fetch financial transactions when viewing
             if (readOnly && record.name) {
-                fetchTransactions(record.name);
+                fetchTransactions(record.name, Number(record.opening_balance) || 0);
             }
         } else {
             setFormData(initialForm);
@@ -450,6 +462,7 @@ export default function CustomerModal({ isOpen, onClose, onSuccess, record, read
                                         <p><span style={{ color: '#64748b' }}>Sales Person:</span> {formData.sales_person || 'N/A'}</p>
                                         <p><span style={{ color: '#64748b' }}>Route:</span> {formData.route || 'N/A'}</p>
                                         <p><span style={{ color: '#64748b' }}>Credit Limit:</span> GHS {formData.credit_limit.toLocaleString()}</p>
+                                        <p><span style={{ color: '#64748b' }}>Account Balance:</span> GHS {Number(formData.opening_balance || 0).toLocaleString()}</p>
                                     </div>
                                 </div>
                                 <div className="address-block">
@@ -562,7 +575,7 @@ export default function CustomerModal({ isOpen, onClose, onSuccess, record, read
                                                     <td>{txn.date ? new Date(txn.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}</td>
                                                     <td className="txn-ref">{txn.reference}</td>
                                                     <td>
-                                                        <span className={`txn-type-badge ${txn.type === 'Invoice' ? 'txn-type-inv' : 'txn-type-pay'}`}>
+                                                        <span className={`txn-type-badge ${txn.type === 'Invoice' ? 'txn-type-inv' : txn.type === 'Opening Balance' ? 'txn-type-open' : 'txn-type-pay'}`}>
                                                             {txn.type}
                                                         </span>
                                                     </td>
@@ -852,6 +865,10 @@ export default function CustomerModal({ isOpen, onClose, onSuccess, record, read
                         background: #dcfce7;
                         color: #166534;
                     }
+                    .txn-type-open {
+                        background: #e2e8f0;
+                        color: #334155;
+                    }
                     .txn-total-row td {
                         padding: 8px;
                         background: #f1f5f9;
@@ -1013,7 +1030,22 @@ export default function CustomerModal({ isOpen, onClose, onSuccess, record, read
                                     style={{ ...inputStyle, paddingLeft: 36 }} />
                             </div>
                         </div>
-                        <div style={fieldStyle} />
+                        <div style={fieldStyle}>
+                            <label style={labelStyle}>Account Balance</label>
+                            <div style={inputWrapStyle}>
+                                <Banknote size={14} style={iconStyle} />
+                                <input
+                                    type="number"
+                                    step="0.01"
+                                    disabled={readOnly}
+                                    value={formData.opening_balance}
+                                    onChange={e => setFormData({ ...formData, opening_balance: parseFloat(e.target.value) || 0 })}
+                                    placeholder="e.g. 2500.00"
+                                    title="Outstanding balance owed by the customer (opening balance brought into the system)"
+                                    style={{ ...inputStyle, paddingLeft: 36 }}
+                                />
+                            </div>
+                        </div>
                     </div>
                 </div>
 

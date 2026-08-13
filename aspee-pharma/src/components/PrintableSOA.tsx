@@ -4,7 +4,7 @@ import { formatCurrency } from '@/lib/currency';
 interface Transaction {
     date: string;
     reference: string;
-    type: 'Invoice' | 'Payment';
+    type: 'Invoice' | 'Payment' | 'Opening Balance';
     amount: number;
     balance: number;
 }
@@ -139,17 +139,17 @@ export default function PrintableSOA({ customer, transactions, summary, dateRang
                                         borderRadius: '3px',
                                         fontSize: '8pt',
                                         fontWeight: 600,
-                                        background: txn.type === 'Invoice' ? '#fef2f2' : '#f0fdf4',
-                                        color: txn.type === 'Invoice' ? '#dc2626' : '#16a34a'
+                                        background: txn.type === 'Invoice' ? '#fef2f2' : txn.type === 'Opening Balance' ? '#eff6ff' : '#f0fdf4',
+                                        color: txn.type === 'Invoice' ? '#dc2626' : txn.type === 'Opening Balance' ? '#1e40af' : '#16a34a'
                                     }}>
                                         {txn.type}
                                     </span>
                                 </td>
-                                <td style={{ padding: '8px', textAlign: 'right', fontSize: '9pt', color: txn.type === 'Invoice' ? '#dc2626' : '#94a3b8' }}>
-                                    {txn.type === 'Invoice' ? formatCurrency(txn.amount) : '-'}
+                                <td style={{ padding: '8px', textAlign: 'right', fontSize: '9pt', color: txn.type === 'Invoice' || (txn.type === 'Opening Balance' && txn.amount > 0) ? '#dc2626' : '#94a3b8' }}>
+                                    {txn.type === 'Invoice' || (txn.type === 'Opening Balance' && txn.amount > 0) ? formatCurrency(txn.amount) : '-'}
                                 </td>
-                                <td style={{ padding: '8px', textAlign: 'right', fontSize: '9pt', color: txn.type === 'Payment' ? '#16a34a' : '#94a3b8' }}>
-                                    {txn.type === 'Payment' ? formatCurrency(txn.amount) : '-'}
+                                <td style={{ padding: '8px', textAlign: 'right', fontSize: '9pt', color: txn.type === 'Payment' || (txn.type === 'Opening Balance' && txn.amount < 0) ? '#16a34a' : '#94a3b8' }}>
+                                    {txn.type === 'Payment' || (txn.type === 'Opening Balance' && txn.amount < 0) ? formatCurrency(Math.abs(txn.amount)) : '-'}
                                 </td>
                                 <td style={{ padding: '8px', textAlign: 'right', fontSize: '9pt', fontWeight: 600, color: txn.balance < 0 ? '#dc2626' : '#0f172a' }}>
                                     {formatCurrency(txn.balance)}

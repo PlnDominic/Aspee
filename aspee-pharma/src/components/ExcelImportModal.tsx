@@ -41,6 +41,7 @@ export default function ExcelImportModal({ isOpen, onClose, onSuccess, entityTyp
                 'Sales Person',
                 'Route',
                 'Credit Limit',
+                'Account Balance',
                 'Location',
                 'Phone',
                 'Email',
@@ -61,6 +62,7 @@ export default function ExcelImportModal({ isOpen, onClose, onSuccess, entityTyp
                     'Sales Person': 'John Mensah',
                     'Route': 'East Legon',
                     'Credit Limit': 5000,
+                    'Account Balance': 2500,
                     'Location': 'Downtown Accra',
                     'Phone': '+233123456789',
                     'Email': 'john@example.com',
@@ -74,6 +76,7 @@ export default function ExcelImportModal({ isOpen, onClose, onSuccess, entityTyp
                     'Sales Person': '',
                     'Route': '',
                     'Credit Limit': 0,
+                    'Account Balance': 0,
                     'Location': 'East Legon',
                     'Phone': '+233987654321',
                     'Email': 'procurement@cityhospital.com',
@@ -125,6 +128,7 @@ export default function ExcelImportModal({ isOpen, onClose, onSuccess, entityTyp
                 ['Category', 'Customer category', 'No', 'OTC, WHOLESALE PHARMACY, RETAIL PHARMACY, CLINIC, HOSPITAL, MEDICAL STORES'],
                 ['Route Code', 'Route identifier', 'No', 'Must match existing route code'],
                 ['Sales Person Email', 'Email of assigned sales person', 'No', 'Must match existing user email'],
+                ['Account Balance', 'Outstanding balance owed by the customer (opening balance brought into the system)', 'No', 'Any number — 0 or blank if none; negative = credit balance'],
                 ['Status', 'Customer status', 'No', 'Active or Inactive']
             ];
             
@@ -243,6 +247,18 @@ export default function ExcelImportModal({ isOpen, onClose, onSuccess, entityTyp
                         continue;
                     }
 
+                    // Validate account balance (opening balance brought into the
+                    // system). Blank leaves the existing value untouched on update
+                    // and falls back to 0 on insert; must otherwise be numeric.
+                    const accountBalanceRaw = row['Account Balance'];
+                    const accountBalance = accountBalanceRaw === undefined || accountBalanceRaw === ''
+                        ? null
+                        : Number(accountBalanceRaw);
+                    if (accountBalance !== null && Number.isNaN(accountBalance)) {
+                        errors.push(`Row ${rowNum}: Account Balance "${accountBalanceRaw}" is not a number`);
+                        continue;
+                    }
+
                     // Prepare customer data — same fields, same column names as
                     // CustomerModal's "Add New Customer" form. Sales Person and
                     // Route are free text (matching the form's select-backed but
@@ -258,7 +274,10 @@ export default function ExcelImportModal({ isOpen, onClose, onSuccess, entityTyp
                         sales_person: row['Sales Person']?.toString().trim() || null,
                         route: row['Route']?.toString().trim() || null,
                         credit_limit: creditLimit,
-                        status: status
+                        status: status,
+                        // Only include when provided so an update import without the
+                        // column filled in does not wipe an existing opening balance.
+                        ...(accountBalance !== null ? { opening_balance: accountBalance } : {})
                     };
 
                     // Check if customer already exists

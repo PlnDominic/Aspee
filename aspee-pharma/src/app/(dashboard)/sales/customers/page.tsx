@@ -72,9 +72,11 @@ export default function CustomersPage() {
                 const key = normalizeCustomerName(customer.name);
                 const invoiceTotal = invoiceTotals.get(key) || 0;
                 const receiptTotal = receiptTotals.get(key) || 0;
+                // Balance = opening balance (imported) + invoices − receipts
+                const openingBalance = Number(customer.opening_balance) || 0;
                 return {
                     ...customer,
-                    balance: invoiceTotal - receiptTotal,
+                    balance: openingBalance + invoiceTotal - receiptTotal,
                 };
             });
 
@@ -155,25 +157,13 @@ export default function CustomersPage() {
                 return dateA - dateB;
             });
 
-            // Calculate running balance
-            let runningBalance = 0;
-            const transactions = allTxns.map(txn => {
-                if (txn.type === 'Invoice') {
-                    runningBalance += txn.amount;
-                } else {
-                    runningBalance -= txn.amount;
-                }
-                return {
-                    ...txn,
-                    date: new Date(txn.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
-                    balance: runningBalance
-                };
-            });
-
             const totalInvoices = invoiceTxns.reduce((sum, t) => sum + t.amount, 0);
             const totalPayments = receiptTxns.reduce((sum, t) => sum + t.amount, 0);
 
-            // Determine date range
+            // Opening balance (imported) carried forward as the statement's starting point
+            const openingBalance = Number(customer.opening_balance) || 0;
+
+            // Determine date range (real transactions only)
             const dates = allTxns.map(t => new Date(t.date));
             const minDate = dates.length > 0 ? new Date(Math.min(...dates.map(d => d.getTime()))) : new Date();
             const maxDate = dates.length > 0 ? new Date(Math.max(...dates.map(d => d.getTime()))) : new Date();
@@ -190,6 +180,31 @@ export default function CustomersPage() {
                 dateRange.from = startOfMonth.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
                 dateRange.to = now.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
             }
+
+            // Calculate running balance, starting from the opening balance
+            let runningBalance = openingBalance;
+            const transactions = [
+                ...(openingBalance !== 0 ? [{
+                    date: 'Balance B/F',
+                    reference: 'BALANCE B/F',
+                    type: 'Opening Balance' as const,
+                    amount: openingBalance
+                }] : []),
+                ...allTxns,
+            ].map(txn => {
+                if (txn.type === 'Invoice') {
+                    runningBalance += txn.amount;
+                } else if (txn.type === 'Payment') {
+                    runningBalance -= txn.amount;
+                }
+                return {
+                    ...txn,
+                    date: txn.type === 'Opening Balance'
+                        ? txn.date
+                        : new Date(txn.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+                    balance: runningBalance
+                };
+            });
 
             setSoaData({
                 customer,
