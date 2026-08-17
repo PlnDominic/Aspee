@@ -230,6 +230,18 @@ export default function CustomerModal({ isOpen, onClose, onSuccess, record, read
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const f = e.target.files?.[0];
         if (!f) return;
+        // Mirrors the compliance-documents bucket's allowed_mime_types/file_size_limit
+        // so a disallowed file fails fast with a clear message instead of a raw storage error.
+        if (!['application/pdf', 'image/jpeg', 'image/png', 'image/webp'].includes(f.type)) {
+            toast.error('Only PDF, JPEG, PNG, or WEBP files are allowed');
+            e.target.value = '';
+            return;
+        }
+        if (f.size > 10 * 1024 * 1024) {
+            toast.error('File must be 10MB or smaller');
+            e.target.value = '';
+            return;
+        }
         setGhanaCardFile(f);
         if (f.type.startsWith('image/')) {
             setGhanaCardPreview(URL.createObjectURL(f));
@@ -1125,7 +1137,7 @@ export default function CustomerModal({ isOpen, onClose, onSuccess, record, read
                         <div style={fieldStyle}>
                             <label style={labelStyle}>Upload Ghana Card</label>
                             <input ref={fileInputRef} type="file"
-                                accept="image/*,application/pdf"
+                                accept="image/jpeg,image/png,image/webp,application/pdf"
                                 onChange={handleFileChange}
                                 style={{ display: 'none' }} />
 

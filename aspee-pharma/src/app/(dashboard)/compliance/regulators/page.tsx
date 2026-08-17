@@ -122,6 +122,17 @@ export default function RegulatorsPage() {
       let file_name: string | null = selected?.file_name || null;
 
       if (file) {
+        // Mirrors the compliance-documents bucket's allowed_mime_types/file_size_limit
+        // so a disallowed file fails fast with a clear message instead of a raw storage error.
+        if (!['application/pdf', 'image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+          setLoading(false);
+          return toast.error('Only PDF, JPEG, PNG, or WEBP files are allowed');
+        }
+        if (file.size > 10 * 1024 * 1024) {
+          setLoading(false);
+          return toast.error('File must be 10MB or smaller');
+        }
+
         const path = `regulators/${safeFileName(form.regulator_name)}/${safeFileName(form.document_type)}/${Date.now()}_${safeFileName(file.name)}`;
         const { error: upErr } = await supabase.storage.from(BUCKET).upload(path, file, {
           contentType: file.type || undefined,
@@ -307,7 +318,7 @@ export default function RegulatorsPage() {
               </div>
               <div style={{ fontSize: 11, color: 'var(--slate-500)' }}>Bucket: {BUCKET}</div>
             </div>
-            <input type="file" onChange={(e) => setFile(e.target.files?.[0] || null)} accept="application/pdf,image/*" style={{ marginTop: 10 }} />
+            <input type="file" onChange={(e) => setFile(e.target.files?.[0] || null)} accept="application/pdf,image/jpeg,image/png,image/webp" style={{ marginTop: 10 }} />
             {selected?.file_name && !file && (
               <div style={{ marginTop: 8, fontSize: 12, color: 'var(--slate-600)' }}>
                 Current file: <strong>{selected.file_name}</strong>

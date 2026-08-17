@@ -229,7 +229,17 @@ export default function ProfilePage() {
 
             if (error) throw error;
 
-            toast.success('Password updated successfully');
+            // Kill any other active sessions/devices on this account — if the
+            // password was changed because a session was compromised, this is
+            // the step that actually revokes the attacker's access. Scoped to
+            // 'others' so the current tab (mid password-change) stays logged in.
+            try {
+                await supabase.auth.signOut({ scope: 'others' });
+            } catch (signOutError) {
+                console.error('Failed to sign out other sessions:', signOutError);
+            }
+
+            toast.success('Password updated successfully. You have been signed out of all other devices.');
             
             // Clear password fields
             setPasswords({

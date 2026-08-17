@@ -91,6 +91,14 @@ export default function EntityDocumentsModal(props: {
 
   const upload = async () => {
     if (!file) return toast.error('Please select a file');
+    // Mirrors the compliance-documents bucket's allowed_mime_types/file_size_limit
+    // so a disallowed file fails fast with a clear message instead of a raw storage error.
+    if (!['application/pdf', 'image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      return toast.error('Only PDF, JPEG, PNG, or WEBP files are allowed');
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      return toast.error('File must be 10MB or smaller');
+    }
     if (!documentType) return toast.error('Please select a document type');
 
     // if not allowMultiple and there is an existing doc for that type, block (forces replacement by deleting first)
@@ -273,7 +281,7 @@ export default function EntityDocumentsModal(props: {
               id="doc-upload"
               onChange={(e) => setFile(e.target.files?.[0] || null)}
               style={{ display: 'none' }}
-              accept="application/pdf,image/*"
+              accept="application/pdf,image/jpeg,image/png,image/webp"
             />
             <label htmlFor="doc-upload" style={uploadLabelStyle}>
               {file ? (
