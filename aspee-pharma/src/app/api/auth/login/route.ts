@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import { createServiceRoleClient } from '@/lib/serverAuth';
 import { readJsonBody } from '@/lib/requestLimits';
+import { SECURE_COOKIE_OPTIONS } from '@/lib/cookieOptions';
 
 const MAX_EMAIL_FAILURES = 5;
 const MAX_IP_FAILURES = 100;      // generous for corporate NAT — the per-email limit is the real guard
@@ -98,6 +99,7 @@ export async function POST(request: NextRequest) {
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
         process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
         {
+            cookieOptions: SECURE_COOKIE_OPTIONS,
             cookies: {
                 getAll() {
                     return request.cookies.getAll();

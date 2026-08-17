@@ -2,6 +2,7 @@ import { createServerClient } from '@supabase/ssr';
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { routePermissions } from '@/lib/routePermissions';
+import { SECURE_COOKIE_OPTIONS } from '@/lib/cookieOptions';
 
 export async function middleware(request: NextRequest) {
     const { pathname } = request.nextUrl;
@@ -14,6 +15,7 @@ export async function middleware(request: NextRequest) {
                 process.env.NEXT_PUBLIC_SUPABASE_URL!,
                 process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
                 {
+                    cookieOptions: SECURE_COOKIE_OPTIONS,
                     cookies: {
                         getAll() { return request.cookies.getAll(); },
                         setAll() {},
@@ -38,6 +40,7 @@ export async function middleware(request: NextRequest) {
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
         process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
         {
+            cookieOptions: SECURE_COOKIE_OPTIONS,
             cookies: {
                 getAll() {
                     return request.cookies.getAll();

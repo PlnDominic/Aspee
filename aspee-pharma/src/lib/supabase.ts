@@ -1,4 +1,5 @@
 import { createBrowserClient } from '@supabase/ssr';
+import { SECURE_COOKIE_OPTIONS } from './cookieOptions';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co';
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder-key';
@@ -20,4 +21,5 @@ if (process.env.NODE_ENV === 'production' && (!process.env.NEXT_PUBLIC_SUPABASE_
 // this is safe to set globally.
 export const supabase = createBrowserClient(supabaseUrl, supabaseAnonKey, {
     auth: { flowType: 'implicit' },
+    cookieOptions: SECURE_COOKIE_OPTIONS,
 });

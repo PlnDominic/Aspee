@@ -2,6 +2,7 @@ import { createServerClient } from '@supabase/ssr';
 import { createClient } from '@supabase/supabase-js';
 import { cookies, headers } from 'next/headers';
 import { NextResponse } from 'next/server';
+import { SECURE_COOKIE_OPTIONS } from '@/lib/cookieOptions';
 
 type SystemUserRecord = {
     id: string;
@@ -37,6 +38,7 @@ export async function createAuthenticatedRouteClient() {
     const cookieStore = await cookies();
 
     return createServerClient(getSupabaseUrl(), getAnonKey(), {
+        cookieOptions: SECURE_COOKIE_OPTIONS,
         cookies: {
             getAll() {
                 return cookieStore.getAll();
