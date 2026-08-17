@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { REPORT_ADMIN_ROLES } from '@/lib/routePermissions';
 import { createServiceRoleClient, requireRoles } from '@/lib/serverAuth';
+import { readJsonBody } from '@/lib/requestLimits';
 
 const supabase = createServiceRoleClient();
 
@@ -9,7 +10,8 @@ export async function POST(request: NextRequest) {
         const { appUser, error: authError } = await requireRoles(REPORT_ADMIN_ROLES);
         if (authError || !appUser) return authError;
 
-        const body = await request.json();
+        const { body, error: bodyError } = await readJsonBody<any>(request, 10 * 1024);
+        if (bodyError) return bodyError;
         const { id, action, approvalNotes } = body || {};
 
         if (!id || !action) {

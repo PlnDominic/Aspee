@@ -2,14 +2,16 @@ import { NextRequest, NextResponse } from 'next/server';
 import nodemailer from 'nodemailer';
 import { USER_ADMIN_ROLES } from '@/lib/routePermissions';
 import { createServiceRoleClient, requireRoles } from '@/lib/serverAuth';
+import { readJsonBody } from '@/lib/requestLimits';
 
 export async function POST(request: NextRequest) {
     try {
         const { error: authError } = await requireRoles(USER_ADMIN_ROLES);
         if (authError) return authError;
 
-        const body = await request.json();
-        const { to, subject, html, cc } = body;
+        const { body, error: bodyError } = await readJsonBody<any>(request, 512 * 1024);
+        if (bodyError) return bodyError;
+        const { to, subject, html, cc } = body || {};
 
         if (!to || !subject || !html) {
             return NextResponse.json(

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import { createServiceRoleClient } from '@/lib/serverAuth';
+import { readJsonBody } from '@/lib/requestLimits';
 
 const MAX_EMAIL_FAILURES = 5;
 const MAX_IP_FAILURES = 100;      // generous for corporate NAT — the per-email limit is the real guard
@@ -41,14 +42,10 @@ function lockedResponse(message: string): NextResponse {
 }
 
 export async function POST(request: NextRequest) {
-    let body: { email?: string; password?: string };
-    try {
-        body = await request.json();
-    } catch {
-        return NextResponse.json({ error: 'Invalid request body.' }, { status: 400 });
-    }
+    const { body, error: bodyError } = await readJsonBody<{ email?: string; password?: string }>(request, 2 * 1024);
+    if (bodyError) return bodyError;
 
-    const { email, password } = body;
+    const { email, password } = body || {};
 
     if (!email || typeof email !== 'string' || !password || typeof password !== 'string') {
         return NextResponse.json({ error: 'Email and password are required.' }, { status: 400 });

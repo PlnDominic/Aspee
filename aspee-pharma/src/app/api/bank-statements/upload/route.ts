@@ -27,6 +27,13 @@ export async function POST(request: NextRequest) {
     const { error: authError } = await requireRoles(ACCOUNTING_ROLES);
     if (authError) return authError;
 
+    // Cheap rejection before buffering the whole multipart body in memory —
+    // the file.size check below still applies as the authoritative limit.
+    const contentLength = request.headers.get('content-length');
+    if (contentLength && Number(contentLength) > 6 * 1024 * 1024) {
+      return NextResponse.json({ error: 'CSV upload must be 5MB or smaller' }, { status: 413 });
+    }
+
     const formData = await request.formData();
     const file = formData.get('file') as File;
     const accountId = formData.get('accountId') as string;

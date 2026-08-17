@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import nodemailer from 'nodemailer';
 import { USER_ADMIN_ROLES } from '@/lib/routePermissions';
 import { createServiceRoleClient, requireRoles } from '@/lib/serverAuth';
+import { readJsonBody } from '@/lib/requestLimits';
 
 const supabaseAdmin = createServiceRoleClient();
 
@@ -97,8 +98,9 @@ export async function POST(req: NextRequest) {
         const { error: authError } = await requireRoles(USER_ADMIN_ROLES);
         if (authError) return authError;
 
-        const body = await req.json();
-        const { name, email, phone, role, department, status, mfa_enabled } = body;
+        const { body, error: bodyError } = await readJsonBody<any>(req, 10 * 1024);
+        if (bodyError) return bodyError;
+        const { name, email, phone, role, department, status, mfa_enabled } = body || {};
 
         if (!email || !name || !role) {
             return NextResponse.json({ error: 'name, email, and role are required.' }, { status: 400 });

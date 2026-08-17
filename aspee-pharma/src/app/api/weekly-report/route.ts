@@ -7,6 +7,7 @@ import {
     requireAuthenticatedUser,
     requireRoles,
 } from '@/lib/serverAuth';
+import { readJsonBody } from '@/lib/requestLimits';
 
 const supabase = createServiceRoleClient();
 
@@ -409,12 +410,9 @@ function createTransporter() {
 
 export async function POST(request: Request) {
     try {
-        let body: any = {};
-        try {
-            body = await request.json();
-        } catch {
-            body = {};
-        }
+        const { body: parsedBody, error: bodyError } = await readJsonBody<any>(request, 200 * 1024);
+        if (bodyError) return bodyError;
+        const body: any = parsedBody || {};
 
         const { mdEmail, ccList } = await getReportRecipients();
 
