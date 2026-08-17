@@ -10,7 +10,8 @@ export type AuditAction =
     | 'LOGOUT'
     | 'PRINT'
     | 'STATUS_CHANGE'
-    | 'APPROVE';
+    | 'APPROVE'
+    | 'ACCESS_DENIED';
 
 export interface AuditEntry {
     action: AuditAction;

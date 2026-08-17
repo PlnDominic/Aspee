@@ -79,6 +79,7 @@ const actionColors: Record<string, { bg: string; color: string }> = {
     'PRINT': { bg: '#e0e7ff', color: '#4338ca' },
     'STATUS_CHANGE': { bg: '#fce7f3', color: '#be185d' },
     'APPROVE': { bg: '#dcfce7', color: '#15803d' },
+    'ACCESS_DENIED': { bg: '#fee2e2', color: '#991b1b' },
 };
 
 const ALL_FILTER = 'All';

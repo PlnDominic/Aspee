@@ -1,6 +1,6 @@
 import { createServerClient } from '@supabase/ssr';
 import { createClient } from '@supabase/supabase-js';
-import { cookies } from 'next/headers';
+import { cookies, headers } from 'next/headers';
 import { NextResponse } from 'next/server';
 
 type SystemUserRecord = {
@@ -121,11 +121,39 @@ export async function requireAuthenticatedUser() {
     return { appUser, error: null };
 }
 
+// Best-effort security-event log for API routes an authenticated user hit
+// without the required role. Never throws — logging must not break the
+// actual 403 response it's recording.
+async function logAccessDenied(appUser: AppUser, requiredRoles: readonly string[]) {
+    try {
+        const headerList = await headers();
+        const ip =
+            headerList.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+            headerList.get('x-real-ip') ||
+            null;
+
+        const admin = createServiceRoleClient();
+        await admin.from('audit_log').insert([{
+            user_id: appUser.authUser.id,
+            user_email: appUser.authUser.email,
+            user_name: appUser.systemUser.name || appUser.authUser.email,
+            action: 'ACCESS_DENIED',
+            module: 'API',
+            description: `Role "${appUser.systemUser.role || 'Unknown'}" attempted a restricted action requiring one of: ${requiredRoles.join(', ')}`,
+            record_type: 'api_route',
+            ip_address: ip,
+        }]);
+    } catch {
+        // ignore — never block the real response over a logging failure
+    }
+}
+
 export async function requireRoles(roles: readonly string[]) {
     const { appUser, error } = await requireAuthenticatedUser();
     if (error || !appUser) return { appUser: null, error };
 
     if (!roles.includes(appUser.systemUser.role || '')) {
+        await logAccessDenied(appUser, roles);
         return {
             appUser: null,
             error: NextResponse.json({ error: 'Insufficient permissions.' }, { status: 403 }),

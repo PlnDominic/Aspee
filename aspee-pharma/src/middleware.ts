@@ -103,6 +103,26 @@ export async function middleware(request: NextRequest) {
         }
 
         if (!hasAccess) {
+            // Best-effort security-event log — never blocks the redirect.
+            try {
+                const ip =
+                    request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+                    request.headers.get('x-real-ip') ||
+                    null;
+                await supabase.from('audit_log').insert([{
+                    user_id: user.id,
+                    user_email: user.email,
+                    user_name: user.email,
+                    action: 'ACCESS_DENIED',
+                    module: baseRoute || pathname,
+                    description: `Role "${userRole}" attempted to access ${pathname} without permission`,
+                    record_type: 'route',
+                    ip_address: ip,
+                }]);
+            } catch {
+                // ignore
+            }
+
             // Redirect to overview (home) page
             const url = request.nextUrl.clone();
             url.pathname = '/overview';
