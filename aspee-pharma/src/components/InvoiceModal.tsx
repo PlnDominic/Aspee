@@ -206,7 +206,7 @@ export default function InvoiceModal({ isOpen, onClose, onSave, record }: Invoic
     };
 
     const handleAddItem = () => {
-        setItems([...items, { product_id: '', quantity: 1, unit_price: 0, discount_pct: 0, discount_amount: 0, returns_qty: 0, cash_sale: 0, credit_sale: 0, total_price: 0 }]);
+        setItems([...items, { product_id: '', quantity: 1, unit_price: 0, discount_pct: 0, discount_amount: 0, returns_qty: 0, cash_sale: 0, credit_sale: 0, total_price: 0, batch_number: '' }]);
     };
 
     const recalcItem = (item: any) => {
@@ -603,6 +603,16 @@ export default function InvoiceModal({ isOpen, onClose, onSave, record }: Invoic
                                             style={{ padding: '8px 12px', border: '1px solid var(--slate-200)', borderRadius: 6, fontSize: 12, outline: 'none', width: '100%', background: 'var(--slate-50)', color: 'var(--slate-700)', fontWeight: 600 }}
                                         />
                                     </div>
+                                    <div style={{ flex: '0 0 110px', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                        <label style={{ fontSize: 10, fontWeight: 600, color: 'var(--slate-500)', textTransform: 'uppercase' }}>Batch No.</label>
+                                        <input
+                                            type="text"
+                                            value={item.batch_number ?? ''}
+                                            onChange={(e) => handleUpdateItem(index, 'batch_number', e.target.value)}
+                                            placeholder="e.g. B2408"
+                                            style={{ padding: '8px 8px', border: '1px solid var(--slate-200)', borderRadius: 6, fontSize: 12, outline: 'none', width: '100%' }}
+                                        />
+                                    </div>
                                     <div className="inv-line-remove-wrap" style={{ display: 'flex', alignItems: 'center', paddingTop: 20 }}>
                                         <button
                                             type="button"
@@ -786,7 +796,8 @@ export default function InvoiceModal({ isOpen, onClose, onSave, record }: Invoic
                 .inv-line-item-card > :nth-child(8) label {
                     color: var(--primary-700) !important;
                 }
-                .inv-line-item-card > :nth-child(9) {
+                .inv-line-item-card > :nth-child(9) { flex: 0 0 110px !important; min-width: 100px; }
+                .inv-line-item-card > :nth-child(10) {
                     flex: 0 0 44px !important;
                     justify-content: flex-end;
                     align-items: flex-start !important;
@@ -815,7 +826,7 @@ export default function InvoiceModal({ isOpen, onClose, onSave, record }: Invoic
                     font-size: 10px !important;
                     font-weight: 800 !important;
                 }
-                .inv-line-item-card > :nth-child(9) button {
+                .inv-line-item-card > :nth-child(10) button {
                     width: 36px;
                     height: 36px;
                     border-radius: 10px;
@@ -859,7 +870,8 @@ export default function InvoiceModal({ isOpen, onClose, onSave, record }: Invoic
                         grid-column: span 2;
                     }
                     .inv-line-item-card > :nth-child(4),
-                    .inv-line-item-card > :nth-child(9) {
+                    .inv-line-item-card > :nth-child(9),
+                    .inv-line-item-card > :nth-child(10) {
                         grid-column: span 2;
                     }
                 }
@@ -883,7 +895,7 @@ export default function InvoiceModal({ isOpen, onClose, onSave, record }: Invoic
                     .inv-line-item-card > :nth-child(n) {
                         grid-column: span 1;
                     }
-                    .inv-line-item-card > :nth-child(9) {
+                    .inv-line-item-card > :nth-child(10) {
                         justify-content: flex-start;
                     }
                     .inv-line-items-body {
