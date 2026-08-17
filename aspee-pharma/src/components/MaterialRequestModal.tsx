@@ -125,6 +125,19 @@ export default function MaterialRequestModal({ isOpen, onClose, onSuccess, produ
         }
     };
 
+    // Mirrors app_private.issue_material_request_impl, which only ever draws
+    // stock from the Main Warehouse location — "available" shown here must
+    // match that or requesters get told stock exists when it can't be issued.
+    const resolveMainWarehouseId = async (): Promise<string | null> => {
+        const { data } = await supabase
+            .from('stock_locations')
+            .select('id')
+            .ilike('name', 'Main Warehouse')
+            .limit(1)
+            .maybeSingle();
+        return data?.id || null;
+    };
+
     const fetchJobOrders = async () => {
         try {
             const { data, error } = await supabase
@@ -219,10 +232,12 @@ export default function MaterialRequestModal({ isOpen, onClose, onSuccess, produ
             }));
 
             const productIds = requestItems.map(i => i.product_id);
+            const mainWarehouseId = await resolveMainWarehouseId();
             const { data: stockData } = await supabase
                 .from('stock_levels')
                 .select('product_id, qty_on_hand')
-                .in('product_id', productIds);
+                .in('product_id', productIds)
+                .eq('location_id', mainWarehouseId ?? '');
 
             const stockMap: Record<string, number> = {};
             stockData?.forEach(s => {
@@ -255,10 +270,12 @@ export default function MaterialRequestModal({ isOpen, onClose, onSuccess, produ
             if (error) throw error;
 
             const productIds = data?.map(i => i.product_id) || [];
+            const mainWarehouseId = await resolveMainWarehouseId();
             const { data: stockData } = await supabase
                 .from('stock_levels')
                 .select('product_id, qty_on_hand')
-                .in('product_id', productIds);
+                .in('product_id', productIds)
+                .eq('location_id', mainWarehouseId ?? '');
 
             const stockMap: Record<string, number> = {};
             stockData?.forEach(s => {
@@ -308,11 +325,13 @@ export default function MaterialRequestModal({ isOpen, onClose, onSuccess, produ
 
     const addProduct = async (prod: Product) => {
         // Fetch Stock Qty for this specific product
+        const mainWarehouseId = await resolveMainWarehouseId();
         const { data: stockData } = await supabase
             .from('stock_levels')
             .select('qty_on_hand')
-            .eq('product_id', prod.id);
-        
+            .eq('product_id', prod.id)
+            .eq('location_id', mainWarehouseId ?? '');
+
         const totalStock = stockData?.reduce((sum, s) => sum + (s.qty_on_hand || 0), 0) || 0;
 
         setItems(prev => [...prev, {
