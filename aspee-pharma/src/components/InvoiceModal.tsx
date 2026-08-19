@@ -40,6 +40,24 @@ export default function InvoiceModal({ isOpen, onClose, onSave, record }: Invoic
     const [currency, setCurrency] = useState('GHS');
 
     const [items, setItems] = useState<any[]>([]);
+
+    // Route area may hold combined locations (e.g. "Accra / Tema"); split so a
+    // customer's location only has to match one of them.
+    const selectedVan = useMemo(() => vans.find((v) => v.id === routeId), [vans, routeId]);
+    const routeLocations = useMemo(() => {
+        return (selectedVan?.route_area || '')
+            .split(/\s*(?:\/|,|\||\band\b)\s*/i)
+            .map((part: string) => part.trim().toLowerCase())
+            .filter(Boolean);
+    }, [selectedVan]);
+
+    // Customers column should only show customers whose exact location matches
+    // the selected van's route location(s) - e.g. Route 10 -> Accra only.
+    const filteredCustomers = useMemo(() => {
+        if (!routeId || routeLocations.length === 0) return customers;
+        return customers.filter((c) => routeLocations.includes((c.customer_location || '').trim().toLowerCase()));
+    }, [customers, routeId, routeLocations]);
+
     const currentDraftReservedByProduct = useMemo(() => {
         const reserved: Record<string, number> = {};
         for (const item of items) {
@@ -137,7 +155,7 @@ export default function InvoiceModal({ isOpen, onClose, onSave, record }: Invoic
         try {
             const { data, error } = await supabase
                 .from('customers')
-                .select('id, name, status')
+                .select('id, name, status, customer_location')
                 .eq('status', 'Active')
                 .order('name');
             if (error) throw error;
@@ -334,7 +352,7 @@ export default function InvoiceModal({ isOpen, onClose, onSave, record }: Invoic
                                 list="inv-customer-list"
                             />
                             <datalist id="inv-customer-list">
-                                {customers.map((c) => (
+                                {filteredCustomers.map((c) => (
                                     <option key={c.id} value={c.name} />
                                 ))}
                             </datalist>
@@ -342,6 +360,16 @@ export default function InvoiceModal({ isOpen, onClose, onSave, record }: Invoic
                         {fetchingCustomers && (
                             <div style={{ fontSize: 10, color: 'var(--slate-500)', marginTop: 4 }}>
                                 Loading customers…
+                            </div>
+                        )}
+                        {!fetchingCustomers && routeId && filteredCustomers.length === 0 && (
+                            <div style={{ fontSize: 10, color: 'var(--danger)', marginTop: 4 }}>
+                                No customers found for {selectedVan?.route_area || 'this route'}&apos;s location.
+                            </div>
+                        )}
+                        {!fetchingCustomers && routeId && filteredCustomers.length > 0 && (
+                            <div style={{ fontSize: 10, color: 'var(--slate-500)', marginTop: 4 }}>
+                                Showing customers in {selectedVan?.route_area}.
                             </div>
                         )}
                     </div>
