@@ -6,6 +6,7 @@ import { ClipboardList, Package, Save, Search, Trash2, User, Truck, MapPin, Phon
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { reconcileVanStockFromWaybills } from '@/lib/vanStock';
+import { toBaseQty, toBulkQty } from '@/lib/unitConversions';
 
 interface SalesRequestModalProps {
     isOpen: boolean;
@@ -51,6 +52,10 @@ interface RequestItem {
     quantity_approved?: number;
     quantity_issued?: number;
     notes: string;
+    // Cartons entered by the sales rep. quantity_requested (base units, e.g.
+    // Pieces) is derived from this via product.units_per_carton and is what
+    // actually gets saved/consumed downstream (waybills, stock deduction).
+    quantity_cartons?: number;
 }
 
 const getSingleRelation = <T,>(value: T | T[] | null | undefined): T | null => {
@@ -171,7 +176,7 @@ export default function SalesRequestModal({
                     quantity_approved,
                     quantity_issued,
                     notes,
-                    product:products(id, name, sku, unit, material_type)
+                    product:products(id, name, sku, unit, material_type, units_per_carton, unit_label)
                 `)
                 .eq('requisition_id', requestId)
                 .order('created_at', { ascending: true });
@@ -179,14 +184,19 @@ export default function SalesRequestModal({
             if (error) throw error;
 
             setItems(
-                (data || []).map((item: any) => ({
-                    product_id: item.product_id,
-                    product: getSingleRelation<Product>(item.product) || undefined,
-                    quantity_requested: Number(item.quantity_requested) || 0,
-                    quantity_approved: Number(item.quantity_approved) || 0,
-                    quantity_issued: Number(item.quantity_issued) || 0,
-                    notes: item.notes || '',
-                }))
+                (data || []).map((item: any) => {
+                    const product = getSingleRelation<Product>(item.product) || undefined;
+                    const quantity_requested = Number(item.quantity_requested) || 0;
+                    return {
+                        product_id: item.product_id,
+                        product,
+                        quantity_requested,
+                        quantity_approved: Number(item.quantity_approved) || 0,
+                        quantity_issued: Number(item.quantity_issued) || 0,
+                        notes: item.notes || '',
+                        quantity_cartons: toBulkQty(quantity_requested, Number(product?.units_per_carton) || 0) ?? undefined,
+                    };
+                })
             );
         } catch (error: any) {
             toast.error('Failed to load request items: ' + error.message);
@@ -210,14 +220,19 @@ export default function SalesRequestModal({
 
         if (request.items?.length) {
             setItems(
-                request.items.map((item: any) => ({
-                    product_id: item.product_id,
-                    product: getSingleRelation<Product>(item.product) || item.product || undefined,
-                    quantity_requested: Number(item.quantity_requested) || 0,
-                    quantity_approved: Number(item.quantity_approved) || 0,
-                    quantity_issued: Number(item.quantity_issued) || 0,
-                    notes: item.notes || '',
-                }))
+                request.items.map((item: any) => {
+                    const product = getSingleRelation<Product>(item.product) || item.product || undefined;
+                    const quantity_requested = Number(item.quantity_requested) || 0;
+                    return {
+                        product_id: item.product_id,
+                        product,
+                        quantity_requested,
+                        quantity_approved: Number(item.quantity_approved) || 0,
+                        quantity_issued: Number(item.quantity_issued) || 0,
+                        notes: item.notes || '',
+                        quantity_cartons: toBulkQty(quantity_requested, Number(product?.units_per_carton) || 0) ?? undefined,
+                    };
+                })
             );
         } else if (request.id) {
             void fetchRequestItems(request.id);
@@ -238,13 +253,15 @@ export default function SalesRequestModal({
     };
 
     const addProduct = (product: Product) => {
+        const cartonRatio = Number(product.units_per_carton) || 0;
         setItems((prev) => [
             ...prev,
             {
                 product_id: product.id,
                 product,
-                quantity_requested: 1,
+                quantity_requested: cartonRatio > 0 ? cartonRatio : 1,
                 notes: '',
+                quantity_cartons: cartonRatio > 0 ? 1 : undefined,
             },
         ]);
         setSearchTerm('');
@@ -259,6 +276,19 @@ export default function SalesRequestModal({
         setItems((prev) => {
             const next = [...prev];
             next[index] = { ...next[index], ...updates };
+            return next;
+        });
+    };
+
+    // Sales reps think in cartons; quantity_requested (base units) is what
+    // actually drives approval/waybill/stock deduction, so derive it here.
+    const updateItemCartons = (index: number, cartons: number) => {
+        setItems((prev) => {
+            const next = [...prev];
+            const item = next[index];
+            const ratio = Number(item.product?.units_per_carton) || 0;
+            const baseQty = ratio > 0 ? toBaseQty(cartons, ratio) ?? 0 : cartons;
+            next[index] = { ...item, quantity_cartons: cartons, quantity_requested: baseQty };
             return next;
         });
     };
@@ -975,14 +1005,32 @@ export default function SalesRequestModal({
                                                 <div className="meta">{item.product?.sku || '-'}</div>
                                             </td>
                                             <td>
-                                                <input
-                                                    type="number"
-                                                    min="1"
-                                                    value={item.quantity_requested}
-                                                    onChange={(e) => updateItem(index, { quantity_requested: Number(e.target.value) || 0 })}
-                                                    className="sales-request-qty"
-                                                    readOnly={readOnly}
-                                                />
+                                                {Number(item.product?.units_per_carton) > 0 ? (
+                                                    <>
+                                                        <input
+                                                            type="number"
+                                                            min="1"
+                                                            step="1"
+                                                            value={item.quantity_cartons ?? ''}
+                                                            onChange={(e) => updateItemCartons(index, Number(e.target.value) || 0)}
+                                                            className="sales-request-qty"
+                                                            readOnly={readOnly}
+                                                            placeholder="Cartons"
+                                                        />
+                                                        <div className="sales-request-carton-hint">
+                                                            = {item.quantity_requested.toLocaleString()} {item.product?.unit || 'units'}
+                                                        </div>
+                                                    </>
+                                                ) : (
+                                                    <input
+                                                        type="number"
+                                                        min="1"
+                                                        value={item.quantity_requested}
+                                                        onChange={(e) => updateItem(index, { quantity_requested: Number(e.target.value) || 0 })}
+                                                        className="sales-request-qty"
+                                                        readOnly={readOnly}
+                                                    />
+                                                )}
                                             </td>
                                             {isStoreSection && (
                                                 <>
@@ -1331,6 +1379,12 @@ export default function SalesRequestModal({
                 .sales-request-qty,
                 .sales-request-note {
                     padding: 8px 10px;
+                }
+                .sales-request-carton-hint {
+                    margin-top: 4px;
+                    font-size: 10px;
+                    color: var(--slate-500);
+                    white-space: nowrap;
                 }
                 .sales-request-unit {
                     display: inline-flex;
