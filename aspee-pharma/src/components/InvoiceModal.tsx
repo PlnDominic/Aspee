@@ -61,7 +61,7 @@ export default function InvoiceModal({ isOpen, onClose, onSave, record }: Invoic
         return customers.filter((c) => {
             const customerLocation = (c.customer_location || '').trim().toLowerCase().replace(/\s+/g, ' ');
             if (!customerLocation) return false;
-            return routeLocations.some((routeLocation) =>
+            return routeLocations.some((routeLocation: string) =>
                 customerLocation.includes(routeLocation) || routeLocation.includes(customerLocation)
             );
         });
