@@ -986,10 +986,7 @@ export default function SalesRequestModal({
                                         <th>Product</th>
                                         <th style={{ width: 100 }}>Requested</th>
                                         {isStoreSection && (
-                                            <>
-                                                <th style={{ width: 100 }}>Approved</th>
-                                                <th style={{ width: 100 }}>Issued</th>
-                                            </>
+                                            <th style={{ width: 100 }}>Issued</th>
                                         )}
                                         <th style={{ width: 80 }}>Unit</th>
                                         <th>Line Note</th>
@@ -1033,28 +1030,17 @@ export default function SalesRequestModal({
                                                 )}
                                             </td>
                                             {isStoreSection && (
-                                                <>
-                                                    <td>
-                                                        <input
-                                                            type="number"
-                                                            min="0"
-                                                            value={item.quantity_approved}
-                                                            onChange={(e) => updateItem(index, { quantity_approved: Number(e.target.value) || 0 })}
-                                                            className="sales-request-qty"
-                                                            readOnly={readOnly}
-                                                        />
-                                                    </td>
-                                                    <td>
-                                                        <input
-                                                            type="number"
-                                                            min="0"
-                                                            value={item.quantity_issued}
-                                                            onChange={(e) => updateItem(index, { quantity_issued: Number(e.target.value) || 0 })}
-                                                            className="sales-request-qty"
-                                                            readOnly={readOnly}
-                                                        />
-                                                    </td>
-                                                </>
+                                                <td>
+                                                    <input
+                                                        type="number"
+                                                        min="0"
+                                                        value={item.quantity_issued || ''}
+                                                        onChange={(e) => updateItem(index, { quantity_issued: Number(e.target.value) || 0 })}
+                                                        className="sales-request-qty"
+                                                        readOnly={readOnly}
+                                                        placeholder="0"
+                                                    />
+                                                </td>
                                             )}
                                             <td>
                                                 <span className="sales-request-unit">{item.product?.unit || '-'}</span>

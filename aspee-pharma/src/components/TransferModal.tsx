@@ -166,8 +166,47 @@ export default function TransferModal({ isOpen, onClose, onSave, initialData, mo
     const selectedToRepId = fromIsFinishedGoods
         ? (salesReps.find(r => toLocation?.name === getSalespersonLocationName(r.name))?.id || '')
         : '';
-    const handleToRepChange = (repId: string) => {
+    // Prefills Transfer Items from whatever Stores most recently marked as
+    // "Issued" on this rep's Sales Request — the transfer is how that issued
+    // stock physically leaves Finished Goods for the rep's personal location.
+    const handleToRepChange = async (repId: string) => {
         setToLocationId(repLocationIds[repId] || '');
+        if (!repId) return;
+
+        try {
+            const { data: requisition, error } = await supabase
+                .from('requisitions')
+                .select(`
+                    id,
+                    items:requisition_items(
+                        product_id,
+                        quantity_issued,
+                        product:products(id, name, sku, unit, bulk_unit, bulk_to_base_ratio)
+                    )
+                `)
+                .eq('salesperson_id', repId)
+                .in('status', ['APPROVED', 'FULFILLED'])
+                .order('created_at', { ascending: false })
+                .limit(1)
+                .maybeSingle();
+
+            if (error) throw error;
+
+            const issuedItems = (requisition?.items || [])
+                .filter((item: any) => Number(item.quantity_issued) > 0)
+                .map((item: any) => ({
+                    product_id: item.product_id,
+                    product: Array.isArray(item.product) ? item.product[0] : item.product,
+                    quantity: Number(item.quantity_issued),
+                }));
+
+            if (issuedItems.length > 0) {
+                setItems(issuedItems);
+                toast.success(`Prefilled ${issuedItems.length} item${issuedItems.length === 1 ? '' : 's'} issued to this sales rep.`);
+            }
+        } catch (error: any) {
+            console.error('Failed to prefill issued items:', error);
+        }
     };
 
     useEffect(() => {
