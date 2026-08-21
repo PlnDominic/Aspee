@@ -47,15 +47,24 @@ export default function InvoiceModal({ isOpen, onClose, onSave, record }: Invoic
     const routeLocations = useMemo(() => {
         return (selectedVan?.route_area || '')
             .split(/\s*(?:\/|,|\||\band\b)\s*/i)
-            .map((part: string) => part.trim().toLowerCase())
+            .map((part: string) => part.trim().toLowerCase().replace(/\s+/g, ' '))
             .filter(Boolean);
     }, [selectedVan]);
 
-    // Customers column should only show customers whose exact location matches
-    // the selected van's route location(s) - e.g. Route 10 -> Accra only.
+    // Customers assigned to this sales rep's route. There's no direct
+    // customer -> route/rep assignment in the schema yet, so this matches on
+    // customer_location vs. the van's route_area — loosely (either string
+    // contains the other) rather than requiring an exact match, so real-world
+    // variants like "Accra" / "Accra Central" / "Greater Accra" still line up.
     const filteredCustomers = useMemo(() => {
         if (!routeId || routeLocations.length === 0) return customers;
-        return customers.filter((c) => routeLocations.includes((c.customer_location || '').trim().toLowerCase()));
+        return customers.filter((c) => {
+            const customerLocation = (c.customer_location || '').trim().toLowerCase().replace(/\s+/g, ' ');
+            if (!customerLocation) return false;
+            return routeLocations.some((routeLocation) =>
+                customerLocation.includes(routeLocation) || routeLocation.includes(customerLocation)
+            );
+        });
     }, [customers, routeId, routeLocations]);
 
     const currentDraftReservedByProduct = useMemo(() => {
