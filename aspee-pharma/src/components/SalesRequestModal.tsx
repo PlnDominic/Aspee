@@ -673,7 +673,6 @@ export default function SalesRequestModal({
     const totalRequested = items.reduce((sum, item) => sum + (Number(item.quantity_requested) || 0), 0);
 
     if (readOnly) {
-        const totalApproved = items.reduce((sum, item) => sum + (Number(item.quantity_approved) || 0), 0);
         const totalIssued = items.reduce((sum, item) => sum + (Number(item.quantity_issued) || 0), 0);
         const repName = selectedSalesperson?.name || getSingleRelation<any>(editingRequest?.salesperson)?.name || 'Unknown Rep';
         const repEmail = selectedSalesperson?.email || getSingleRelation<any>(editingRequest?.salesperson)?.email || '';
@@ -763,7 +762,6 @@ export default function SalesRequestModal({
                                             <th style={{ width: '40px' }}>#</th>
                                             <th>Product / SKU</th>
                                             <th style={{ width: '100px', textAlign: 'right' }}>Requested Qty</th>
-                                            <th style={{ width: '100px', textAlign: 'right' }}>Approved Qty</th>
                                             <th style={{ width: '100px', textAlign: 'right' }}>Issued Qty</th>
                                             <th style={{ width: '60px', textAlign: 'center' }}>Unit</th>
                                             <th>Line Note</th>
@@ -778,7 +776,6 @@ export default function SalesRequestModal({
                                                     <div className="item-sku">{item.product?.sku || '-'}</div>
                                                 </td>
                                                 <td style={{ textAlign: 'right' }}>{item.quantity_requested.toLocaleString()}</td>
-                                                <td style={{ textAlign: 'right' }}>{item.quantity_approved?.toLocaleString() ?? '0'}</td>
                                                 <td style={{ textAlign: 'right' }}>{item.quantity_issued?.toLocaleString() ?? '0'}</td>
                                                 <td style={{ textAlign: 'center' }}>{item.product?.unit || '-'}</td>
                                                 <td>{item.notes || '-'}</td>
@@ -789,7 +786,6 @@ export default function SalesRequestModal({
                                         <tr className="grand-total-row">
                                             <td colSpan={2} className="total-label">TOTALS</td>
                                             <td style={{ textAlign: 'right', fontWeight: 'bold' }}>{totalRequested.toLocaleString()}</td>
-                                            <td style={{ textAlign: 'right', fontWeight: 'bold' }}>{totalApproved.toLocaleString()}</td>
                                             <td style={{ textAlign: 'right', fontWeight: 'bold' }}>{totalIssued.toLocaleString()}</td>
                                             <td colSpan={2} className="no-border"></td>
                                         </tr>
