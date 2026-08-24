@@ -166,9 +166,12 @@ export default function TransferModal({ isOpen, onClose, onSave, initialData, mo
     const selectedToRepId = fromIsFinishedGoods
         ? (salesReps.find(r => toLocation?.name === getSalespersonLocationName(r.name))?.id || '')
         : '';
-    // Prefills Transfer Items from whatever Stores most recently marked as
-    // "Issued" on this rep's Sales Request — the transfer is how that issued
-    // stock physically leaves Finished Goods for the rep's personal location.
+    // Prefills Transfer Items from this rep's most recent approved (or later,
+    // fulfilled) Sales Request — the transfer is how that approved stock
+    // physically leaves Finished Goods for the rep's personal location.
+    // Once Stores has marked lines "Issued", that quantity takes precedence;
+    // otherwise the approved quantity is used so the transfer can be raised
+    // as soon as the request is approved, without waiting for fulfilment.
     const handleToRepChange = async (repId: string) => {
         setToLocationId(repLocationIds[repId] || '');
         if (!repId) return;
@@ -178,8 +181,11 @@ export default function TransferModal({ isOpen, onClose, onSave, initialData, mo
                 .from('requisitions')
                 .select(`
                     id,
+                    status,
                     items:requisition_items(
                         product_id,
+                        quantity_requested,
+                        quantity_approved,
                         quantity_issued,
                         product:products(id, name, sku, unit, bulk_unit, bulk_to_base_ratio)
                     )
@@ -192,20 +198,25 @@ export default function TransferModal({ isOpen, onClose, onSave, initialData, mo
 
             if (error) throw error;
 
-            const issuedItems = (requisition?.items || [])
-                .filter((item: any) => Number(item.quantity_issued) > 0)
+            const prefillItems = (requisition?.items || [])
                 .map((item: any) => ({
                     product_id: item.product_id,
                     product: Array.isArray(item.product) ? item.product[0] : item.product,
-                    quantity: Number(item.quantity_issued),
-                }));
+                    quantity: Number(item.quantity_issued) || Number(item.quantity_approved) || Number(item.quantity_requested) || 0,
+                }))
+                .filter((item: any) => item.quantity > 0);
 
-            if (issuedItems.length > 0) {
-                setItems(issuedItems);
-                toast.success(`Prefilled ${issuedItems.length} item${issuedItems.length === 1 ? '' : 's'} issued to this sales rep.`);
+            if (prefillItems.length > 0) {
+                setItems(prefillItems);
+                toast.success(`Prefilled ${prefillItems.length} item${prefillItems.length === 1 ? '' : 's'} from this sales rep's approved request.`);
+            } else if (requisition) {
+                toast.info('This sales rep has an approved request but no line quantities to prefill.');
+            } else {
+                toast.info('No approved Sales Request found for this rep yet — add items manually.');
             }
         } catch (error: any) {
-            console.error('Failed to prefill issued items:', error);
+            console.error('Failed to prefill approved items:', error);
+            toast.error('Failed to prefill items from the sales request: ' + error.message);
         }
     };
 
