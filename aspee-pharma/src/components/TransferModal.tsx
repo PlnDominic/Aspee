@@ -167,13 +167,16 @@ export default function TransferModal({ isOpen, onClose, onSave, initialData, mo
         ? (salesReps.find(r => toLocation?.name === getSalespersonLocationName(r.name))?.id || '')
         : '';
     // Prefills Transfer Items from whatever Stores has entered in the Issued
-    // Qty column on this rep's Sales Request — Stores treats a line as
-    // approved the moment they type its issued quantity, with no separate
-    // approval step, so status is not used as a gate here. The transfer is
-    // how that issued stock physically leaves Finished Goods for the rep's
-    // personal location.
+    // Qty column on this rep's latest Sales Request — Stores treats a line
+    // as approved the moment they type its issued quantity, with no separate
+    // approval step, so status is not used as a gate here. Any quantity
+    // already sent to this rep in a prior transfer (since that request was
+    // raised) is subtracted first, so re-selecting the rep — or issuing a
+    // top-up on the same request — never prefills stock that already left
+    // Finished Goods.
     const handleToRepChange = async (repId: string) => {
-        setToLocationId(repLocationIds[repId] || '');
+        const repLocationId = repLocationIds[repId] || '';
+        setToLocationId(repLocationId);
         if (!repId) return;
 
         try {
@@ -181,6 +184,7 @@ export default function TransferModal({ isOpen, onClose, onSave, initialData, mo
                 .from('requisitions')
                 .select(`
                     id,
+                    created_at,
                     items:requisition_items(
                         product_id,
                         quantity_issued,
@@ -202,9 +206,39 @@ export default function TransferModal({ isOpen, onClose, onSave, initialData, mo
                     quantity: Number(item.quantity_issued),
                 }));
 
-            if (issuedItems.length > 0) {
-                setItems(issuedItems);
-                toast.success(`Prefilled ${issuedItems.length} item${issuedItems.length === 1 ? '' : 's'} issued to this sales rep.`);
+            // Subtract quantities already moved to this rep in transfers made
+            // since the request was raised, so a second transfer against the
+            // same request only prefills what's still outstanding.
+            let alreadyTransferred: Record<string, number> = {};
+            if (issuedItems.length > 0 && repLocationId && requisition?.created_at) {
+                const { data: priorTransfers, error: transfersError } = await supabase
+                    .from('stock_transfers')
+                    .select('items:stock_transfer_items(product_id, quantity)')
+                    .eq('to_location_id', repLocationId)
+                    .gte('created_at', requisition.created_at);
+
+                if (transfersError) throw transfersError;
+
+                alreadyTransferred = (priorTransfers || []).reduce((acc: Record<string, number>, transfer: any) => {
+                    (transfer.items || []).forEach((item: any) => {
+                        acc[item.product_id] = (acc[item.product_id] || 0) + Number(item.quantity || 0);
+                    });
+                    return acc;
+                }, {});
+            }
+
+            const outstandingItems = issuedItems
+                .map((item) => ({
+                    ...item,
+                    quantity: item.quantity - (alreadyTransferred[item.product_id] || 0),
+                }))
+                .filter((item) => item.quantity > 0);
+
+            if (outstandingItems.length > 0) {
+                setItems(outstandingItems);
+                toast.success(`Prefilled ${outstandingItems.length} item${outstandingItems.length === 1 ? '' : 's'} issued to this sales rep.`);
+            } else if (issuedItems.length > 0) {
+                toast.info('Everything issued on this sales rep\'s latest request has already been transferred.');
             } else if (requisition) {
                 toast.info('This sales rep\'s latest request has no Issued Qty entered yet.');
             } else {
