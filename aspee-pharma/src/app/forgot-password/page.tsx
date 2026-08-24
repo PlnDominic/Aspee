@@ -2,7 +2,6 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase';
 import { Loader2, AlertCircle, MailCheck, ArrowLeft } from 'lucide-react';
 import { ResetPasswordStyles } from '@/components/ResetPasswordStyles';
 
@@ -21,13 +20,20 @@ export default function ForgotPasswordPage() {
         }
         setLoading(true);
         try {
-            const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-                redirectTo: `${window.location.origin}/reset-password`,
+            const res = await fetch('/api/auth/forgot-password', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email: email.trim() }),
             });
+
             // Don't reveal whether the email exists — only surface real failures
-            // (e.g. rate limiting). A missing account still returns success.
-            if (error && /rate|too many/i.test(error.message)) {
+            // (e.g. rate limiting). A missing account still reports success.
+            if (res.status === 429) {
                 setError('Too many attempts. Please wait a few minutes and try again.');
+                return;
+            }
+            if (!res.ok) {
+                setError('Something went wrong. Please try again.');
                 return;
             }
             setSent(true);

@@ -3,11 +3,18 @@ import nodemailer from 'nodemailer';
 import { USER_ADMIN_ROLES } from '@/lib/routePermissions';
 import { createServiceRoleClient, requireRoles } from '@/lib/serverAuth';
 import { readJsonBody } from '@/lib/requestLimits';
+import { enforceRateLimit, getClientIp } from '@/lib/rateLimit';
 
 export async function POST(request: NextRequest) {
     try {
-        const { error: authError } = await requireRoles(USER_ADMIN_ROLES);
-        if (authError) return authError;
+        const { appUser, error: authError } = await requireRoles(USER_ADMIN_ROLES);
+        if (authError || !appUser) return authError;
+
+        const rateLimitError = await enforceRateLimit('send-email', [
+            { keyType: 'user', keyValue: appUser.authUser.id, max: 30, windowMinutes: 15 },
+            { keyType: 'ip', keyValue: getClientIp(request), max: 60, windowMinutes: 15 },
+        ]);
+        if (rateLimitError) return rateLimitError;
 
         const { body, error: bodyError } = await readJsonBody<any>(request, 512 * 1024);
         if (bodyError) return bodyError;

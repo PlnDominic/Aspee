@@ -4,6 +4,7 @@ import nodemailer from 'nodemailer';
 import { USER_ADMIN_ROLES } from '@/lib/routePermissions';
 import { createServiceRoleClient, requireRoles } from '@/lib/serverAuth';
 import { readJsonBody } from '@/lib/requestLimits';
+import { enforceRateLimit, getClientIp } from '@/lib/rateLimit';
 
 const supabaseAdmin = createServiceRoleClient();
 
@@ -95,8 +96,14 @@ function welcomeEmailHtml(name: string, email: string, password: string, role: s
 
 export async function POST(req: NextRequest) {
     try {
-        const { error: authError } = await requireRoles(USER_ADMIN_ROLES);
-        if (authError) return authError;
+        const { appUser, error: authError } = await requireRoles(USER_ADMIN_ROLES);
+        if (authError || !appUser) return authError;
+
+        const rateLimitError = await enforceRateLimit('create-user', [
+            { keyType: 'user', keyValue: appUser.authUser.id, max: 10, windowMinutes: 60 },
+            { keyType: 'ip', keyValue: getClientIp(req), max: 20, windowMinutes: 60 },
+        ]);
+        if (rateLimitError) return rateLimitError;
 
         const { body, error: bodyError } = await readJsonBody<any>(req, 10 * 1024);
         if (bodyError) return bodyError;

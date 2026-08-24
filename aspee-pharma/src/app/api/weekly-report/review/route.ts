@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { REPORT_ADMIN_ROLES } from '@/lib/routePermissions';
 import { createServiceRoleClient, requireRoles } from '@/lib/serverAuth';
 import { readJsonBody } from '@/lib/requestLimits';
+import { enforceRateLimit, getClientIp } from '@/lib/rateLimit';
 
 const supabase = createServiceRoleClient();
 
@@ -9,6 +10,12 @@ export async function POST(request: NextRequest) {
     try {
         const { appUser, error: authError } = await requireRoles(REPORT_ADMIN_ROLES);
         if (authError || !appUser) return authError;
+
+        const rateLimitError = await enforceRateLimit('weekly-report-review', [
+            { keyType: 'user', keyValue: appUser.authUser.id, max: 60, windowMinutes: 15 },
+            { keyType: 'ip', keyValue: getClientIp(request), max: 120, windowMinutes: 15 },
+        ]);
+        if (rateLimitError) return rateLimitError;
 
         const { body, error: bodyError } = await readJsonBody<any>(request, 10 * 1024);
         if (bodyError) return bodyError;

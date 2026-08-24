@@ -8,6 +8,7 @@ import {
     requireRoles,
 } from '@/lib/serverAuth';
 import { readJsonBody } from '@/lib/requestLimits';
+import { enforceRateLimit, getClientIp } from '@/lib/rateLimit';
 
 const supabase = createServiceRoleClient();
 
@@ -429,6 +430,12 @@ export async function POST(request: Request) {
             const { appUser, error } = await requireAuthenticatedUser();
             if (error || !appUser) return error;
 
+            const rateLimitError = await enforceRateLimit('weekly-report-submission', [
+                { keyType: 'user', keyValue: appUser.authUser.id, max: 20, windowMinutes: 15 },
+                { keyType: 'ip', keyValue: getClientIp(request), max: 40, windowMinutes: 15 },
+            ]);
+            if (rateLimitError) return rateLimitError;
+
             const report = body.report;
             const allowedDepartment = appUser.systemUser.department || '';
             const submitterEmail = appUser.authUser.email?.toLowerCase();
@@ -485,8 +492,14 @@ export async function POST(request: Request) {
         }
 
         if (!isAuthorizedCronRequest(request)) {
-            const { error } = await requireRoles([...REPORT_ADMIN_ROLES, ...ACCOUNTING_ROLES]);
-            if (error) return error;
+            const { appUser, error } = await requireRoles([...REPORT_ADMIN_ROLES, ...ACCOUNTING_ROLES]);
+            if (error || !appUser) return error;
+
+            const rateLimitError = await enforceRateLimit('weekly-report-generate', [
+                { keyType: 'user', keyValue: appUser.authUser.id, max: 20, windowMinutes: 15 },
+                { keyType: 'ip', keyValue: getClientIp(request), max: 40, windowMinutes: 15 },
+            ]);
+            if (rateLimitError) return rateLimitError;
         }
 
         const { from, to, label } = weekRange();
