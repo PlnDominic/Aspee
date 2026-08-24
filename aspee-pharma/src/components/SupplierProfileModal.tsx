@@ -161,7 +161,6 @@ export default function SupplierProfileModal({ isOpen, onClose, supplier }: Supp
                     <ProfileField icon={<Building2 size={14} />} label="Category" value={supplier.category} />
                     <ProfileField icon={<Wallet size={14} />} label="Status" value={supplier.status} />
                     <ProfileField icon={<User size={14} />} label="Contact Person" value={supplier.contact_person || '—'} />
-                    <ProfileField icon={<CreditCard size={14} />} label="Payment Terms" value={supplier.payment_terms || '—'} />
                     <ProfileField icon={<Mail size={14} />} label="Email" value={supplier.email || '—'} />
                     <ProfileField icon={<Phone size={14} />} label="Phone" value={supplier.phone || '—'} />
                     <ProfileField icon={<MapPin size={14} />} label="Address" value={supplier.address || '—'} full />

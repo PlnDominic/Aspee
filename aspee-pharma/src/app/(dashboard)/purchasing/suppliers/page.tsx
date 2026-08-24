@@ -41,7 +41,7 @@ export default function SuppliersPage() {
 
     const exportToCSV = () => {
         if (suppliers.length === 0) return;
-        const headers = ['Name', 'Contact Person', 'Email', 'Phone', 'Category', 'Payment Terms', 'Status'];
+        const headers = ['Name', 'Contact Person', 'Email', 'Phone', 'Category', 'Status'];
         const csvContent = [
             headers.join(','),
             ...suppliers.map((s: any) => [
@@ -50,7 +50,6 @@ export default function SuppliersPage() {
                 `"${s.email || ''}"`,
                 `"${s.phone || ''}"`,
                 `"${s.category}"`,
-                `"${s.payment_terms || ''}"`,
                 `"${s.status}"`
             ].join(','))
         ].join('\n');
@@ -106,7 +105,6 @@ export default function SuppliersPage() {
                 </span>
             )
         },
-        { key: 'payment_terms', label: 'Payment Terms' },
         {
             key: 'status',
             label: 'Status',
