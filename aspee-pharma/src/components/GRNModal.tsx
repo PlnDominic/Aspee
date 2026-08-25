@@ -1280,6 +1280,8 @@ export default function GRNModal({ isOpen, onClose, onSave, initialData, mode = 
                                                 <input
                                                     type="number"
                                                     min="0"
+                                                    step="0.01"
+                                                    inputMode="decimal"
                                                     value={item.received_qty || ''}
                                                     onChange={(e) => updateGRNItem(idx, 'received_qty', parseFloat(e.target.value) || 0)}
                                                     placeholder="0"

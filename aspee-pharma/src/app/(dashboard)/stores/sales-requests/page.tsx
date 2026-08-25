@@ -4,7 +4,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import PageHeader from '@/components/PageHeader';
 import DataTable from '@/components/DataTable';
 import SalesRequestModal from '@/components/SalesRequestModal';
-import { Plus, Eye, Edit2, Trash2 } from 'lucide-react';
+import { Plus, Eye, Edit2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { useCurrentUser } from '@/lib/hooks';
@@ -87,20 +87,6 @@ export default function SalesRequestsPage() {
         void fetchRequests();
     }, [fetchRequests]);
 
-    const handleDelete = async (row: any) => {
-        if (!confirm(`Delete request ${row.requisition_number}?`)) return;
-
-        try {
-            const { error } = await supabase.from('requisitions').delete().eq('id', row.id);
-            if (error) throw error;
-
-            toast.success(`Request ${row.requisition_number} deleted`);
-            void fetchRequests();
-        } catch (error: any) {
-            toast.error('Failed to delete request: ' + error.message);
-        }
-    };
-
     const columns = [
         {
             key: 'requisition_number',
@@ -162,24 +148,13 @@ export default function SalesRequestsPage() {
                         <Eye size={14} />
                     </button>
                     {(row.status === 'PENDING' || row.status === 'APPROVED') && (
-                        <>
-                            <button
-                                onClick={() => { setSelectedRequest(row); setReadOnly(false); setIsModalOpen(true); }}
-                                style={{ padding: 6, borderRadius: 6, border: '1px solid var(--slate-200)', background: 'var(--card-bg)', color: 'var(--primary-600)', cursor: 'pointer' }}
-                                title="Edit Request"
-                            >
-                                <Edit2 size={14} />
-                            </button>
-                            {row.status === 'PENDING' && (
-                                <button
-                                    onClick={() => handleDelete(row)}
-                                    style={{ padding: 6, borderRadius: 6, border: '1px solid var(--slate-200)', background: 'var(--card-bg)', color: 'var(--danger)', cursor: 'pointer' }}
-                                    title="Delete Request"
-                                >
-                                    <Trash2 size={14} />
-                                </button>
-                            )}
-                        </>
+                        <button
+                            onClick={() => { setSelectedRequest(row); setReadOnly(false); setIsModalOpen(true); }}
+                            style={{ padding: 6, borderRadius: 6, border: '1px solid var(--slate-200)', background: 'var(--card-bg)', color: 'var(--primary-600)', cursor: 'pointer' }}
+                            title="Edit Request"
+                        >
+                            <Edit2 size={14} />
+                        </button>
                     )}
                 </div>
             ),
