@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
-import { ensureSalesDepartmentLocation, ensureVanStockLocation, ensureSalespersonStockLocation, getSalespersonLocationName, isSalesDepartmentLocation, isVanStockLocation, isFinishedGoodsLocation, isSalespersonStockLocation } from '@/lib/vanStock';
+import { ensureSalesDepartmentLocation, ensureVanStockLocation, isSalesDepartmentLocation, isVanStockLocation, isFinishedGoodsLocation, isSalespersonStockLocation } from '@/lib/vanStock';
 import { formatMixedBulk } from '@/lib/unitConversions';
 
 interface Product {
@@ -62,7 +62,13 @@ export default function TransferModal({ isOpen, onClose, onSave, initialData, mo
     const [products, setProducts] = useState<Product[]>([]);
     const [locations, setLocations] = useState<Location[]>([]);
     const [salesReps, setSalesReps] = useState<{ id: string; name: string }[]>([]);
-    const [repLocationIds, setRepLocationIds] = useState<Record<string, string>>({});
+    // Each rep's assigned van/route, matched by driver_name — the same
+    // matching rule used by the Sales Request route auto-select and by the
+    // Sales Reports "salesperson" grouping. A transfer to a rep posts stock
+    // straight into that van's stock location (rather than a standalone
+    // personal location) so it's immediately invoiceable and shows up in
+    // reports; a rep with no matching van has nowhere valid to receive stock.
+    const [repRoutes, setRepRoutes] = useState<Record<string, { vanId: string; vanLabel: string; locationId: string }>>({});
     
     const [transferNumber, setTransferNumber] = useState('');
     const [fromLocationId, setFromLocationId] = useState('');
@@ -161,11 +167,15 @@ export default function TransferModal({ isOpen, onClose, onSave, initialData, mo
     });
 
     // When transferring out of Finished Goods, the destination is a sales rep
-    // from the Sales Reps roster — mapped to that rep's personal stock location.
+    // from the Sales Reps roster — mapped straight to that rep's assigned
+    // van/route stock location, so the stock is immediately invoiceable and
+    // shows up in Sales Reports (both of which key off the van's location,
+    // not a standalone per-rep bucket).
     const fromIsFinishedGoods = !!(fromLocation && isFinishedGoodsLocation(fromLocation));
-    const selectedToRepId = fromIsFinishedGoods
-        ? (salesReps.find(r => toLocation?.name === getSalespersonLocationName(r.name))?.id || '')
-        : '';
+    // Not gated on fromIsFinishedGoods — used to show the rep's name on the
+    // view/print document regardless of the current form state.
+    const toRep = salesReps.find(r => repRoutes[r.id]?.locationId === toLocationId);
+    const selectedToRepId = fromIsFinishedGoods ? (toRep?.id || '') : '';
     // Prefills Transfer Items from whatever Stores has entered in the Issued
     // Qty column on this rep's latest Sales Request — Stores treats a line
     // as approved the moment they type its issued quantity, with no separate
@@ -175,9 +185,14 @@ export default function TransferModal({ isOpen, onClose, onSave, initialData, mo
     // top-up on the same request — never prefills stock that already left
     // Finished Goods.
     const handleToRepChange = async (repId: string) => {
-        const repLocationId = repLocationIds[repId] || '';
-        setToLocationId(repLocationId);
+        const route = repRoutes[repId];
+        setToLocationId(route?.locationId || '');
         if (!repId) return;
+
+        if (!route) {
+            toast.error('This sales rep has no assigned route (van). Assign one under Sales → Routes before transferring stock — otherwise it can\'t be invoiced.');
+            return;
+        }
 
         try {
             const { data: requisition, error } = await supabase
@@ -210,11 +225,11 @@ export default function TransferModal({ isOpen, onClose, onSave, initialData, mo
             // since the request was raised, so a second transfer against the
             // same request only prefills what's still outstanding.
             let alreadyTransferred: Record<string, number> = {};
-            if (issuedItems.length > 0 && repLocationId && requisition?.created_at) {
+            if (issuedItems.length > 0 && requisition?.created_at) {
                 const { data: priorTransfers, error: transfersError } = await supabase
                     .from('stock_transfers')
                     .select('items:stock_transfer_items(product_id, quantity)')
-                    .eq('to_location_id', repLocationId)
+                    .eq('to_location_id', route.locationId)
                     .gte('created_at', requisition.created_at);
 
                 if (transfersError) throw transfersError;
@@ -286,20 +301,32 @@ export default function TransferModal({ isOpen, onClose, onSave, initialData, mo
             if (repsRes.error) throw repsRes.error;
 
             // Active sales reps from the Sales Reps roster — the destination picker
-            // for stock leaving Finished Goods. Ensure each rep has a personal
-            // stock location so the transfer has a concrete destination.
+            // for stock leaving Finished Goods.
             const activeReps = (repsRes.data || [])
                 .map((r: any) => ({ id: r.id, name: (r.name || '').trim() }))
                 .filter(r => r.name);
             setSalesReps(activeReps);
 
             await ensureSalesDepartmentLocation();
-            await Promise.all((vanRes.data || []).map((van: any) => ensureVanStockLocation(van)));
-            const ensured = await Promise.all(activeReps.map(async (rep) => {
-                const loc = await ensureSalespersonStockLocation({ id: rep.id, full_name: rep.name });
-                return [rep.id, loc?.id] as const;
-            }));
-            setRepLocationIds(Object.fromEntries(ensured.filter(([, locId]) => locId)));
+            const vanLocations = await Promise.all((vanRes.data || []).map((van: any) => ensureVanStockLocation(van)));
+            const vanLocationById = new Map<string, any>((vanRes.data || []).map((van: any, i: number) => [van.id, vanLocations[i]]));
+
+            // A rep's route is their assigned van, matched by driver_name —
+            // same rule the Sales Request route auto-select and Sales
+            // Reports "salesperson" grouping use. No match means the rep has
+            // no route to invoice against yet.
+            const normalize = (value: unknown) => String(value ?? '').trim().toLowerCase();
+            const routeEntries = activeReps.map((rep) => {
+                const van = (vanRes.data || []).find((v: any) => normalize(v.driver_name) && normalize(v.driver_name) === normalize(rep.name));
+                const location = van ? vanLocationById.get(van.id) : null;
+                if (!van || !location) return [rep.id, undefined] as const;
+                return [rep.id, {
+                    vanId: van.id,
+                    vanLabel: `${van.van_id}${van.route_area ? ` — ${van.route_area}` : ''}`,
+                    locationId: location.id,
+                }] as const;
+            });
+            setRepRoutes(Object.fromEntries(routeEntries.filter(([, route]) => route)));
 
             const { data: locationsData, error: locationsError } = await supabase
                 .from('stock_locations')
@@ -429,6 +456,11 @@ export default function TransferModal({ isOpen, onClose, onSave, initialData, mo
             }
         }
 
+        if (fromIsFinishedGoods && selectedToRepId && !repRoutes[selectedToRepId]) {
+            toast.error('This sales rep has no assigned route (van). Assign one under Sales → Routes before transferring stock.');
+            return;
+        }
+
         const validItems = items.filter(item => item.product_id && item.quantity > 0);
         if (validItems.length === 0) {
             toast.error('Please add at least one valid item');
@@ -506,8 +538,8 @@ export default function TransferModal({ isOpen, onClose, onSave, initialData, mo
                                 <div className="location-block">
                                     <h3>TO</h3>
                                     <div className="location-info">
-                                        <strong>{toLocation?.name || 'N/A'}</strong>
-                                        <span>{toLocation?.type || ''}</span>
+                                        <strong>{toRep?.name || toLocation?.name || 'N/A'}</strong>
+                                        <span>{toRep ? repRoutes[toRep.id]?.vanLabel : (toLocation?.type || '')}</span>
                                     </div>
                                 </div>
                             </div>
@@ -654,7 +686,7 @@ export default function TransferModal({ isOpen, onClose, onSave, initialData, mo
                                     const currentTo = locations.find(l => l.id === toLocationId);
                                     if (
                                         toLocationId === newId ||
-                                        (newLoc && isFinishedGoodsLocation(newLoc) && !(currentTo && isSalespersonStockLocation(currentTo)))
+                                        (newLoc && isFinishedGoodsLocation(newLoc) && !(currentTo && (isSalespersonStockLocation(currentTo) || isVanStockLocation(currentTo))))
                                     ) {
                                         setToLocationId('');
                                     }
@@ -686,12 +718,14 @@ export default function TransferModal({ isOpen, onClose, onSave, initialData, mo
                                     disabled={isViewOnly}
                                 >
                                     <option value="">
-                                        {toLocation && isSalespersonStockLocation(toLocation) && !selectedToRepId
+                                        {toLocation && !selectedToRepId && (isSalespersonStockLocation(toLocation) || isVanStockLocation(toLocation))
                                             ? toLocation.name
                                             : 'Select sales rep'}
                                     </option>
                                     {salesReps.map(rep => (
-                                        <option key={rep.id} value={rep.id}>{rep.name}</option>
+                                        <option key={rep.id} value={rep.id}>
+                                            {rep.name}{repRoutes[rep.id] ? ` — ${repRoutes[rep.id].vanLabel}` : ' (no route assigned)'}
+                                        </option>
                                     ))}
                                 </select>
                             ) : (
@@ -713,7 +747,9 @@ export default function TransferModal({ isOpen, onClose, onSave, initialData, mo
                                 {isSalesVanLoadFlow
                                     ? 'Use this page only for Sales Department to van loading.'
                                     : fromIsFinishedGoods
-                                        ? 'Stock leaving Finished Goods is assigned to a sales rep from the Sales Reps roster.'
+                                        ? (selectedToRepId && !repRoutes[selectedToRepId]
+                                            ? 'This rep has no assigned route (van) — assign one under Sales → Routes before transferring, otherwise this stock can\'t be invoiced.'
+                                            : 'Stock leaving Finished Goods is posted straight to the rep\'s assigned van/route, so it\'s immediately invoiceable.')
                                         : 'Select any warehouse as the destination.'}
                             </div>
                         )}

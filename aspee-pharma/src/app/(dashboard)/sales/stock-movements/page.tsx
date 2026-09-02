@@ -63,6 +63,24 @@ export default function SalesStockMovementsPage() {
             (fgProducts || []).forEach((p: any) => { fgMap[p.id] = p; });
             const fgIds = Object.keys(fgMap);
 
+            // Resolves a "Sales Van - <van_id>" location name to its driver,
+            // so a rep-dispatch transfer (which now lands directly on the
+            // rep's van location) still shows the rep's name here, not the
+            // raw van location.
+            const { data: vansData, error: vansError } = await supabase
+                .from('vans')
+                .select('van_id, driver_name');
+            if (vansError) return { data: null, error: vansError };
+            const driverByVanId: Record<string, string> = {};
+            (vansData || []).forEach((van: any) => {
+                if (van.van_id) driverByVanId[String(van.van_id).trim().toLowerCase()] = van.driver_name || '';
+            });
+            const driverForVanLocationName = (name: string) => {
+                const match = /^sales van - (.+)$/i.exec(name.trim());
+                if (!match) return null;
+                return driverByVanId[match[1].trim().toLowerCase()] || null;
+            };
+
             const { data: transfers, error: transferError } = await supabase
                 .from('stock_transfers')
                 .select(`
@@ -79,7 +97,7 @@ export default function SalesStockMovementsPage() {
                 isSalesDepartmentLocation(transfer.from) && isVanStockLocation(transfer.to)
             );
             const salespersonDispatchTransfers = (transfers || []).filter((transfer: any) =>
-                isFinishedGoodsLocation(transfer.from) && isSalespersonStockLocation(transfer.to)
+                isFinishedGoodsLocation(transfer.from) && (isVanStockLocation(transfer.to) || isSalespersonStockLocation(transfer.to))
             );
 
             const relevantIds = [
@@ -125,7 +143,7 @@ export default function SalesStockMovementsPage() {
                     const fromLocation = Array.isArray(transfer?.from) ? transfer.from[0] : transfer?.from;
                     const toLocation = Array.isArray(transfer?.to) ? transfer.to[0] : transfer?.to;
                     const toName: string = toLocation?.name || '';
-                    const salespersonName = toName.replace(/^Sales Rep - /i, '') || toName;
+                    const salespersonName = driverForVanLocationName(toName) || toName.replace(/^Sales Rep - /i, '') || toName;
                     const product = fgMap[item.product_id];
                     return {
                         id: `dispatch-${item.transfer_id}-${item.product_id}`,

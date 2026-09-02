@@ -10,6 +10,7 @@ import { useFetch, useAction } from '@/lib/hooks';
 import { toast } from 'sonner';
 import TransferModal from '@/components/TransferModal';
 import { useQueryClient } from '@tanstack/react-query';
+import { getVanStockLocationName } from '@/lib/vanStock';
 
 export default function TransfersPage() {
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -29,6 +30,23 @@ export default function TransfersPage() {
                 `)
                 .order('created_at', { ascending: false });
             return { data: data || [], error };
+        }
+    );
+
+    // Maps a van's stock location name -> "driver (van_id — route_area)" so
+    // a transfer's Destination column shows the route a stock transfer to a
+    // sales rep actually landed on, not just the raw location name.
+    const { data: vanLabelByLocationName = {} } = useFetch<Record<string, string>>(
+        ['vans-location-labels'],
+        async () => {
+            const { data, error } = await supabase.from('vans').select('van_id, driver_name, route_area');
+            if (error) return { data: {}, error };
+            const map: Record<string, string> = {};
+            (data || []).forEach((van: any) => {
+                const label = `${van.driver_name || 'Unassigned'} (${van.van_id}${van.route_area ? ` — ${van.route_area}` : ''})`;
+                map[getVanStockLocationName(van)] = label;
+            });
+            return { data: map, error: null };
         }
     );
 
@@ -87,9 +105,20 @@ export default function TransfersPage() {
         {
             key: 'to',
             label: 'Destination',
-            render: (v: any) => v?.name
-                ? <EntityLink href={`/stores/stock?search=${encodeURIComponent(v.name)}`} subtle title="View stock at this location">{v.name}</EntityLink>
-                : <span>-</span>,
+            render: (v: any) => {
+                if (!v?.name) return <span>-</span>;
+                const routeLabel = vanLabelByLocationName[v.name];
+                return (
+                    <EntityLink href={`/stores/stock?search=${encodeURIComponent(v.name)}`} subtle title="View stock at this location">
+                        {routeLabel
+                            ? <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                <span>{routeLabel}</span>
+                                <span style={{ fontSize: 11, color: 'var(--slate-500)' }}>{v.name}</span>
+                            </div>
+                            : v.name}
+                    </EntityLink>
+                );
+            },
         },
         {
             key: 'actions',

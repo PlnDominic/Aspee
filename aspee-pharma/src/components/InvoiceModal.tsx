@@ -56,11 +56,16 @@ export default function InvoiceModal({ isOpen, onClose, onSave, record }: Invoic
     // customer_location vs. the van's route_area — loosely (either string
     // contains the other) rather than requiring an exact match, so real-world
     // variants like "Accra" / "Accra Central" / "Greater Accra" still line up.
+    // customer_location is an optional free-text field — a customer with
+    // none on file is kept in the list rather than hidden, since there's no
+    // way to tell whether they belong on this route or not; excluding them
+    // outright made the picker show almost nobody whenever most customer
+    // records simply hadn't had a location typed in.
     const filteredCustomers = useMemo(() => {
         if (!routeId || routeLocations.length === 0) return customers;
         return customers.filter((c) => {
             const customerLocation = (c.customer_location || '').trim().toLowerCase().replace(/\s+/g, ' ');
-            if (!customerLocation) return false;
+            if (!customerLocation) return true;
             return routeLocations.some((routeLocation: string) =>
                 customerLocation.includes(routeLocation) || routeLocation.includes(customerLocation)
             );
