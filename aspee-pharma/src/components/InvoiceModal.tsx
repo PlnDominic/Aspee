@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import Modal from './Modal';
-import { Plus, Trash2, Save, Printer, Hash, Calendar, Banknote, User, Clock, AlignLeft, Percent } from 'lucide-react';
+import { Plus, Trash2, Save, Printer, Hash, Calendar, Banknote, User, Clock, AlignLeft, Percent, ChevronDown } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import PrintableInvoice from './PrintableInvoice';
@@ -33,6 +33,8 @@ export default function InvoiceModal({ isOpen, onClose, onSave, record }: Invoic
 
     const [invoiceNumber, setInvoiceNumber] = useState('');
     const [customerName, setCustomerName] = useState('');
+    const [customerDropdownOpen, setCustomerDropdownOpen] = useState(false);
+    const customerFieldRef = useRef<HTMLDivElement>(null);
     const [routeId, setRouteId] = useState('');
     const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
     const [dueDate, setDueDate] = useState('');
@@ -51,26 +53,53 @@ export default function InvoiceModal({ isOpen, onClose, onSave, record }: Invoic
             .filter(Boolean);
     }, [selectedVan]);
 
-    // Customers assigned to this sales rep's route. There's no direct
-    // customer -> route/rep assignment in the schema yet, so this matches on
-    // customer_location vs. the van's route_area — loosely (either string
-    // contains the other) rather than requiring an exact match, so real-world
-    // variants like "Accra" / "Accra Central" / "Greater Accra" still line up.
-    // customer_location is an optional free-text field — a customer with
-    // none on file is kept in the list rather than hidden, since there's no
-    // way to tell whether they belong on this route or not; excluding them
-    // outright made the picker show almost nobody whenever most customer
-    // records simply hadn't had a location typed in.
+    // Customers assigned to this sales rep's route. CustomerModal already
+    // sets customer.sales_person / customer.route directly from the same
+    // rosters this van dropdown is built from (sales_reps.name / vans.route_area),
+    // so that's the primary, exact match. customer_location (free text) is
+    // only a fallback for a customer that was never tagged with either —
+    // kept rather than hidden, since there's no way to tell whether they
+    // belong on this route or not.
     const filteredCustomers = useMemo(() => {
-        if (!routeId || routeLocations.length === 0) return customers;
+        if (!routeId || !selectedVan) return customers;
+        const driverName = (selectedVan.driver_name || '').trim().toLowerCase();
+        const routeArea = (selectedVan.route_area || '').trim().toLowerCase();
+
         return customers.filter((c) => {
+            const salesPerson = (c.sales_person || '').trim().toLowerCase();
+            const route = (c.route || '').trim().toLowerCase();
+
+            if (salesPerson || route) {
+                return (!!salesPerson && !!driverName && salesPerson === driverName)
+                    || (!!route && !!routeArea && route === routeArea);
+            }
+
             const customerLocation = (c.customer_location || '').trim().toLowerCase().replace(/\s+/g, ' ');
             if (!customerLocation) return true;
             return routeLocations.some((routeLocation: string) =>
                 customerLocation.includes(routeLocation) || routeLocation.includes(customerLocation)
             );
         });
-    }, [customers, routeId, routeLocations]);
+    }, [customers, routeId, selectedVan, routeLocations]);
+
+    // Narrows the dropdown as the user types; shows every route-matched
+    // customer when the field is empty (or not yet focused-and-typed-in).
+    const customerSuggestions = useMemo(() => {
+        const query = customerName.trim().toLowerCase();
+        if (!query) return filteredCustomers;
+        return filteredCustomers.filter((c) => c.name?.toLowerCase().includes(query));
+    }, [filteredCustomers, customerName]);
+
+    useEffect(() => {
+        if (!customerDropdownOpen) return;
+        const handleClickOutside = (e: MouseEvent) => {
+            if (customerFieldRef.current && !customerFieldRef.current.contains(e.target as Node)) {
+                setCustomerDropdownOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [customerDropdownOpen]);
 
     const currentDraftReservedByProduct = useMemo(() => {
         const reserved: Record<string, number> = {};
@@ -169,7 +198,7 @@ export default function InvoiceModal({ isOpen, onClose, onSave, record }: Invoic
         try {
             const { data, error } = await supabase
                 .from('customers')
-                .select('id, name, status, customer_location')
+                .select('id, name, status, customer_location, sales_person, route')
                 .eq('status', 'Active')
                 .order('name');
             if (error) throw error;
@@ -355,35 +384,57 @@ export default function InvoiceModal({ isOpen, onClose, onSave, record }: Invoic
                 <div className="inv-grid">
                     <div className="inv-field full-width">
                         <label>Customer Name *</label>
-                        <div className="inv-input-wrap">
+                        <div className="inv-input-wrap inv-customer-field" ref={customerFieldRef}>
                             <User size={15} className="inv-icon" />
                             <input
                                 type="text"
                                 value={customerName}
-                                onChange={(e) => setCustomerName(e.target.value)}
+                                onChange={(e) => { setCustomerName(e.target.value); setCustomerDropdownOpen(true); }}
+                                onFocus={() => setCustomerDropdownOpen(true)}
                                 placeholder="E.g. John Doe Clinics..."
                                 required
-                                list="inv-customer-list"
+                                autoComplete="off"
                             />
-                            <datalist id="inv-customer-list">
-                                {filteredCustomers.map((c) => (
-                                    <option key={c.id} value={c.name} />
-                                ))}
-                            </datalist>
+                            <button
+                                type="button"
+                                className="inv-customer-toggle"
+                                onClick={() => setCustomerDropdownOpen((open) => !open)}
+                                tabIndex={-1}
+                                aria-label="Toggle customer list"
+                            >
+                                <ChevronDown size={15} />
+                            </button>
+                            {customerDropdownOpen && (
+                                <div className="inv-customer-dropdown">
+                                    {fetchingCustomers ? (
+                                        <div className="inv-customer-dropdown-empty">Loading customers…</div>
+                                    ) : customerSuggestions.length === 0 ? (
+                                        <div className="inv-customer-dropdown-empty">
+                                            {routeId ? `No customers found for ${selectedVan?.driver_name || 'this route'}.` : 'No customers found.'}
+                                        </div>
+                                    ) : (
+                                        customerSuggestions.map((c) => (
+                                            <button
+                                                type="button"
+                                                key={c.id}
+                                                className={`inv-customer-option ${c.name === customerName ? 'selected' : ''}`}
+                                                onClick={() => { setCustomerName(c.name); setCustomerDropdownOpen(false); }}
+                                            >
+                                                <span className="inv-customer-option-name">{c.name}</span>
+                                                {(c.route || c.sales_person) && (
+                                                    <span className="inv-customer-option-meta">{[c.route, c.sales_person].filter(Boolean).join(' · ')}</span>
+                                                )}
+                                            </button>
+                                        ))
+                                    )}
+                                </div>
+                            )}
                         </div>
-                        {fetchingCustomers && (
-                            <div style={{ fontSize: 10, color: 'var(--slate-500)', marginTop: 4 }}>
-                                Loading customers…
-                            </div>
-                        )}
-                        {!fetchingCustomers && routeId && filteredCustomers.length === 0 && (
-                            <div style={{ fontSize: 10, color: 'var(--danger)', marginTop: 4 }}>
-                                No customers found for {selectedVan?.route_area || 'this route'}&apos;s location.
-                            </div>
-                        )}
-                        {!fetchingCustomers && routeId && filteredCustomers.length > 0 && (
-                            <div style={{ fontSize: 10, color: 'var(--slate-500)', marginTop: 4 }}>
-                                Showing customers in {selectedVan?.route_area}.
+                        {!fetchingCustomers && routeId && (
+                            <div style={{ fontSize: 10, color: filteredCustomers.length === 0 ? 'var(--danger)' : 'var(--slate-500)', marginTop: 4 }}>
+                                {filteredCustomers.length === 0
+                                    ? `No customers assigned to ${selectedVan?.driver_name || 'this route'} yet.`
+                                    : `Showing ${filteredCustomers.length} customer${filteredCustomers.length === 1 ? '' : 's'} for ${selectedVan?.driver_name || selectedVan?.route_area || 'this route'}.`}
                             </div>
                         )}
                     </div>
@@ -770,6 +821,69 @@ export default function InvoiceModal({ isOpen, onClose, onSave, record }: Invoic
                     font-size: 11px;
                     outline: none;
                     resize: vertical;
+                }
+                .inv-customer-field input { padding-right: 34px; }
+                .inv-customer-toggle {
+                    position: absolute;
+                    right: 4px;
+                    top: 50%;
+                    transform: translateY(-50%);
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    width: 28px;
+                    height: 28px;
+                    border: none;
+                    background: transparent;
+                    color: var(--slate-400);
+                    cursor: pointer;
+                    border-radius: 6px;
+                }
+                .inv-customer-toggle:hover { background: var(--slate-50); color: var(--slate-600); }
+                .inv-customer-dropdown {
+                    position: absolute;
+                    top: calc(100% + 4px);
+                    left: 0;
+                    right: 0;
+                    z-index: 20;
+                    max-height: 260px;
+                    overflow-y: auto;
+                    background: var(--card-bg);
+                    border: 1.5px solid var(--slate-200);
+                    border-radius: 10px;
+                    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+                    padding: 4px;
+                }
+                .inv-customer-dropdown-empty {
+                    padding: 12px 10px;
+                    font-size: 11px;
+                    color: var(--slate-500);
+                    text-align: center;
+                }
+                .inv-customer-option {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 2px;
+                    width: 100%;
+                    text-align: left;
+                    padding: 8px 10px;
+                    border: none;
+                    background: transparent;
+                    border-radius: 8px;
+                    cursor: pointer;
+                    font-family: inherit;
+                }
+                .inv-customer-option:hover, .inv-customer-option.selected {
+                    background: var(--primary-50);
+                }
+                .inv-customer-option-name {
+                    font-size: 11px;
+                    font-weight: 600;
+                    color: var(--slate-800);
+                }
+                .inv-customer-option-meta {
+                    font-size: 10px;
+                    color: var(--slate-500);
                 }
                 .inv-line-items-shell {
                     border-radius: 18px !important;
