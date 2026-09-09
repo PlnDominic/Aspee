@@ -2,6 +2,7 @@ import { createServerClient } from '@supabase/ssr';
 import { createClient } from '@supabase/supabase-js';
 import { cookies, headers } from 'next/headers';
 import { NextResponse } from 'next/server';
+import { timingSafeEqual as nodeTimingSafeEqual } from 'crypto';
 import { SECURE_COOKIE_OPTIONS } from '@/lib/cookieOptions';
 
 type SystemUserRecord = {
@@ -169,12 +170,26 @@ export function hasRole(appUser: AppUser, roles: readonly string[]) {
     return roles.includes(appUser.systemUser.role || '');
 }
 
+// Constant-time string compare — a plain === leaks how many leading
+// characters matched via response-time differences, in theory letting an
+// attacker recover CRON_SECRET one byte at a time over enough requests.
+// crypto.timingSafeEqual requires equal-length buffers; the length check
+// below still short-circuits unequal lengths, but that's fine — it doesn't
+// leak anything beyond "wrong length", which a real secret's fixed length
+// already makes an unhelpful signal to an attacker.
+function timingSafeEqual(a: string, b: string): boolean {
+    const bufA = Buffer.from(a);
+    const bufB = Buffer.from(b);
+    if (bufA.length !== bufB.length) return false;
+    return nodeTimingSafeEqual(bufA, bufB);
+}
+
 export function isAuthorizedCronRequest(request: Request) {
     const secret = process.env.CRON_SECRET;
     if (!secret) return false;
 
-    const bearer = request.headers.get('authorization');
-    const headerSecret = request.headers.get('x-cron-secret');
+    const bearer = request.headers.get('authorization') || '';
+    const headerSecret = request.headers.get('x-cron-secret') || '';
 
-    return bearer === `Bearer ${secret}` || headerSecret === secret;
+    return timingSafeEqual(bearer, `Bearer ${secret}`) || timingSafeEqual(headerSecret, secret);
 }

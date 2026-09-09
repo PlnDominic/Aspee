@@ -71,6 +71,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Independent of the byte-size cap above — a 5MB file of very short
+    // rows could still be tens of thousands of rows, each becoming its own
+    // insert below. Bound row count too, so one upload can't hand the DB an
+    // unbounded batch of writes.
+    const MAX_ROWS = 10000;
+    if (parseResult.data.length > MAX_ROWS) {
+      return NextResponse.json(
+        { error: `CSV has ${parseResult.data.length} rows — split it into batches of ${MAX_ROWS} or fewer.` },
+        { status: 400 }
+      );
+    }
+
     const supabase = createServiceRoleClient();
     const transactions: ParsedTransaction[] = [];
     const errors: string[] = [];

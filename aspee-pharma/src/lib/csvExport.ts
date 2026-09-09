@@ -4,7 +4,18 @@ function escapeCsvValue(value: CsvValue): string {
   if (value === null || value === undefined) return '';
   if (value instanceof Date) return value.toISOString();
 
-  const str = String(value);
+  let str = String(value);
+
+  // CSV/Excel formula injection guard (CWE-1236): a cell whose content
+  // starts with =, +, -, @, or a tab/CR is interpreted as a formula by
+  // Excel/Sheets when the file is opened, not displayed as text — e.g. a
+  // bank statement description of "=cmd|'/c calc'!A1" from an uploaded CSV
+  // would execute on whoever opens this export. Prefixing with a leading
+  // apostrophe forces "treat as text" in every major spreadsheet app.
+  if (/^[=+\-@\t\r]/.test(str)) {
+    str = `'${str}`;
+  }
+
   // Escape if contains delimiter, quotes, or newline
   if (/[",\n\r]/.test(str)) {
     return `"${str.replace(/"/g, '""')}"`;

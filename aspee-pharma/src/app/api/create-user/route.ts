@@ -40,6 +40,10 @@ function escapeHtml(value: string) {
 }
 
 function welcomeEmailHtml(name: string, email: string, password: string, role: string) {
+    name = escapeHtml(name);
+    email = escapeHtml(email);
+    password = escapeHtml(password);
+    role = escapeHtml(role);
     return `<!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>

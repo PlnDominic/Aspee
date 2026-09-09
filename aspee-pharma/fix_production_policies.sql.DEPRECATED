@@ -1,3 +1,20 @@
+-- ============================================================================
+-- DEPRECATED — DO NOT RUN THIS FILE.
+--
+-- This script grants every authenticated user full CRUD on core tables
+-- (USING (true) policies), which is exactly the vulnerability fixed by
+-- supabase/migrations/20260909000000_role_based_rls_policies.sql and
+-- 20260909000001_fix_notifications_profiles_categories_rls.sql.
+--
+-- Running this file again — even after those migrations — will silently
+-- re-open every table it touches: Postgres RLS policies are OR'd together,
+-- so one leftover USING (true) policy overrides any number of stricter
+-- ones sitting alongside it, regardless of which was created first.
+--
+-- Kept only for historical reference. If you need to change access for a
+-- table, add a new supabase/migrations/*.sql file instead.
+-- ============================================================================
+
 -- ASPEE PHARMACEUTICALS - PRODUCTION POLICIES FIX
 -- This script adds the missing RLS policies for production-related tables to fix the "new row violates row-level security policy" error.
 
