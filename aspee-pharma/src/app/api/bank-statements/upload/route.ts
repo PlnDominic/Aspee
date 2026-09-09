@@ -46,6 +46,31 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No account ID provided' }, { status: 400 });
     }
 
+    // accountId comes straight from the client — validate its shape before
+    // it reaches any query, and confirm the account actually exists before
+    // parsing the file at all. Without this, a malformed or made-up ID only
+    // surfaces as a raw Postgres FK-violation error on the final insert,
+    // after the whole file has already been parsed.
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(accountId)) {
+      return NextResponse.json({ error: 'Invalid account ID.' }, { status: 400 });
+    }
+
+    const supabase = createServiceRoleClient();
+
+    const { data: bankAccount, error: accountLookupError } = await supabase
+      .from('bank_accounts')
+      .select('id')
+      .eq('id', accountId)
+      .maybeSingle();
+
+    if (accountLookupError) {
+      console.error('Bank account lookup error:', accountLookupError);
+      return NextResponse.json({ error: 'Failed to verify account.' }, { status: 500 });
+    }
+    if (!bankAccount) {
+      return NextResponse.json({ error: 'Bank account not found.' }, { status: 404 });
+    }
+
     if (file.size > 5 * 1024 * 1024) {
       return NextResponse.json({ error: 'CSV upload must be 5MB or smaller' }, { status: 400 });
     }
@@ -83,7 +108,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const supabase = createServiceRoleClient();
     const transactions: ParsedTransaction[] = [];
     const errors: string[] = [];
 
@@ -108,6 +132,22 @@ export async function POST(request: NextRequest) {
         const creditAmount = parseFloat(String(creditStr).replace(/[^0-9.-]/g, '')) || 0;
         const balance = balanceStr ? parseFloat(String(balanceStr).replace(/[^0-9.-]/g, '')) : null;
 
+        // parseFloat on a crafted value like "1e400" returns Infinity, which
+        // `|| 0` doesn't catch (Infinity is truthy) — Number.isFinite closes
+        // that, and also rejects NaN explicitly rather than relying on the
+        // fallback-to-0 coincidence. Bank statement amounts are always
+        // non-negative magnitudes (the debit/credit column split already
+        // encodes direction) — a negative value here means the row is
+        // malformed, not a legitimate transaction.
+        if (!Number.isFinite(debitAmount) || debitAmount < 0 || !Number.isFinite(creditAmount) || creditAmount < 0) {
+          errors.push(`Row ${i + 1}: Invalid debit/credit amount`);
+          continue;
+        }
+        if (balance !== null && !Number.isFinite(balance)) {
+          errors.push(`Row ${i + 1}: Invalid balance amount`);
+          continue;
+        }
+
         if (debitAmount === 0 && creditAmount === 0) {
           errors.push(`Row ${i + 1}: No amount specified`);
           continue;
@@ -119,10 +159,28 @@ export async function POST(request: NextRequest) {
           continue;
         }
 
+        // Sanity-bound the date range — catches garbage that still happens
+        // to parse (e.g. a stray "9999-01-01" or a swapped day/month landing
+        // in some other century) rather than silently importing it.
+        const MIN_STATEMENT_DATE = new Date('2000-01-01T00:00:00Z').getTime();
+        const oneDayFromNow = Date.now() + 24 * 60 * 60 * 1000;
+        if (transactionDate.getTime() < MIN_STATEMENT_DATE || transactionDate.getTime() > oneDayFromNow) {
+          errors.push(`Row ${i + 1}: Transaction date out of plausible range: ${dateStr}`);
+          continue;
+        }
+
+        // Bank CSV exports occasionally concatenate multiple fields into one
+        // free-text column — bound length rather than reject outright, so a
+        // slightly-too-long real description still imports (truncated)
+        // instead of failing the whole row.
+        const MAX_TEXT_LENGTH = 500;
+        const safeDescription = String(description).trim().slice(0, MAX_TEXT_LENGTH);
+        const safeReference = reference ? String(reference).trim().slice(0, MAX_TEXT_LENGTH) : null;
+
         transactions.push({
           transaction_date: transactionDate.toISOString().split('T')[0],
-          description: String(description).trim(),
-          reference: reference ? String(reference).trim() : null,
+          description: safeDescription,
+          reference: safeReference,
           debit_amount: debitAmount,
           credit_amount: creditAmount,
           balance: balance
@@ -160,8 +218,9 @@ export async function POST(request: NextRequest) {
       .insert(insertData);
 
     if (insertError) {
+      console.error('Bank statement insert error:', insertError);
       return NextResponse.json(
-        { error: 'Failed to save transactions to database', details: insertError.message },
+        { error: 'Failed to save transactions to database.' },
         { status: 500 }
       );
     }
