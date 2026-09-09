@@ -1,0 +1,116 @@
+name: Dependency vulnerability audit
+
+# Runs npm audit against aspee-pharma/package-lock.json — the app's real
+# dependency tree, not just what package.json declares — so a vulnerable
+# transitive dependency gets caught too, not only a direct one.
+#
+# Triggers:
+#   - every push/PR that touches the lockfile or package.json (catches a
+#     newly-introduced vulnerable dependency before it merges)
+#   - a weekly schedule (catches a vulnerability disclosed *after* the fact
+#     in a dependency nobody just changed — npm audit only reports what's
+#     known at run time, so a lockfile that hasn't moved in months can still
+#     newly fail this check without any code change of its own)
+#   - manual dispatch, for an on-demand check
+on:
+  push:
+    branches: [master]
+    paths:
+      - "aspee-pharma/package.json"
+      - "aspee-pharma/package-lock.json"
+      - ".github/workflows/dependency-audit.yml"
+  pull_request:
+    paths:
+      - "aspee-pharma/package.json"
+      - "aspee-pharma/package-lock.json"
+      - ".github/workflows/dependency-audit.yml"
+  schedule:
+    # 06:00 UTC every Monday.
+    - cron: "0 6 * * 1"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    name: npm audit (high + critical)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: aspee-pharma
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: aspee-pharma/package-lock.json
+
+      # npm audit works off package-lock.json without needing a full
+      # install, but `npm ci` first guarantees the lockfile is actually
+      # installable — a lockfile that's drifted from package.json (and
+      # would fail a real install) should fail this check too, not just be
+      # silently audited as-is.
+      - name: Install dependencies (npm ci)
+        run: npm ci
+
+      - name: Run npm audit
+        id: audit
+        run: |
+          set +e
+          npm audit --audit-level=high --json > audit-report.json
+          echo "exit_code=$?" >> "$GITHUB_OUTPUT"
+          set -e
+
+      - name: Summarize results
+        if: always()
+        run: |
+          cat <<'SCRIPT' > /tmp/audit-summary.js
+          const fs = require('fs');
+          let report;
+          try {
+            report = JSON.parse(fs.readFileSync('audit-report.json', 'utf8'));
+          } catch {
+            console.log('Could not parse audit-report.json — see raw npm audit output above.');
+            process.exit(0);
+          }
+          const meta = report.metadata?.vulnerabilities || {};
+          const lines = [
+            '## Dependency audit summary',
+            '',
+            '| Severity | Count |',
+            '|---|---|',
+            `| Critical | ${meta.critical || 0} |`,
+            `| High | ${meta.high || 0} |`,
+            `| Moderate | ${meta.moderate || 0} |`,
+            `| Low | ${meta.low || 0} |`,
+            '',
+          ];
+          if ((meta.critical || 0) + (meta.high || 0) > 0) {
+            lines.push('**This fails the check** — high/critical vulnerabilities exist in the dependency tree (direct or transitive).');
+            lines.push('Run `npm audit` locally in aspee-pharma/ for the full advisory list, then `npm audit fix` (or bump the affected package directly) to resolve.');
+          } else {
+            lines.push('No high/critical vulnerabilities found. (Moderate/low are reported but do not fail this check.)');
+          }
+          fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, lines.join('\n') + '\n');
+          console.log(lines.join('\n'));
+          SCRIPT
+          node /tmp/audit-summary.js
+
+      - name: Upload full audit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: npm-audit-report
+          path: aspee-pharma/audit-report.json
+          retention-days: 30
+
+      - name: Fail if high/critical vulnerabilities were found
+        if: steps.audit.outputs.exit_code != '0'
+        run: |
+          echo "npm audit found high/critical vulnerabilities — see the job summary and the uploaded npm-audit-report artifact."
+          exit 1
