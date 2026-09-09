@@ -46,6 +46,6 @@
     "prettier": "^3.8.1",
     "supabase": "^2.78.1",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^7"
   }
 }
