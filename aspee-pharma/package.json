@@ -41,7 +41,7 @@
     "@types/papaparse": "^5.5.2",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "eslint": "^9",
+    "eslint": "^10",
     "eslint-config-next": "15.1.9",
     "prettier": "^3.8.1",
     "supabase": "^2.78.1",
