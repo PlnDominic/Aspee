@@ -176,6 +176,7 @@ const navigation: NavItem[] = [
             { label: 'Cash Receipt Entry',  href: '/sales/cash-receipts', icon: <Banknote size={18} /> },
             { label: 'Receipts',            href: '/sales/receipts',     icon: <CreditCard size={18} /> },
             { label: 'Dispatch Management', href: '/sales/dispatch',     icon: <Truck size={18} /> },
+            { label: 'Stock Losses',        href: '/sales/stock-losses', icon: <AlertTriangle size={18} /> },
             { label: 'Credit Notes',        href: '/sales/credit-notes', icon: <BookOpen size={18} /> },
             { label: 'Cash Reconciliation', href: '/sales/cash-reconciliation', icon: <Scale size={18} /> },
             { label: 'Sales Reports',        href: '/sales/reports',      icon: <BarChart3 size={18} /> },

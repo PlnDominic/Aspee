@@ -290,14 +290,21 @@ export default function InvoiceModal({ isOpen, onClose, onSave, record }: Invoic
         setItems(newItems);
     };
 
+    // Returns are units the customer actually handed back on this same
+    // invoice — they reduce what that customer is billed. Damage, leakage,
+    // and gifted stock are a different thing (product lost/given away in the
+    // field, unrelated to any one customer) and are tracked on their own
+    // page (Sales → Stock Losses), not here, so they never touch this total.
     const recalcItem = (item: any) => {
         const qty = Number(item.quantity) || 0;
         const price = Number(item.unit_price) || 0;
+        const returns = Math.min(Number(item.returns_qty) || 0, qty);
         const disc = Math.min(Number(item.discount_pct) || 0, maxDiscountPct > 0 ? maxDiscountPct : 100);
-        const gross = qty * price;
+        const billableQty = Math.max(0, qty - returns);
+        const gross = billableQty * price;
         const discAmt = parseFloat((gross * disc / 100).toFixed(2));
         const total = parseFloat((gross - discAmt).toFixed(2));
-        return { ...item, discount_pct: disc, discount_amount: discAmt, total_price: total };
+        return { ...item, returns_qty: returns, discount_pct: disc, discount_amount: discAmt, total_price: total };
     };
 
     const handleUpdateItem = (index: number, field: string, value: any) => {
@@ -311,11 +318,14 @@ export default function InvoiceModal({ isOpen, onClose, onSave, record }: Invoic
             // applies, so unlock Cash Sale / Credit Sale until one is picked again.
             newItems[index].sale_type = null;
             newItems[index] = recalcItem(newItems[index]);
-        } else if (['quantity', 'unit_price', 'discount_pct'].includes(field)) {
+        } else if (['quantity', 'unit_price', 'discount_pct', 'returns_qty'].includes(field)) {
             // enforce ceiling
             if (field === 'discount_pct' && maxDiscountPct > 0 && Number(value) > maxDiscountPct) {
                 toast.error(`Max discount allowed is ${maxDiscountPct}%`);
                 newItems[index].discount_pct = maxDiscountPct;
+            }
+            if (field === 'returns_qty' && Number(value) > (Number(newItems[index].quantity) || 0)) {
+                toast.error('Returns cannot exceed the quantity sold on this line');
             }
             newItems[index] = recalcItem(newItems[index]);
             if (newItems[index].sale_type === 'cash') {
@@ -330,7 +340,7 @@ export default function InvoiceModal({ isOpen, onClose, onSave, record }: Invoic
                     newItems[index].credit_sale = newItems[index].total_price - cash;
                 }
             }
-        } else if (field === 'cash_sale' || field === 'credit_sale' || field === 'returns_qty') {
+        } else if (field === 'cash_sale' || field === 'credit_sale') {
             newItems[index][field] = Number(value) || 0;
         }
 
@@ -696,15 +706,21 @@ export default function InvoiceModal({ isOpen, onClose, onSave, record }: Invoic
                                         />
                                     </div>
                                     <div style={{ flex: '0 0 70px', display: 'flex', flexDirection: 'column', gap: 4 }}>
-                                        <label style={{ fontSize: 10, fontWeight: 600, color: 'var(--slate-500)', textTransform: 'uppercase' }}>Returns</label>
+                                        <label style={{ fontSize: 10, fontWeight: 600, color: 'var(--slate-500)', textTransform: 'uppercase' }} title="Units the customer handed back on this invoice — reduces what they're billed. For damage, leakage, or gifted stock, use Sales → Stock Losses instead.">Returns</label>
                                         <input
                                             type="number"
                                             min="0"
+                                            max={item.quantity || undefined}
                                             step="any"
                                             value={item.returns_qty ?? 0}
                                             onChange={(e) => handleUpdateItem(index, 'returns_qty', e.target.value)}
                                             style={{ padding: '8px 8px', border: '1px solid var(--amber-300, #fcd34d)', borderRadius: 6, fontSize: 12, outline: 'none', width: '100%', background: 'var(--amber-50, #fffbeb)' }}
                                         />
+                                        {Number(item.returns_qty) > 0 && (
+                                            <span style={{ fontSize: 9, color: '#92400e', fontWeight: 600 }}>
+                                                −{formatCurrency(Number(item.returns_qty) * (Number(item.unit_price) || 0), currency)} off this line
+                                            </span>
+                                        )}
                                     </div>
                                     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4 }}>
                                         <label style={{ fontSize: 10, fontWeight: 600, color: 'var(--slate-500)', textTransform: 'uppercase' }}>Cash Sale</label>
