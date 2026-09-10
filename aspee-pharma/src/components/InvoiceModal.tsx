@@ -463,7 +463,7 @@ export default function InvoiceModal({ isOpen, onClose, onSave, record }: Invoic
                         )}
                         {!routeId && !fetchingVans && (
                             <div style={{ fontSize: 10, color: 'var(--slate-500)', marginTop: 4 }}>
-                                {'Real flow: Stores -> Sales Department -> Individual Vans -> Sales Invoices.'}
+                                {'Real flow: Finished Goods Store -> Sales Rep (Van/Route) -> Sales Invoices.'}
                             </div>
                         )}
                     </div>

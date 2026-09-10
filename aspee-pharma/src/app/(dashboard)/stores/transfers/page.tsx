@@ -155,7 +155,7 @@ export default function TransfersPage() {
         <div className="animate-fade-in">
             <PageHeader
                 title="Stock Transfers"
-                subtitle="Inter-location stock movements with Sales flow routed through Sales Department"
+                subtitle="Inter-location stock movements — Sales flow goes straight from Finished Goods to a rep's van/route"
                 breadcrumbs={[
                     { label: 'Stores', href: '/stores/transfers' },
                     { label: 'Transfers' },

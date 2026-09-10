@@ -14,6 +14,10 @@ export interface SalespersonRecord {
     full_name: string;
 }
 
+// Historical only — stock transfers no longer route through Sales Department;
+// as of 20260910000000_direct_finished_goods_to_van_transfers.sql, vans load
+// directly from Finished Goods Store. Kept so old transfer records (and the
+// "Van Load" row type in sales/stock-movements) still classify correctly.
 export const SALES_DEPARTMENT_LOCATION_NAME  = 'Sales Department';
 export const FINISHED_GOODS_LOCATION_NAME    = 'Finished Goods Store';
 export const SALESPERSON_LOCATION_PREFIX     = 'Sales Rep - ';

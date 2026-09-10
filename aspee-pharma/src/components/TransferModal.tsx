@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
-import { ensureSalesDepartmentLocation, ensureVanStockLocation, isSalesDepartmentLocation, isVanStockLocation, isFinishedGoodsLocation, isSalespersonStockLocation } from '@/lib/vanStock';
+import { ensureVanStockLocation, isVanStockLocation, isFinishedGoodsLocation, isSalespersonStockLocation } from '@/lib/vanStock';
 import { formatMixedBulk } from '@/lib/unitConversions';
 
 interface Product {
@@ -50,15 +50,13 @@ interface TransferModalProps {
     onSave: (data: any) => Promise<void>;
     initialData?: any;
     mode?: 'create' | 'edit' | 'view';
-    flowMode?: 'general' | 'sales-van-load';
 }
 
-export default function TransferModal({ isOpen, onClose, onSave, initialData, mode = 'create', flowMode = 'general' }: TransferModalProps) {
+export default function TransferModal({ isOpen, onClose, onSave, initialData, mode = 'create' }: TransferModalProps) {
     const [loading, setLoading] = useState(false);
     const [fetching, setFetching] = useState(false);
     const isViewOnly = mode === 'view';
-    const isSalesVanLoadFlow = flowMode === 'sales-van-load';
-    
+
     const [products, setProducts] = useState<Product[]>([]);
     const [locations, setLocations] = useState<Location[]>([]);
     const [salesReps, setSalesReps] = useState<{ id: string; name: string }[]>([]);
@@ -80,7 +78,6 @@ export default function TransferModal({ isOpen, onClose, onSave, initialData, mo
 
     const fromLocation = locations.find(loc => loc.id === fromLocationId);
     const toLocation = locations.find(loc => loc.id === toLocationId);
-    const salesDepartmentLocation = locations.find(loc => isSalesDepartmentLocation(loc));
 
     // PDF generation functions
     const getClonedContent = () => {
@@ -137,26 +134,22 @@ export default function TransferModal({ isOpen, onClose, onSave, initialData, mo
     const filteredFromLocations = locations.filter(loc => {
         if (isViewOnly) return true;
         if (loc.id === toLocationId) return false;
-        if (isSalesVanLoadFlow) {
-            return isSalesDepartmentLocation(loc);
-        }
         if (isVanStockLocation(loc) || isSalespersonStockLocation(loc)) {
             return false;
         }
         if (toLocation && isVanStockLocation(toLocation)) {
-            return isSalesDepartmentLocation(loc);
+            return isFinishedGoodsLocation(loc);
         }
         return true;
     });
     const filteredToLocations = locations.filter(loc => {
         if (isViewOnly) return true;
         if (loc.id === fromLocationId) return false;
-        if (isSalesVanLoadFlow) {
-            return isVanStockLocation(loc);
-        }
-        // Vans are valid destinations from Sales Department only
+        // Vans are valid destinations from Finished Goods Store only — stock
+        // now goes straight from Finished Goods to a sales rep's van/route,
+        // with no Sales Department hop in between.
         if (isVanStockLocation(loc)) {
-            return fromLocation ? isSalesDepartmentLocation(fromLocation) : false;
+            return fromLocation ? isFinishedGoodsLocation(fromLocation) : false;
         }
         // Salesperson locations are only reachable from Finished Goods, which is
         // handled by the sales-rep destination dropdown below.
@@ -277,18 +270,10 @@ export default function TransferModal({ isOpen, onClose, onSave, initialData, mo
         }
     }, [isOpen, mode, initialData]);
 
-    useEffect(() => {
-        if (isOpen && mode === 'create' && isSalesVanLoadFlow && salesDepartmentLocation?.id) {
-            setFromLocationId(prev => prev || salesDepartmentLocation.id);
-        }
-    }, [isOpen, mode, isSalesVanLoadFlow, salesDepartmentLocation?.id]);
-
     const fetchData = async () => {
         setFetching(true);
         try {
-            const productsQuery = isSalesVanLoadFlow
-                ? supabase.from('products').select('id, name, sku, unit, bulk_unit, bulk_to_base_ratio').eq('material_type', 'Finished Good').order('name')
-                : supabase.from('products').select('id, name, sku, unit, bulk_unit, bulk_to_base_ratio').order('name');
+            const productsQuery = supabase.from('products').select('id, name, sku, unit, bulk_unit, bulk_to_base_ratio').order('name');
 
             const [prodRes, vanRes, repsRes] = await Promise.all([
                 productsQuery,
@@ -307,7 +292,6 @@ export default function TransferModal({ isOpen, onClose, onSave, initialData, mo
                 .filter(r => r.name);
             setSalesReps(activeReps);
 
-            await ensureSalesDepartmentLocation();
             const vanLocations = await Promise.all((vanRes.data || []).map((van: any) => ensureVanStockLocation(van)));
             const vanLocationById = new Map<string, any>((vanRes.data || []).map((van: any, i: number) => [van.id, vanLocations[i]]));
 
@@ -375,7 +359,7 @@ export default function TransferModal({ isOpen, onClose, onSave, initialData, mo
         setTransferDate(new Date().toISOString().split('T')[0]);
         setItems([{ product_id: '', quantity: 1 }]);
         setNotes('');
-        setFromLocationId(isSalesVanLoadFlow ? (salesDepartmentLocation?.id || '') : '');
+        setFromLocationId('');
         setToLocationId('');
     };
 
@@ -443,17 +427,6 @@ export default function TransferModal({ isOpen, onClose, onSave, initialData, mo
         if (toLocation && isVanStockLocation(toLocation) && fromLocation && isVanStockLocation(fromLocation)) {
             toast.error('Cannot transfer directly between two vans.');
             return;
-        }
-
-        if (isSalesVanLoadFlow) {
-            if (!isSalesDepartmentLocation(fromLocation)) {
-                toast.error('This page only allows loading stock from Sales Department.');
-                return;
-            }
-            if (!isVanStockLocation(toLocation)) {
-                toast.error('This page only allows loading stock into an individual van.');
-                return;
-            }
         }
 
         if (fromIsFinishedGoods && selectedToRepId && !repRoutes[selectedToRepId]) {
@@ -639,9 +612,9 @@ export default function TransferModal({ isOpen, onClose, onSave, initialData, mo
         <Modal
             isOpen={isOpen}
             onClose={onClose}
-            title={mode === 'create' ? (isSalesVanLoadFlow ? 'Load Van Stock' : 'New Stock Transfer') : isViewOnly ? 'Transfer Details' : 'Edit Transfer'}
+            title={mode === 'create' ? 'New Stock Transfer' : isViewOnly ? 'Transfer Details' : 'Edit Transfer'}
             subtitle={mode === 'create'
-                ? (isSalesVanLoadFlow ? 'Sales Department → Individual Vans only' : 'Flow: Finished Goods Store → Salesperson · Sales Department → Vans')
+                ? 'Flow: Finished Goods Store → Sales Rep (Van / Route)'
                 : `Reviewing transfer ${transferNumber}`}
             width={850}
         >
@@ -691,7 +664,7 @@ export default function TransferModal({ isOpen, onClose, onSave, initialData, mo
                                         setToLocationId('');
                                     }
                                 }}
-                                disabled={isViewOnly || isSalesVanLoadFlow}
+                                disabled={isViewOnly}
                             >
                                 <option value="">Select source</option>
                                 {filteredFromLocations.map(loc => (
@@ -699,11 +672,6 @@ export default function TransferModal({ isOpen, onClose, onSave, initialData, mo
                                 ))}
                             </select>
                         </div>
-                        {!isViewOnly && toLocation && isVanStockLocation(toLocation) && salesDepartmentLocation && (
-                            <div style={{ fontSize: 10, color: 'var(--slate-500)', marginTop: 4 }}>
-                                Vans can only be loaded from {salesDepartmentLocation.name}.
-                            </div>
-                        )}
                     </div>
 
                     <div className="form-field">
@@ -744,13 +712,11 @@ export default function TransferModal({ isOpen, onClose, onSave, initialData, mo
                         </div>
                         {!isViewOnly && (
                             <div style={{ fontSize: 10, color: 'var(--slate-500)', marginTop: 4 }}>
-                                {isSalesVanLoadFlow
-                                    ? 'Use this page only for Sales Department to van loading.'
-                                    : fromIsFinishedGoods
-                                        ? (selectedToRepId && !repRoutes[selectedToRepId]
-                                            ? 'This rep has no assigned route (van) — assign one under Sales → Routes before transferring, otherwise this stock can\'t be invoiced.'
-                                            : 'Stock leaving Finished Goods is posted straight to the rep\'s assigned van/route, so it\'s immediately invoiceable.')
-                                        : 'Select any warehouse as the destination.'}
+                                {fromIsFinishedGoods
+                                    ? (selectedToRepId && !repRoutes[selectedToRepId]
+                                        ? 'This rep has no assigned route (van) — assign one under Sales → Routes before transferring, otherwise this stock can\'t be invoiced.'
+                                        : 'Stock leaving Finished Goods is posted straight to the rep\'s assigned van/route, so it\'s immediately invoiceable.')
+                                    : 'Select any warehouse as the destination.'}
                             </div>
                         )}
                     </div>
