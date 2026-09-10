@@ -222,11 +222,11 @@ export default function InvoiceModal({ isOpen, onClose, onSave, record }: Invoic
 
             if (record.items) {
                 setItems(
-                    record.items.map((item: any) => ({
-                        ...item,
-                        cash_sale: Number(item.cash_sale) || 0,
-                        credit_sale: Number(item.credit_sale) || 0,
-                    }))
+                    record.items.map((item: any) => {
+                        const cash_sale = Number(item.cash_sale) || 0;
+                        const credit_sale = Number(item.credit_sale) || 0;
+                        return { ...item, cash_sale, credit_sale, sale_type: deriveSaleType(cash_sale, credit_sale) };
+                    })
                 );
             } else {
                 fetchItems(record.id);
@@ -255,11 +255,11 @@ export default function InvoiceModal({ isOpen, onClose, onSave, record }: Invoic
                 .eq('invoice_id', invoiceId);
             if (error) throw error;
             setItems(
-                (data || []).map((item: any) => ({
-                    ...item,
-                    cash_sale: Number(item.cash_sale) || 0,
-                    credit_sale: Number(item.credit_sale) || 0,
-                }))
+                (data || []).map((item: any) => {
+                    const cash_sale = Number(item.cash_sale) || 0;
+                    const credit_sale = Number(item.credit_sale) || 0;
+                    return { ...item, cash_sale, credit_sale, sale_type: deriveSaleType(cash_sale, credit_sale) };
+                })
             );
         } catch (error: any) {
             toast.error('Failed to load invoice items');
@@ -267,7 +267,27 @@ export default function InvoiceModal({ isOpen, onClose, onSave, record }: Invoic
     };
 
     const handleAddItem = () => {
-        setItems([...items, { product_id: '', quantity: 1, unit_price: 0, discount_pct: 0, discount_amount: 0, returns_qty: 0, cash_sale: 0, credit_sale: 0, total_price: 0, batch_number: '' }]);
+        setItems([...items, { product_id: '', quantity: 1, unit_price: 0, discount_pct: 0, discount_amount: 0, returns_qty: 0, cash_sale: 0, credit_sale: 0, sale_type: null, total_price: 0, batch_number: '' }]);
+    };
+
+    // Once a line's Cash or Credit price pill is picked, that line is locked to
+    // that sale type — Cash Sale / Credit Sale re-derive from the total instead
+    // of being hand-typed, so they can never drift from the price actually
+    // charged. null means neither pill has been picked yet (or a loaded invoice
+    // has a genuinely mixed line), so the fields stay free-text as before.
+    const deriveSaleType = (cash: number, credit: number): 'cash' | 'credit' | null => {
+        if (cash > 0 && credit === 0) return 'cash';
+        if (credit > 0 && cash === 0) return 'credit';
+        return null;
+    };
+
+    const handleSelectSaleType = (index: number, type: 'cash' | 'credit', price: number) => {
+        const newItems = [...items];
+        newItems[index] = recalcItem({ ...newItems[index], unit_price: price, sale_type: type });
+        const total = newItems[index].total_price;
+        newItems[index].cash_sale = type === 'cash' ? total : 0;
+        newItems[index].credit_sale = type === 'credit' ? total : 0;
+        setItems(newItems);
     };
 
     const recalcItem = (item: any) => {
@@ -287,6 +307,9 @@ export default function InvoiceModal({ isOpen, onClose, onSave, record }: Invoic
         if (field === 'product_id') {
             const prod = productMap[value];
             if (prod?.cash_price != null) newItems[index].unit_price = prod.cash_price;
+            // New product — the previous line's Cash/Credit pill choice no longer
+            // applies, so unlock Cash Sale / Credit Sale until one is picked again.
+            newItems[index].sale_type = null;
             newItems[index] = recalcItem(newItems[index]);
         } else if (['quantity', 'unit_price', 'discount_pct'].includes(field)) {
             // enforce ceiling
@@ -295,9 +318,17 @@ export default function InvoiceModal({ isOpen, onClose, onSave, record }: Invoic
                 newItems[index].discount_pct = maxDiscountPct;
             }
             newItems[index] = recalcItem(newItems[index]);
-            const cash = Number(newItems[index].cash_sale) || 0;
-            if (cash <= newItems[index].total_price) {
-                newItems[index].credit_sale = newItems[index].total_price - cash;
+            if (newItems[index].sale_type === 'cash') {
+                newItems[index].cash_sale = newItems[index].total_price;
+                newItems[index].credit_sale = 0;
+            } else if (newItems[index].sale_type === 'credit') {
+                newItems[index].credit_sale = newItems[index].total_price;
+                newItems[index].cash_sale = 0;
+            } else {
+                const cash = Number(newItems[index].cash_sale) || 0;
+                if (cash <= newItems[index].total_price) {
+                    newItems[index].credit_sale = newItems[index].total_price - cash;
+                }
             }
         } else if (field === 'cash_sale' || field === 'credit_sale' || field === 'returns_qty') {
             newItems[index][field] = Number(value) || 0;
@@ -620,8 +651,13 @@ export default function InvoiceModal({ isOpen, onClose, onSave, record }: Invoic
                                                     {cashPrice != null && (
                                                         <button
                                                             type="button"
-                                                            onClick={() => handleUpdateItem(index, 'unit_price', cashPrice)}
-                                                            style={{ padding: '3px 8px', borderRadius: 999, border: '1px solid #bbf7d0', background: '#f0fdf4', color: '#166534', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}
+                                                            onClick={() => handleSelectSaleType(index, 'cash', cashPrice)}
+                                                            style={{
+                                                                padding: '3px 8px', borderRadius: 999,
+                                                                border: item.sale_type === 'cash' ? '1.5px solid #166534' : '1px solid #bbf7d0',
+                                                                background: '#f0fdf4', color: '#166534', fontSize: 10, fontWeight: 700, cursor: 'pointer',
+                                                                boxShadow: item.sale_type === 'cash' ? '0 0 0 2px #bbf7d0' : 'none',
+                                                            }}
                                                         >
                                                             Cash GH₵ {Number(cashPrice).toFixed(2)}
                                                         </button>
@@ -629,8 +665,13 @@ export default function InvoiceModal({ isOpen, onClose, onSave, record }: Invoic
                                                     {creditPrice != null && (
                                                         <button
                                                             type="button"
-                                                            onClick={() => handleUpdateItem(index, 'unit_price', creditPrice)}
-                                                            style={{ padding: '3px 8px', borderRadius: 999, border: '1px solid #fed7aa', background: '#fff7ed', color: '#9a3412', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}
+                                                            onClick={() => handleSelectSaleType(index, 'credit', creditPrice)}
+                                                            style={{
+                                                                padding: '3px 8px', borderRadius: 999,
+                                                                border: item.sale_type === 'credit' ? '1.5px solid #9a3412' : '1px solid #fed7aa',
+                                                                background: '#fff7ed', color: '#9a3412', fontSize: 10, fontWeight: 700, cursor: 'pointer',
+                                                                boxShadow: item.sale_type === 'credit' ? '0 0 0 2px #fed7aa' : 'none',
+                                                            }}
                                                         >
                                                             Credit GH₵ {Number(creditPrice).toFixed(2)}
                                                         </button>
@@ -673,7 +714,15 @@ export default function InvoiceModal({ isOpen, onClose, onSave, record }: Invoic
                                             step="any"
                                             value={item.cash_sale ?? 0}
                                             onChange={(e) => handleUpdateItem(index, 'cash_sale', e.target.value)}
-                                            style={{ padding: '8px 12px', border: '1px solid var(--slate-200)', borderRadius: 6, fontSize: 12, outline: 'none', width: '100%' }}
+                                            readOnly={!!item.sale_type}
+                                            title={item.sale_type ? 'Locked by the Cash/Credit pill selected above' : undefined}
+                                            style={{
+                                                padding: '8px 12px', border: '1px solid var(--slate-200)', borderRadius: 6, fontSize: 12, outline: 'none', width: '100%',
+                                                background: item.sale_type ? 'var(--slate-50)' : undefined,
+                                                color: item.sale_type ? 'var(--slate-700)' : undefined,
+                                                fontWeight: item.sale_type ? 600 : undefined,
+                                                cursor: item.sale_type ? 'not-allowed' : undefined,
+                                            }}
                                         />
                                     </div>
                                     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -684,7 +733,15 @@ export default function InvoiceModal({ isOpen, onClose, onSave, record }: Invoic
                                             step="any"
                                             value={item.credit_sale ?? 0}
                                             onChange={(e) => handleUpdateItem(index, 'credit_sale', e.target.value)}
-                                            style={{ padding: '8px 12px', border: '1px solid var(--slate-200)', borderRadius: 6, fontSize: 12, outline: 'none', width: '100%' }}
+                                            readOnly={!!item.sale_type}
+                                            title={item.sale_type ? 'Locked by the Cash/Credit pill selected above' : undefined}
+                                            style={{
+                                                padding: '8px 12px', border: '1px solid var(--slate-200)', borderRadius: 6, fontSize: 12, outline: 'none', width: '100%',
+                                                background: item.sale_type ? 'var(--slate-50)' : undefined,
+                                                color: item.sale_type ? 'var(--slate-700)' : undefined,
+                                                fontWeight: item.sale_type ? 600 : undefined,
+                                                cursor: item.sale_type ? 'not-allowed' : undefined,
+                                            }}
                                         />
                                     </div>
                                     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4 }}>
