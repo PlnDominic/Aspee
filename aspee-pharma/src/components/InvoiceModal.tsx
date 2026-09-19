@@ -649,7 +649,15 @@ export default function InvoiceModal({ isOpen, onClose, onSave, record }: Invoic
                                             step="any"
                                             value={item.unit_price}
                                             onChange={(e) => handleUpdateItem(index, 'unit_price', e.target.value)}
-                                            style={{ padding: '8px 12px', border: '1px solid var(--slate-200)', borderRadius: 6, fontSize: 12, outline: 'none', width: '100%' }}
+                                            readOnly={!!item.sale_type}
+                                            title={item.sale_type ? 'Locked by the Cash/Credit pill selected below — pick the other pill to change it' : undefined}
+                                            style={{
+                                                padding: '8px 12px', border: '1px solid var(--slate-200)', borderRadius: 6, fontSize: 12, outline: 'none', width: '100%',
+                                                background: item.sale_type ? 'var(--slate-50)' : undefined,
+                                                color: item.sale_type ? 'var(--slate-700)' : undefined,
+                                                fontWeight: item.sale_type ? 600 : undefined,
+                                                cursor: item.sale_type ? 'not-allowed' : undefined,
+                                            }}
                                         />
                                         {item.product_id && (() => {
                                             const prod = productMap[item.product_id];
