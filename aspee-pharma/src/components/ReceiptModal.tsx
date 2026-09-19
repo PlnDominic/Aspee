@@ -63,7 +63,7 @@ export default function ReceiptModal({ isOpen, onClose, onSuccess, record }: Rec
     const [loading, setLoading] = useState(false);
     const [customers, setCustomers] = useState<Customer[]>([]);
     const [salesPersons, setSalesPersons] = useState<{ id: string; name: string }[]>([]);
-    const [vans, setVans] = useState<{ id: string; van_number?: string; driver_name?: string; route_name?: string; route_area?: string }[]>([]);
+    const [vans, setVans] = useState<{ id: string; van_id?: string; driver_name?: string; route_area?: string }[]>([]);
 
     const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
     const [customerInvoices, setCustomerInvoices] = useState<Invoice[]>([]);
@@ -137,8 +137,7 @@ export default function ReceiptModal({ isOpen, onClose, onSuccess, record }: Rec
         const needle = pendingRouteText.trim().toLowerCase();
         const matched = vans.find(v =>
             (v.route_area || '').trim().toLowerCase() === needle ||
-            (v.van_number || '').trim().toLowerCase() === needle ||
-            (v.route_name || '').trim().toLowerCase() === needle
+            (v.van_id || '').trim().toLowerCase() === needle
         );
         if (matched) {
             setRouteId(matched.id);
@@ -186,10 +185,17 @@ export default function ReceiptModal({ isOpen, onClose, onSuccess, record }: Rec
     };
 
     const fetchVans = async () => {
-        const { data } = await supabase
+        // van_number/route_name aren't real columns on vans (van_id and
+        // route_area are) — this select was 400-ing on every load, so vans
+        // stayed empty and the Route/Van dropdown never had anything to show.
+        const { data, error } = await supabase
             .from('vans')
-            .select('id, van_number, driver_name, route_name, route_area')
-            .order('van_number');
+            .select('id, van_id, driver_name, route_area')
+            .order('van_id');
+        if (error) {
+            toast.error('Failed to load routes: ' + error.message);
+            return;
+        }
         setVans((data as any) || []);
     };
 
@@ -353,8 +359,7 @@ export default function ReceiptModal({ isOpen, onClose, onSuccess, record }: Rec
             const routeText = c.route.trim().toLowerCase();
             const matchedVan = vans.find(v =>
                 (v.route_area || '').trim().toLowerCase() === routeText ||
-                (v.van_number || '').trim().toLowerCase() === routeText ||
-                (v.route_name || '').trim().toLowerCase() === routeText
+                (v.van_id || '').trim().toLowerCase() === routeText
             );
             if (matchedVan) {
                 setRouteId(matchedVan.id);
@@ -617,7 +622,7 @@ export default function ReceiptModal({ isOpen, onClose, onSuccess, record }: Rec
                                     : vans
                                 ).map(v => (
                                     <option key={v.id} value={v.id}>
-                                        {v.van_number ?? v.route_name ?? 'Van'} {v.driver_name ? `· ${v.driver_name}` : ''}
+                                        {v.route_area ?? v.van_id ?? 'Van'} {v.driver_name ? `· ${v.driver_name}` : ''}
                                     </option>
                                 ))}
                                 {salesPersonRouteIds.size > 0 && vans.filter(v => !salesPersonRouteIds.has(v.id)).length > 0 && (
@@ -625,7 +630,7 @@ export default function ReceiptModal({ isOpen, onClose, onSuccess, record }: Rec
                                         <option disabled>──── Other routes ────</option>
                                         {vans.filter(v => !salesPersonRouteIds.has(v.id)).map(v => (
                                             <option key={v.id} value={v.id}>
-                                                {v.van_number ?? v.route_name ?? 'Van'} {v.driver_name ? `· ${v.driver_name}` : ''}
+                                                {v.route_area ?? v.van_id ?? 'Van'} {v.driver_name ? `· ${v.driver_name}` : ''}
                                             </option>
                                         ))}
                                     </>

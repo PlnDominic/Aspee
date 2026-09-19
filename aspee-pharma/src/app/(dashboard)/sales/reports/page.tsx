@@ -8,7 +8,7 @@ import StatusBadge from '@/components/StatusBadge';
 import {
     BarChart3, Users, Truck, Banknote, CreditCard, AlertTriangle,
     TrendingUp, ClipboardList, Download, Calendar, RefreshCw,
-    CheckCircle, Clock, Package, ArrowUpDown
+    CheckCircle, Clock, Package, ArrowUpDown, FileSpreadsheet
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { formatCurrency } from '@/lib/formatCurrency';
@@ -19,6 +19,7 @@ import { exportToCsv } from '@/lib/csvExport';
 
 type ReportTab =
     | 'distribution'
+    | 'invoice_entries'
     | 'stock_by_salesperson'
     | 'stock_by_route'
     | 'debtors_by_staff'
@@ -289,9 +290,10 @@ async function buildVanStockMaps(): Promise<{
 // ── Main Component ────────────────────────────────────────────────────────────
 
 export default function SalesReportsPage() {
-    const [activeTab, setActiveTab] = useState<ReportTab>('stock_by_salesperson');
+    const [activeTab, setActiveTab] = useState<ReportTab>('invoice_entries');
 
     const tabs: { key: ReportTab; label: string; icon: React.ReactNode }[] = [
+        { key: 'invoice_entries',      label: 'Invoice Entries',              icon: <FileSpreadsheet size={15} /> },
         { key: 'stock_by_salesperson', label: 'Stock Balance / Salesperson', icon: <Users size={15} /> },
         { key: 'stock_by_route',       label: 'Stock Balance / Route',        icon: <Truck size={15} /> },
         { key: 'debtors_by_staff',     label: 'Debtors / Staff',              icon: <Users size={15} /> },
@@ -340,6 +342,7 @@ export default function SalesReportsPage() {
             </div>
 
             {/* Report Panels */}
+            {activeTab === 'invoice_entries'      && <InvoiceEntries />}
             {activeTab === 'stock_by_salesperson' && <StockBySalesperson />}
             {activeTab === 'stock_by_route'       && <StockByRoute />}
             {activeTab === 'debtors_by_staff'     && <DebtorsByStaff />}
@@ -406,6 +409,138 @@ function ExportBtn({ onClick }: { onClick: () => void }) {
             }}>
             <Download size={13} /> Export CSV
         </button>
+    );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// 0. ALL INVOICE ENTRIES — one row per invoice line item
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function InvoiceEntries() {
+    const [data, setData] = useState<any[]>([]);
+    const [loading, setLoading] = useState(false);
+    const [startDate, setStartDate] = useState(firstOfMonth);
+    const [endDate, setEndDate] = useState(today);
+    const [statusFilter, setStatusFilter] = useState('ALL');
+
+    const fetch = useCallback(async () => {
+        setLoading(true);
+        try {
+            const vanMap = await buildVanMap();
+
+            // No status filter here — this report shows every entry (Draft
+            // included) by default; the dropdown below narrows it client-side.
+            const { data: items, error } = await supabase
+                .from('sales_invoice_items')
+                .select(`
+                    quantity, unit_price, discount_pct, discount_amount, total_price,
+                    product:products(name, sku, unit),
+                    invoice:sales_invoices!inner(invoice_number, customer_name, date, route_id, status)
+                `)
+                .gte('invoice.date', startDate)
+                .lte('invoice.date', endDate);
+
+            if (error) throw error;
+
+            const rows = (items || [])
+                .map((r: any) => {
+                    const inv = r.invoice;
+                    const prod = r.product;
+                    if (!inv || !prod) return null;
+                    // Route and salesperson both come from the invoice's van
+                    // (route_id) — same derivation the other reports on this
+                    // page use, so all reports agree on who sold what.
+                    const van = inv.route_id ? vanMap[inv.route_id] : null;
+                    return {
+                        date: inv.date,
+                        invoice_number: inv.invoice_number,
+                        route: van?.route_area || 'No Route',
+                        sales_person: van?.driver_name || 'Unassigned',
+                        customer_name: inv.customer_name || '-',
+                        product_name: prod.name,
+                        sku: prod.sku,
+                        unit: prod.unit,
+                        quantity: Number(r.quantity) || 0,
+                        discount_pct: Number(r.discount_pct) || 0,
+                        discount_amount: Number(r.discount_amount) || 0,
+                        total: Number(r.total_price) || 0,
+                        status: inv.status,
+                    };
+                })
+                .filter(Boolean) as any[];
+
+            rows.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+            setData(rows);
+        } catch (e: any) { toast.error(e.message); }
+        finally { setLoading(false); }
+    }, [startDate, endDate]);
+
+    useEffect(() => { fetch(); }, [fetch]);
+
+    const filtered = statusFilter === 'ALL' ? data : data.filter(r => r.status === statusFilter);
+    const statuses = Array.from(new Set(data.map(r => r.status).filter(Boolean)));
+
+    const columns = [
+        { key: 'date',            label: 'Date', render: (v: any) => new Date(v).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) },
+        { key: 'invoice_number',  label: 'Invoice', render: (v: any) => <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--primary-600)', fontWeight: 700 }}>{v}</span> },
+        { key: 'route',           label: 'Route' },
+        { key: 'sales_person',    label: "Salesperson" },
+        { key: 'customer_name',   label: 'Customer' },
+        { key: 'product_name',    label: 'Product', render: (v: any, row: any) => (
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+                <span style={{ fontWeight: 600, fontSize: 12 }}>{v}</span>
+                <span style={{ fontSize: 10, color: 'var(--slate-400)', fontFamily: 'var(--font-mono)' }}>{row.sku}</span>
+            </div>
+        )},
+        { key: 'quantity',        label: 'Qty', render: (v: any, row: any) => <span style={{ fontWeight: 700 }}>{Number(v).toLocaleString()} <span style={{ fontWeight: 400, fontSize: 11 }}>{row.unit}</span></span> },
+        { key: 'discount_amount', label: 'Discount', render: (v: any, row: any) => (
+            v > 0
+                ? <div style={{ display: 'flex', flexDirection: 'column' }}>
+                    <span style={{ fontWeight: 600, color: 'var(--danger)' }}>{formatCurrency(v)}</span>
+                    <span style={{ fontSize: 10, color: 'var(--slate-400)' }}>{row.discount_pct}%</span>
+                </div>
+                : <span style={{ color: 'var(--slate-400)' }}>-</span>
+        )},
+        { key: 'total',           label: 'Total', render: (v: any) => <span style={{ fontWeight: 700 }}>{formatCurrency(v)}</span> },
+        { key: 'status',          label: 'Status', render: (v: any) => <StatusBadge status={v} variant={v === 'Paid' ? 'success' : v === 'Draft' ? 'default' : v === 'Overdue' ? 'danger' : 'warning'} /> },
+    ];
+
+    return (
+        <div>
+            <FilterBar startDate={startDate} endDate={endDate} onStartChange={setStartDate} onEndChange={setEndDate}
+                onRefresh={fetch} loading={loading}
+                extra={
+                    <>
+                        <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
+                            style={{ padding: '6px 10px', borderRadius: 6, border: '1px solid var(--slate-200)', fontSize: 12 }}>
+                            <option value="ALL">All Statuses</option>
+                            {statuses.map(s => <option key={s} value={s}>{s}</option>)}
+                        </select>
+                        <ExportBtn onClick={() => exportToCsv(`invoice_entries_${today}.csv`, filtered, [
+                            { header: 'Date', accessor: r => r.date },
+                            { header: 'Invoice', accessor: r => r.invoice_number },
+                            { header: 'Route', accessor: r => r.route },
+                            { header: 'Salesperson', accessor: r => r.sales_person },
+                            { header: 'Customer', accessor: r => r.customer_name },
+                            { header: 'Product', accessor: r => r.product_name },
+                            { header: 'SKU', accessor: r => r.sku },
+                            { header: 'Quantity', accessor: r => r.quantity },
+                            { header: 'Discount %', accessor: r => r.discount_pct },
+                            { header: 'Discount (GHS)', accessor: r => r.discount_amount },
+                            { header: 'Total (GHS)', accessor: r => r.total },
+                            { header: 'Status', accessor: r => r.status },
+                        ])} />
+                    </>
+                }
+            />
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 16, marginBottom: 20 }}>
+                <StatCard title="Entries"        value={filtered.length} icon={<FileSpreadsheet size={20} />} color="blue" />
+                <StatCard title="Units"           value={filtered.reduce((s, r) => s + r.quantity, 0).toLocaleString()} icon={<Package size={20} />} color="teal" />
+                <StatCard title="Total Discount"  value={formatCurrency(filtered.reduce((s, r) => s + r.discount_amount, 0))} icon={<AlertTriangle size={20} />} color="amber" />
+                <StatCard title="Total Value"     value={formatCurrency(filtered.reduce((s, r) => s + r.total, 0))} icon={<Banknote size={20} />} color="green" />
+            </div>
+            <DataTable columns={columns} data={filtered} loading={loading} searchPlaceholder="Search invoice, customer, route, or product..." />
+        </div>
     );
 }
 

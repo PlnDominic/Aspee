@@ -54,6 +54,37 @@ export default function ReceiptsPage() {
 
             const legacySystemUserIds = Array.from(invoiceSalespersonMap.values()).filter(Boolean) as string[];
 
+            // Route: direct route_id on the receipt (current), fallback to the
+            // linked invoice's route_id (legacy receipts saved before this
+            // column existed on sales_receipts).
+            const directRouteIds = (receipts || []).map((r: any) => r.route_id).filter(Boolean);
+            const legacyInvoiceIdsForRoute = (receipts || [])
+                .filter((r: any) => !r.route_id && r.invoice_id)
+                .map((r: any) => r.invoice_id);
+            const invoiceRouteMap = new Map<string, string | null>();
+            if (legacyInvoiceIdsForRoute.length > 0) {
+                const { data: invoicesForRoute } = await supabase
+                    .from('sales_invoices')
+                    .select('id, route_id')
+                    .in('id', legacyInvoiceIdsForRoute);
+                (invoicesForRoute || []).forEach((inv: any) => {
+                    invoiceRouteMap.set(inv.id, inv.route_id ?? null);
+                });
+            }
+            const legacyRouteIds = Array.from(invoiceRouteMap.values()).filter(Boolean) as string[];
+            const routeIds = Array.from(new Set([...directRouteIds, ...legacyRouteIds]));
+
+            const routeLabelMap = new Map<string, string>();
+            if (routeIds.length > 0) {
+                const { data: vans } = await supabase
+                    .from('vans')
+                    .select('id, van_id, route_area')
+                    .in('id', routeIds);
+                (vans || []).forEach((v: any) => {
+                    routeLabelMap.set(v.id, v.route_area || v.van_id || '-');
+                });
+            }
+
             const salespersonNameMap = new Map<string, string>();
             if (directRepIds.length > 0) {
                 const { data: reps } = await supabase
@@ -76,9 +107,11 @@ export default function ReceiptsPage() {
 
             const mapped = (receipts || []).map((r: any) => {
                 const sId = r.sales_rep_id ?? (r.invoice_id ? invoiceSalespersonMap.get(r.invoice_id) : null);
+                const rId = r.route_id ?? (r.invoice_id ? invoiceRouteMap.get(r.invoice_id) : null);
                 return {
                     ...r,
                     salesperson_name: sId ? salespersonNameMap.get(sId) ?? null : null,
+                    route_name: rId ? routeLabelMap.get(rId) ?? null : null,
                 };
             });
             return { data: mapped, error: null };
@@ -125,6 +158,7 @@ export default function ReceiptsPage() {
         },
         { key: 'customer_name', label: 'Customer', render: (v: any) => v ? <EntityLink href={`/customers?search=${encodeURIComponent(v)}`}>{v}</EntityLink> : '-' },
         { key: 'salesperson_name', label: 'Sales Person', render: (v: any) => v || <span style={{ color: 'var(--slate-400)' }}>-</span> },
+        { key: 'route_name', label: 'Route', render: (v: any) => v || <span style={{ color: 'var(--slate-400)' }}>-</span> },
         {
             key: 'date',
             label: 'Date',

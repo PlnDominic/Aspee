@@ -234,6 +234,7 @@ export default function ReceiptViewModal({ isOpen, onClose, receipt }: ReceiptVi
                                 <div className="address-content">
                                     <strong>{receipt.customer_name || 'N/A'}</strong>
                                     <p><span style={{ color: '#64748b' }}>Sales Person:</span> {receipt.salesperson_name || 'N/A'}</p>
+                                    <p><span style={{ color: '#64748b' }}>Route:</span> {receipt.route_name || 'N/A'}</p>
                                     <p><span style={{ color: '#64748b' }}>Invoice Ref:</span> {receipt.invoice_number || 'N/A'}</p>
                                     <p><span style={{ color: '#64748b' }}>Currency:</span> {receipt.currency || 'GHS'}</p>
                                 </div>
