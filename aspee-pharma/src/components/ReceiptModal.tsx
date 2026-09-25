@@ -445,9 +445,37 @@ export default function ReceiptModal({ isOpen, onClose, onSuccess, record }: Rec
 
         setLoading(true);
         try {
-            const cleanAllocations = allocations
+            const manualAllocations = allocations
                 .filter(a => a.invoice_id && parseFloat(a.amount) > 0)
                 .map(a => ({ invoice_id: a.invoice_id, amount: parseFloat(a.amount) }));
+
+            // Whatever the receipt didn't get manually allocated to a specific
+            // invoice still needs to pay down this customer's outstanding
+            // invoices — otherwise the invoice-level balance (Debtors report,
+            // invoice status, etc.) never drops even though the receipt was
+            // saved, which is exactly the "I keyed the receipt but the
+            // customer's balance didn't reduce" bug. Auto-apply the leftover
+            // against their oldest open invoices first (FIFO), same order
+            // customerInvoices is already loaded in.
+            let leftover = Math.max(0, amount - manualAllocations.reduce((s, a) => s + a.amount, 0));
+            const autoAllocations: { invoice_id: string; amount: number }[] = [];
+            if (leftover > 0.01) {
+                const manuallyAllocatedIds = new Set(manualAllocations.map(a => a.invoice_id));
+                for (const inv of customerInvoices) {
+                    if (leftover <= 0.01) break;
+                    if (manuallyAllocatedIds.has(inv.id)) continue;
+                    const outstanding = inv.outstanding ?? 0;
+                    if (outstanding <= 0.01) continue;
+                    const take = Math.min(outstanding, leftover);
+                    autoAllocations.push({ invoice_id: inv.id, amount: take });
+                    leftover -= take;
+                }
+            }
+            // Anything still left over (customer has no open invoices, or
+            // fewer than the receipt covers) is a genuine on-account credit —
+            // it still reduces the customer's overall balance (computed by
+            // name, not by invoice) even with no invoice left to apply it to.
+            const cleanAllocations = [...manualAllocations, ...autoAllocations];
 
             const receiptPayload: any = {
                 ...(record?.id ? { id: record.id } : {}),
@@ -693,7 +721,7 @@ export default function ReceiptModal({ isOpen, onClose, onSuccess, record }: Rec
                                         Allocate to Invoices (optional)
                                     </div>
                                     <div style={{ fontSize: 10, color: 'var(--slate-500)', marginTop: 2 }}>
-                                        Leave blank to apply payment to the customer's running balance.
+                                        Leave blank and the unallocated part is applied to this customer's oldest open invoices automatically on save.
                                     </div>
                                 </div>
                                 <div className="rct-alloc-status">
