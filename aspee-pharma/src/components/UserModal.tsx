@@ -88,11 +88,12 @@ export default function UserModal({ isOpen, onClose, onSuccess, record }: UserMo
             // Load this user's saved module overrides — an empty result for a
             // module just means "still on the role default", not "No Access".
             setLoadingPermissions(true);
-            supabase
-                .from('user_module_permissions')
-                .select('module, access')
-                .eq('user_id', record.id)
-                .then(({ data, error }) => {
+            (async () => {
+                try {
+                    const { data, error } = await supabase
+                        .from('user_module_permissions')
+                        .select('module, access')
+                        .eq('user_id', record.id);
                     if (error) {
                         toast.error('Failed to load module permissions: ' + error.message);
                         return;
@@ -101,8 +102,10 @@ export default function UserModal({ isOpen, onClose, onSuccess, record }: UserMo
                     MODULES.forEach((mod) => { loaded[mod.key] = ''; });
                     (data || []).forEach((row: any) => { loaded[row.module] = row.access; });
                     setFormData(prev => ({ ...prev, permissions: loaded }));
-                })
-                .finally(() => setLoadingPermissions(false));
+                } finally {
+                    setLoadingPermissions(false);
+                }
+            })();
         } else {
             setFormData(initialFormData);
         }
