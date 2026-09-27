@@ -11,6 +11,7 @@ import { toast } from 'sonner';
 import TransferModal from '@/components/TransferModal';
 import { useQueryClient } from '@tanstack/react-query';
 import { getVanStockLocationName } from '@/lib/vanStock';
+import { logAudit } from '@/lib/auditLog';
 
 export default function TransfersPage() {
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -59,6 +60,15 @@ export default function TransfersPage() {
             });
 
             if (error) throw error;
+
+            // Feeds the Stores weekly report's auto-draft (department_activity_logs).
+            await logAudit({
+                action: id ? 'UPDATE' : 'CREATE',
+                module: 'Stores',
+                description: `${id ? 'Updated' : 'Created'} stock transfer ${header.transfer_number || ''}`.trim(),
+                record_id: id,
+                record_type: 'stock_transfers',
+            });
         },
         invalidateKeys: ['stock_transfers', 'stock_levels', 'stock-levels-matrix', 'stock_movements'],
         successMessage: 'Transfer saved successfully',
@@ -73,6 +83,14 @@ export default function TransfersPage() {
         try {
             const { error } = await supabase.rpc('delete_stock_transfer', { transfer_uuid: id });
             if (error) throw error;
+
+            await logAudit({
+                action: 'DELETE',
+                module: 'Stores',
+                description: `Deleted stock transfer ${id}`,
+                record_id: id,
+                record_type: 'stock_transfers',
+            });
 
             toast.success('Transfer deleted');
             queryClient.invalidateQueries({ queryKey: ['stock_transfers'] });

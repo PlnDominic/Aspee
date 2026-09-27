@@ -20,6 +20,7 @@ import {
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { formatCurrency, CURRENCY_SYMBOL } from '@/lib/currency';
+import { logAudit } from '@/lib/auditLog';
 
 interface Customer {
     id: string;
@@ -495,6 +496,15 @@ export default function ReceiptModal({ isOpen, onClose, onSuccess, record }: Rec
 
             const { error } = await supabase.rpc('post_sales_receipt', { receipt_payload: receiptPayload });
             if (error) throw error;
+
+            // Feeds the Sales weekly report's auto-draft (department_activity_logs).
+            await logAudit({
+                action: record?.id ? 'UPDATE' : 'CREATE',
+                module: 'Sales',
+                description: `${record?.id ? 'Updated' : 'Recorded'} receipt ${receiptNumber} for ${selectedCustomer.name} (${formatCurrency(amount)})`,
+                record_id: record?.id,
+                record_type: 'sales_receipts',
+            });
 
             toast.success(record?.id ? 'Receipt updated' : 'Receipt recorded');
             onSuccess?.();

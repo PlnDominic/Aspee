@@ -14,6 +14,7 @@ import { formatCurrency } from '@/lib/currency';
 import { useFetch } from '@/lib/hooks';
 import { useQueryClient } from '@tanstack/react-query';
 import ReceiptViewModal from '@/components/ReceiptViewModal';
+import { logAudit } from '@/lib/auditLog';
 
 export default function ReceiptsPage() {
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -137,6 +138,13 @@ export default function ReceiptsPage() {
         try {
             const { error } = await supabase.rpc('delete_sales_receipt', { receipt_uuid: receipt.id });
             if (error) throw error;
+            await logAudit({
+                action: 'DELETE',
+                module: 'Sales',
+                description: `Deleted receipt ${receipt.receipt_number}`,
+                record_id: receipt.id,
+                record_type: 'sales_receipts',
+            });
             toast.success('Receipt deleted');
             queryClient.invalidateQueries({ queryKey: ['sales_receipts'] });
             queryClient.invalidateQueries({ queryKey: ['sales_invoices'] });

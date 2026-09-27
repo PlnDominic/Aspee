@@ -15,6 +15,7 @@ import { exportToCsv } from '@/lib/csvExport';
 import { formatCurrency } from '@/lib/formatCurrency';
 import { useFetch, useAction, useTableData } from '@/lib/hooks';
 import SendToMDModal from '@/components/SendToMDModal';
+import { logAudit } from '@/lib/auditLog';
 
 const normalizeInvoiceStatus = (status?: string | null) => {
     const normalized = (status || '').trim().toUpperCase().replace(/\s+/g, ' ');
@@ -119,6 +120,16 @@ export default function InvoicesPage() {
                 item_payload: items || [],
             });
             if (error) throw error;
+
+            // Feeds the Sales weekly report's "Refresh from Activity" auto-draft
+            // (see department_activity_logs / weekly-reports page).
+            await logAudit({
+                action: id ? 'UPDATE' : 'CREATE',
+                module: 'Sales',
+                description: `${id ? 'Updated' : 'Created'} invoice ${normalizedHeader.invoice_number || ''} for ${normalizedHeader.customer_name || 'customer'}`.trim(),
+                record_id: id,
+                record_type: 'sales_invoices',
+            });
         },
         invalidateKeys: ['sales_invoices', 'stock_levels', 'stock_movements'],
         successMessage: 'Invoice saved successfully!',
@@ -135,6 +146,14 @@ export default function InvoicesPage() {
 
             const { error } = await supabase.from('sales_invoices').delete().eq('id', id);
             if (error) throw error;
+
+            await logAudit({
+                action: 'DELETE',
+                module: 'Sales',
+                description: `Deleted draft invoice ${id}`,
+                record_id: id,
+                record_type: 'sales_invoices',
+            });
         },
         invalidateKeys: ['sales_invoices'],
         successMessage: 'Invoice deleted.',

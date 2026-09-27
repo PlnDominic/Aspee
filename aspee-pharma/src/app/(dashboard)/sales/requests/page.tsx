@@ -8,6 +8,7 @@ import { Plus, Eye, Edit2, Trash2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { useCurrentUser } from '@/lib/hooks';
+import { logAudit } from '@/lib/auditLog';
 
 const getSingleRelation = <T,>(value: T | T[] | null | undefined): T | null => {
     if (Array.isArray(value)) return value[0] ?? null;
@@ -93,6 +94,14 @@ export default function SalesRequestsPage() {
         try {
             const { error } = await supabase.from('requisitions').delete().eq('id', row.id);
             if (error) throw error;
+
+            await logAudit({
+                action: 'DELETE',
+                module: 'Sales',
+                description: `Deleted sales request ${row.requisition_number}`,
+                record_id: row.id,
+                record_type: 'requisitions',
+            });
 
             toast.success(`Request ${row.requisition_number} deleted`);
             void fetchRequests();

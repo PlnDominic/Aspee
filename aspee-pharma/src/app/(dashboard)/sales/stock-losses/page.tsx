@@ -12,6 +12,7 @@ import { toast } from 'sonner';
 import { useQueryClient } from '@tanstack/react-query';
 import StockLossModal from '@/components/StockLossModal';
 import { exportToCsv } from '@/lib/csvExport';
+import { logAudit } from '@/lib/auditLog';
 
 const REASON_COLORS: Record<string, 'default' | 'success' | 'warning' | 'danger' | 'info'> = {
     Damage: 'danger',
@@ -86,6 +87,15 @@ export default function StockLossesPage() {
                 .insert([{ ...formData, id }]);
             if (error) throw error;
             await deductStock(formData.product_id, formData.location_id, formData.quantity, id, formData.reference_number, formData.reason);
+
+            // Feeds the Sales weekly report's auto-draft (department_activity_logs).
+            await logAudit({
+                action: 'CREATE',
+                module: 'Sales',
+                description: `Logged ${formData.reason.toLowerCase()} — ${formData.quantity} unit(s), ref ${formData.reference_number}`,
+                record_id: id,
+                record_type: 'sales_stock_losses',
+            });
         },
         invalidateKeys: ['sales_stock_losses', 'stock_levels', 'stock-levels-matrix', 'stock_movements'],
         successMessage: 'Loss logged and stock adjusted',
