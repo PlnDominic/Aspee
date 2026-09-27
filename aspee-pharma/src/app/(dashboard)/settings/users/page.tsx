@@ -55,12 +55,37 @@ export default function UserManagementPage() {
         try {
             // ── Editing an existing user ──────────────────────────────────────
             if (formData.id) {
-                const { id, ...updateData } = formData;
+                const { id, permissions, ...updateData } = formData;
                 const { error } = await supabase
                     .from('system_users')
                     .update(updateData)
                     .eq('id', id);
                 if (error) throw error;
+
+                // Sync module permission overrides: only what's explicitly
+                // set gets a row — clearing a module back to "Role default"
+                // deletes its row instead of writing one.
+                const entries = Object.entries(permissions || {}) as [string, string][];
+                const toUpsert = entries.filter(([, access]) => access);
+                const toClear = entries.filter(([, access]) => !access).map(([mod]) => mod);
+
+                if (toUpsert.length > 0) {
+                    const { error: upsertError } = await supabase
+                        .from('user_module_permissions')
+                        .upsert(
+                            toUpsert.map(([module, access]) => ({ user_id: id, module, access })),
+                            { onConflict: 'user_id,module' }
+                        );
+                    if (upsertError) throw upsertError;
+                }
+                if (toClear.length > 0) {
+                    const { error: clearError } = await supabase
+                        .from('user_module_permissions')
+                        .delete()
+                        .eq('user_id', id)
+                        .in('module', toClear);
+                    if (clearError) throw clearError;
+                }
 
                 await logAudit({
                     action: 'UPDATE',

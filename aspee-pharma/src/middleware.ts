@@ -2,6 +2,7 @@ import { createServerClient } from '@supabase/ssr';
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { routePermissions } from '@/lib/routePermissions';
+import { moduleForRoute } from '@/lib/modulePermissions';
 import { SECURE_COOKIE_OPTIONS } from '@/lib/cookieOptions';
 
 export async function middleware(request: NextRequest) {
@@ -72,15 +73,17 @@ export async function middleware(request: NextRequest) {
         // Prefer custom claims, but keep a database fallback for existing sessions
         // whose JWT was issued before role claims were synced.
         let userRole = user.app_metadata?.role as string | undefined;
+        let systemUserId: string | undefined;
 
         if (!userRole) {
             const { data: userData } = await supabase
                 .from('system_users')
-                .select('role')
+                .select('id, role')
                 .or(`auth_user_id.eq.${user.id},email.ilike.${user.email ?? ''}`)
                 .maybeSingle();
 
             userRole = userData?.role;
+            systemUserId = userData?.id;
         }
 
         if (!userRole) {
@@ -102,6 +105,34 @@ export async function middleware(request: NextRequest) {
             const allowedRoles = routePermissions[baseRoute];
             if (allowedRoles.includes('*') || (userRole && allowedRoles.includes(userRole))) {
                 hasAccess = true;
+            }
+        }
+
+        // Per-user module override (Settings → User Management → Module
+        // Permissions) beats the role-based result either way — it can shut
+        // a module the role would normally reach, or open one it wouldn't.
+        // Super Admin never gets an override row via the UI, so this is a
+        // no-op for that role.
+        const overrideModule = moduleForRoute(pathname);
+        if (overrideModule && userRole !== 'Super Admin') {
+            if (systemUserId === undefined) {
+                const { data: idRow } = await supabase
+                    .from('system_users')
+                    .select('id')
+                    .or(`auth_user_id.eq.${user.id},email.ilike.${user.email ?? ''}`)
+                    .maybeSingle();
+                systemUserId = idRow?.id;
+            }
+            if (systemUserId) {
+                const { data: overrideRow } = await supabase
+                    .from('user_module_permissions')
+                    .select('access')
+                    .eq('user_id', systemUserId)
+                    .eq('module', overrideModule)
+                    .maybeSingle();
+                if (overrideRow?.access) {
+                    hasAccess = overrideRow.access !== 'none';
+                }
             }
         }
 

@@ -387,6 +387,31 @@ export function useCurrentUser() {
     });
 }
 
+// Per-user module access overrides (see user_module_permissions /
+// supabase/migrations/20260927000000_user_module_permissions.sql). Returns
+// only the modules an admin has explicitly overridden for this person — a
+// module absent from the map means "still on the role default", handled by
+// the existing ROUTE_ROLES/routePermissions tables.
+export function useModulePermissions() {
+    const { data: currentUser } = useCurrentUser();
+
+    return useQuery({
+        queryKey: ['modulePermissions', currentUser?.id],
+        enabled: !!currentUser?.id,
+        queryFn: async () => {
+            const { data, error } = await supabase
+                .from('user_module_permissions')
+                .select('module, access')
+                .eq('user_id', currentUser!.id);
+            if (error) throw error;
+
+            const map: Record<string, 'none' | 'view' | 'edit'> = {};
+            (data || []).forEach((row: any) => { map[row.module] = row.access; });
+            return map;
+        },
+    });
+}
+
 // Notification hook with Realtime
 export function useNotifications() {
     const queryClient = useQueryClient();

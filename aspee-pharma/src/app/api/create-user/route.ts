@@ -111,7 +111,7 @@ export async function POST(req: NextRequest) {
 
         const { body, error: bodyError } = await readJsonBody<any>(req, 10 * 1024);
         if (bodyError) return bodyError;
-        const { name, email, phone, role, department, status, mfa_enabled } = body || {};
+        const { name, email, phone, role, department, status, mfa_enabled, edit_window_override_days, permissions } = body || {};
 
         if (!email || !name || !role) {
             return NextResponse.json({ error: 'name, email, and role are required.' }, { status: 400 });
@@ -150,6 +150,14 @@ export async function POST(req: NextRequest) {
 
         createdAuthUserId = authData.user.id;
 
+        const normalizedOverrideDays = edit_window_override_days != null && edit_window_override_days !== ''
+            ? Number(edit_window_override_days)
+            : null;
+        if (normalizedOverrideDays !== null && (!Number.isFinite(normalizedOverrideDays) || normalizedOverrideDays <= 0)) {
+            await supabaseAdmin.auth.admin.deleteUser(createdAuthUserId);
+            return NextResponse.json({ error: 'Edit window override must be a positive number of days.' }, { status: 400 });
+        }
+
         const { data: newUser, error: dbError } = await supabaseAdmin
             .from('system_users')
             .insert([{
@@ -161,6 +169,7 @@ export async function POST(req: NextRequest) {
                 status,
                 mfa_enabled,
                 auth_user_id: createdAuthUserId,
+                edit_window_override_days: normalizedOverrideDays,
             }])
             .select()
             .single();
@@ -171,6 +180,27 @@ export async function POST(req: NextRequest) {
         }
 
         createdSystemUserId = newUser.id;
+
+        // Module permission overrides — only rows the admin actually set
+        // (left as "Role default" in the UI never reaches here), so an
+        // account with no customization ends up with zero override rows and
+        // behaves exactly like every existing user.
+        const VALID_MODULES = new Set(['sales', 'purchasing', 'stores', 'production', 'qa', 'accounting', 'hr', 'internal_audit', 'compliance', 'settings', 'dashboard']);
+        const VALID_ACCESS = new Set(['none', 'view', 'edit']);
+        const permissionRows = Object.entries(permissions || {})
+            .filter(([mod, access]) => VALID_MODULES.has(mod) && VALID_ACCESS.has(access as string))
+            .map(([mod, access]) => ({ user_id: createdSystemUserId, module: mod, access }));
+
+        if (permissionRows.length > 0) {
+            const { error: permError } = await supabaseAdmin
+                .from('user_module_permissions')
+                .insert(permissionRows);
+            if (permError) {
+                await supabaseAdmin.from('system_users').delete().eq('id', createdSystemUserId);
+                await supabaseAdmin.auth.admin.deleteUser(createdAuthUserId);
+                return NextResponse.json({ error: 'Failed to save module permissions: ' + permError.message }, { status: 400 });
+            }
+        }
 
         const transporter = nodemailer.createTransport({
             host: process.env.SMTP_HOST || 'smtp.gmail.com',

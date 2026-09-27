@@ -48,7 +48,8 @@ import {
     Clock,
 } from 'lucide-react';
 import clsx from 'clsx';
-import { useCurrentUser } from '@/lib/hooks';
+import { useCurrentUser, useModulePermissions } from '@/lib/hooks';
+import { moduleForRoute } from '@/lib/modulePermissions';
 
 // ── Role-based access (mirrors middleware routePermissions) ──────────────────
 // Maps a route prefix → roles allowed to see it.
@@ -84,7 +85,23 @@ const ROUTE_ROLES: Record<string, string[]> = {
     '/settings/audit-log':  ['Super Admin', 'Managing Director', 'Internal Auditor'],
 };
 
-function canAccess(href: string, role: string | null | undefined): boolean {
+function canAccess(
+    href: string,
+    role: string | null | undefined,
+    overrides?: Record<string, 'none' | 'view' | 'edit'>
+): boolean {
+    // Per-user override (Settings → User Management → Module Permissions)
+    // wins either way — it can open a module the role wouldn't normally see,
+    // or close one it would. Super Admin has no overrides in practice (the
+    // create/edit form doesn't offer any for that role) so this still runs
+    // for them, harmlessly.
+    if (overrides) {
+        const overrideModule = moduleForRoute(href);
+        if (overrideModule && overrides[overrideModule]) {
+            return overrides[overrideModule] !== 'none';
+        }
+    }
+
     if (!role || role === 'Super Admin') return true;
 
     // Find the longest (most specific) matching rule for this href
@@ -266,6 +283,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
     const pathname = usePathname();
     const { data: currentUser } = useCurrentUser();
     const userRole: string | null = currentUser?.role ?? null;
+    const { data: moduleOverrides } = useModulePermissions();
 
     const [expandedGroup, setExpandedGroup] = useState<string | null>(null);
 
@@ -296,11 +314,11 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
     const visibleNav: NavItem[] = navigation
         .map(item => {
             if (item.children) {
-                const visibleChildren = item.children.filter(c => canAccess(c.href, userRole));
+                const visibleChildren = item.children.filter(c => canAccess(c.href, userRole, moduleOverrides));
                 if (visibleChildren.length === 0) return null;   // hide empty groups
                 return { ...item, children: visibleChildren };
             }
-            if (!canAccess(item.href!, userRole)) return null;
+            if (!canAccess(item.href!, userRole, moduleOverrides)) return null;
             return item;
         })
         .filter(Boolean) as NavItem[];

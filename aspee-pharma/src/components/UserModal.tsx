@@ -2,7 +2,10 @@
 
 import React, { useState, useEffect } from 'react';
 import Modal from './Modal';
-import { User, Mail, Phone, Shield, Building2, Activity, Lock } from 'lucide-react';
+import { User, Mail, Phone, Shield, Building2, Activity, Lock, KeyRound } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
+import { toast } from 'sonner';
+import { MODULES, roleDefaultAccess, editWindowDaysForRole, formatEditWindow, type ModuleAccess } from '@/lib/modulePermissions';
 
 interface UserFormData {
     id?: string;
@@ -13,6 +16,8 @@ interface UserFormData {
     department: string;
     status: 'Active' | 'Inactive';
     mfa_enabled: boolean;
+    edit_window_override_days: number | null;
+    permissions: Record<string, ModuleAccess | ''>;
 }
 
 interface UserModalProps {
@@ -56,11 +61,14 @@ const initialFormData: UserFormData = {
     department: 'Sales',
     status: 'Active',
     mfa_enabled: false,
+    edit_window_override_days: null,
+    permissions: {},
 };
 
 export default function UserModal({ isOpen, onClose, onSuccess, record }: UserModalProps) {
     const [formData, setFormData] = useState<UserFormData>(initialFormData);
     const [loading, setLoading] = useState(false);
+    const [loadingPermissions, setLoadingPermissions] = useState(false);
 
     useEffect(() => {
         if (record) {
@@ -73,7 +81,28 @@ export default function UserModal({ isOpen, onClose, onSuccess, record }: UserMo
                 department: record.department || 'Sales',
                 status: record.status || 'Active',
                 mfa_enabled: record.mfa_enabled || false,
+                edit_window_override_days: record.edit_window_override_days ?? null,
+                permissions: {},
             });
+
+            // Load this user's saved module overrides — an empty result for a
+            // module just means "still on the role default", not "No Access".
+            setLoadingPermissions(true);
+            supabase
+                .from('user_module_permissions')
+                .select('module, access')
+                .eq('user_id', record.id)
+                .then(({ data, error }) => {
+                    if (error) {
+                        toast.error('Failed to load module permissions: ' + error.message);
+                        return;
+                    }
+                    const loaded: Record<string, ModuleAccess | ''> = {};
+                    MODULES.forEach((mod) => { loaded[mod.key] = ''; });
+                    (data || []).forEach((row: any) => { loaded[row.module] = row.access; });
+                    setFormData(prev => ({ ...prev, permissions: loaded }));
+                })
+                .finally(() => setLoadingPermissions(false));
         } else {
             setFormData(initialFormData);
         }
@@ -206,6 +235,75 @@ export default function UserModal({ isOpen, onClose, onSuccess, record }: UserMo
                                 </select>
                             </div>
                         </div>
+                    </div>
+                </div>
+
+                {/* Module Permissions Section */}
+                <div className="user-form-section">
+                    <div className="user-form-section-header">
+                        <KeyRound size={15} />
+                        <span>Module Permissions</span>
+                    </div>
+                    <p style={{ fontSize: 11, color: 'var(--slate-500)', margin: '-8px 0 14px' }}>
+                        Leave a module on "Role default" to keep whatever {formData.role} normally gets. Set it
+                        explicitly to grant or restrict access for just this person.
+                    </p>
+
+                    <div className="user-perm-table">
+                        <div className="user-perm-row user-perm-head">
+                            <span>Module</span>
+                            <span>Access</span>
+                        </div>
+                        {MODULES.map((mod) => {
+                            const override = formData.permissions[mod.key];
+                            const roleDefault = roleDefaultAccess(formData.role, mod.key);
+                            return (
+                                <div className="user-perm-row" key={mod.key}>
+                                    <span className="user-perm-label">{mod.label}</span>
+                                    <select
+                                        className="user-form-input"
+                                        value={override ?? ''}
+                                        disabled={loadingPermissions}
+                                        onChange={(e) => {
+                                            const value = e.target.value as ModuleAccess | '';
+                                            setFormData((prev) => ({
+                                                ...prev,
+                                                permissions: { ...prev.permissions, [mod.key]: value },
+                                            }));
+                                        }}
+                                    >
+                                        <option value="">Role default ({roleDefault === 'edit' ? 'Full Edit' : roleDefault === 'view' ? 'View Only' : 'No Access'})</option>
+                                        <option value="none">No Access</option>
+                                        <option value="view">View Only</option>
+                                        <option value="edit">Full Edit</option>
+                                    </select>
+                                </div>
+                            );
+                        })}
+                    </div>
+
+                    <div className="user-form-field full-width" style={{ marginTop: 14 }}>
+                        <label className="user-form-label">Edit Window Override (days)</label>
+                        <div className="user-form-input-wrapper">
+                            <Lock size={16} className="user-form-input-icon" />
+                            <input
+                                type="number"
+                                min={1}
+                                value={formData.edit_window_override_days ?? ''}
+                                placeholder={`Default for ${formData.role}: ${formatEditWindow(editWindowDaysForRole(formData.role))}`}
+                                onChange={(e) => setFormData({
+                                    ...formData,
+                                    edit_window_override_days: e.target.value ? Number(e.target.value) : null,
+                                })}
+                                className="user-form-input has-icon"
+                            />
+                        </div>
+                        <p style={{ fontSize: 10, color: 'var(--slate-500)', marginTop: 4 }}>
+                            Past this many days, this person can no longer edit or delete a transaction they've
+                            already posted (invoices, receipts, stock transfers, etc.). Leave blank to use the
+                            role default — Officer-level roles get 21 days, Manager-level roles get 60,
+                            Super Admin and Managing Director are unlimited.
+                        </p>
                     </div>
                 </div>
 
@@ -429,6 +527,46 @@ export default function UserModal({ isOpen, onClose, onSuccess, record }: UserMo
                     font-size: 11px;
                     font-weight: 500;
                     color: var(--slate-600);
+                }
+
+                .user-perm-table {
+                    display: flex;
+                    flex-direction: column;
+                    border: 1.5px solid var(--slate-200);
+                    border-radius: 10px;
+                    overflow: hidden;
+                }
+
+                .user-perm-row {
+                    display: grid;
+                    grid-template-columns: 1fr 1fr;
+                    gap: 12px;
+                    align-items: center;
+                    padding: 8px 14px;
+                    border-bottom: 1px solid var(--slate-100);
+                }
+
+                .user-perm-row:last-child {
+                    border-bottom: none;
+                }
+
+                .user-perm-head {
+                    background: var(--slate-50);
+                    font-size: 10px;
+                    font-weight: 700;
+                    text-transform: uppercase;
+                    letter-spacing: 0.05em;
+                    color: var(--slate-500);
+                }
+
+                .user-perm-label {
+                    font-size: 11px;
+                    font-weight: 500;
+                    color: var(--slate-700);
+                }
+
+                .user-perm-row select.user-form-input {
+                    padding: 6px 30px 6px 10px;
                 }
 
                 .user-form-actions {
