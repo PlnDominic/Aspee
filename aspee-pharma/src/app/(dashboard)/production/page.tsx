@@ -11,7 +11,7 @@ import EntityLink from '@/components/EntityLink';
 import { Plus, Factory, Package, AlertTriangle, CheckCircle, Eye, Pencil, Trash2, ClipboardList, CheckSquare, FlaskConical, Microscope, Send } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
-import { useFetch, useAction } from '@/lib/hooks';
+import { useFetch, useAction, useCanAct } from '@/lib/hooks';
 import { useQueryClient } from '@tanstack/react-query';
 import ProductionCompletionModal from '@/components/ProductionCompletionModal';
 import SendToMDModal from '@/components/SendToMDModal';
@@ -27,6 +27,7 @@ export default function ProductionPage() {
     const [isReportModalOpen, setIsReportModalOpen] = useState(false);
     const [selectedOrder, setSelectedOrder] = useState<any>(null);
     const queryClient = useQueryClient();
+    const canEdit = useCanAct('production', 'edit');
 
     const { data: productionOrders = [], isLoading: loading } = useFetch<any[]>(
         ['production_orders', '*, product:products(name, sku, unit)'],
@@ -213,14 +214,16 @@ export default function ProductionPage() {
                     >
                         <Eye size={14} />
                     </button>
-                    <button
-                        onClick={() => { setSelectedOrder(row); setModalMode('edit'); setIsModalOpen(true); }}
-                        style={{ padding: 6, borderRadius: 6, border: '1px solid var(--slate-200)', background: 'var(--card-bg)', color: 'var(--primary-600)', cursor: 'pointer' }}
-                        title="Edit"
-                    >
-                        <Pencil size={14} />
-                    </button>
-                    {row.status === 'In Progress' && (
+                    {canEdit && (
+                        <button
+                            onClick={() => { setSelectedOrder(row); setModalMode('edit'); setIsModalOpen(true); }}
+                            style={{ padding: 6, borderRadius: 6, border: '1px solid var(--slate-200)', background: 'var(--card-bg)', color: 'var(--primary-600)', cursor: 'pointer' }}
+                            title="Edit"
+                        >
+                            <Pencil size={14} />
+                        </button>
+                    )}
+                    {canEdit && row.status === 'In Progress' && (
                         <button
                             onClick={() => { setSelectedOrder(row); setIsCompletionModalOpen(true); }}
                             style={{ padding: 6, borderRadius: 6, border: '1px solid var(--slate-200)', background: 'var(--card-bg)', color: 'var(--green-600)', cursor: 'pointer' }}
@@ -229,13 +232,15 @@ export default function ProductionPage() {
                             <CheckSquare size={14} />
                         </button>
                     )}
-                    <button
-                        onClick={() => handleDeleteOrder(row.id)}
-                        style={{ padding: 6, borderRadius: 6, border: '1px solid var(--slate-200)', background: 'var(--card-bg)', color: 'var(--danger)', cursor: 'pointer' }}
-                        title="Delete"
-                    >
-                        <Trash2 size={14} />
-                    </button>
+                    {canEdit && (
+                        <button
+                            onClick={() => handleDeleteOrder(row.id)}
+                            style={{ padding: 6, borderRadius: 6, border: '1px solid var(--slate-200)', background: 'var(--card-bg)', color: 'var(--danger)', cursor: 'pointer' }}
+                            title="Delete"
+                        >
+                            <Trash2 size={14} />
+                        </button>
+                    )}
                 </div>
             )
         }
@@ -279,12 +284,14 @@ export default function ProductionPage() {
                         >
                             <Send size={15} /> Send Weekly Report
                         </button>
-                        <button
-                            onClick={() => { setModalMode('create'); setSelectedOrder(null); setIsModalOpen(true); }}
-                            style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 18px', borderRadius: 8, border: 'none', background: 'linear-gradient(135deg, var(--primary-600), var(--primary-500))', fontSize: 13, fontWeight: 600, color: 'white', cursor: 'pointer' }}
-                        >
-                            <Plus size={16} /> New Job Order
-                        </button>
+                        {canEdit && (
+                            <button
+                                onClick={() => { setModalMode('create'); setSelectedOrder(null); setIsModalOpen(true); }}
+                                style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 18px', borderRadius: 8, border: 'none', background: 'linear-gradient(135deg, var(--primary-600), var(--primary-500))', fontSize: 13, fontWeight: 600, color: 'white', cursor: 'pointer' }}
+                            >
+                                <Plus size={16} /> New Job Order
+                            </button>
+                        )}
                     </div>
                 }
             />
