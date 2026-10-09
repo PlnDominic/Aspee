@@ -422,6 +422,7 @@ function InvoiceEntries() {
     const [startDate, setStartDate] = useState(firstOfMonth);
     const [endDate, setEndDate] = useState(today);
     const [statusFilter, setStatusFilter] = useState('ALL');
+    const [expandedInvoice, setExpandedInvoice] = useState<string | null>(null);
 
     const fetch = useCallback(async () => {
         setLoading(true);
@@ -480,12 +481,50 @@ function InvoiceEntries() {
     const filtered = statusFilter === 'ALL' ? data : data.filter(r => r.status === statusFilter);
     const statuses = Array.from(new Set(data.map(r => r.status).filter(Boolean)));
 
-    const columns = [
+    // Bulk view: one row per invoice, not per line item — click a row to
+    // drill into the individual products billed on that invoice below.
+    const invoiceSummaries = React.useMemo(() => {
+        const byInvoice = new Map<string, any>();
+        for (const r of filtered) {
+            const key = r.invoice_number;
+            const existing = byInvoice.get(key);
+            if (existing) {
+                existing.item_count += 1;
+                existing.total_qty += r.quantity;
+                existing.total_discount += r.discount_amount;
+                existing.total += r.total;
+            } else {
+                byInvoice.set(key, {
+                    invoice_number: r.invoice_number,
+                    date: r.date,
+                    route: r.route,
+                    sales_person: r.sales_person,
+                    customer_name: r.customer_name,
+                    status: r.status,
+                    item_count: 1,
+                    total_qty: r.quantity,
+                    total_discount: r.discount_amount,
+                    total: r.total,
+                });
+            }
+        }
+        return Array.from(byInvoice.values());
+    }, [filtered]);
+
+    const invoiceColumns = [
         { key: 'date',            label: 'Date', render: (v: any) => new Date(v).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) },
         { key: 'invoice_number',  label: 'Invoice', render: (v: any) => <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--primary-600)', fontWeight: 700 }}>{v}</span> },
         { key: 'route',           label: 'Route' },
         { key: 'sales_person',    label: "Salesperson" },
         { key: 'customer_name',   label: 'Customer' },
+        { key: 'item_count',      label: 'Items', render: (v: any) => <span style={{ fontWeight: 600 }}>{v} product{v === 1 ? '' : 's'}</span> },
+        { key: 'total_qty',       label: 'Total Qty', render: (v: any) => <span style={{ fontWeight: 700 }}>{Number(v).toLocaleString()}</span> },
+        { key: 'total_discount',  label: 'Discount', render: (v: any) => v > 0 ? <span style={{ fontWeight: 600, color: 'var(--danger)' }}>{formatCurrency(v)}</span> : <span style={{ color: 'var(--slate-400)' }}>-</span> },
+        { key: 'total',           label: 'Total', render: (v: any) => <span style={{ fontWeight: 700 }}>{formatCurrency(v)}</span> },
+        { key: 'status',          label: 'Status', render: (v: any) => <StatusBadge status={v} variant={v === 'Paid' ? 'success' : v === 'Draft' ? 'default' : v === 'Overdue' ? 'danger' : 'warning'} /> },
+    ];
+
+    const lineItemColumns = [
         { key: 'product_name',    label: 'Product', render: (v: any, row: any) => (
             <div style={{ display: 'flex', flexDirection: 'column' }}>
                 <span style={{ fontWeight: 600, fontSize: 12 }}>{v}</span>
@@ -502,8 +541,9 @@ function InvoiceEntries() {
                 : <span style={{ color: 'var(--slate-400)' }}>-</span>
         )},
         { key: 'total',           label: 'Total', render: (v: any) => <span style={{ fontWeight: 700 }}>{formatCurrency(v)}</span> },
-        { key: 'status',          label: 'Status', render: (v: any) => <StatusBadge status={v} variant={v === 'Paid' ? 'success' : v === 'Draft' ? 'default' : v === 'Overdue' ? 'danger' : 'warning'} /> },
     ];
+
+    const expandedItems = expandedInvoice ? filtered.filter(r => r.invoice_number === expandedInvoice) : [];
 
     return (
         <div>
@@ -534,12 +574,34 @@ function InvoiceEntries() {
                 }
             />
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 16, marginBottom: 20 }}>
-                <StatCard title="Entries"        value={filtered.length} icon={<FileSpreadsheet size={20} />} color="blue" />
+                <StatCard title="Invoices"        value={invoiceSummaries.length} icon={<FileSpreadsheet size={20} />} color="blue" />
                 <StatCard title="Units"           value={filtered.reduce((s, r) => s + r.quantity, 0).toLocaleString()} icon={<Package size={20} />} color="teal" />
                 <StatCard title="Total Discount"  value={formatCurrency(filtered.reduce((s, r) => s + r.discount_amount, 0))} icon={<AlertTriangle size={20} />} color="amber" />
                 <StatCard title="Total Value"     value={formatCurrency(filtered.reduce((s, r) => s + r.total, 0))} icon={<Banknote size={20} />} color="green" />
             </div>
-            <DataTable columns={columns} data={filtered} loading={loading} searchPlaceholder="Search invoice, customer, route, or product..." />
+            <DataTable
+                columns={invoiceColumns}
+                data={invoiceSummaries}
+                loading={loading}
+                searchPlaceholder="Search invoice, customer, route, or salesperson..."
+                onRowClick={(row) => setExpandedInvoice(prev => prev === row.invoice_number ? null : row.invoice_number)}
+            />
+            {expandedInvoice && (
+                <div style={{ marginTop: 16, padding: 16, border: '1.5px solid var(--primary-200, #bfdbfe)', borderRadius: 10, background: 'var(--primary-50, #eff6ff)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--primary-700)' }}>
+                            Products billed on invoice {expandedInvoice}
+                        </span>
+                        <button
+                            onClick={() => setExpandedInvoice(null)}
+                            style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid var(--slate-200)', background: 'var(--card-bg)', fontSize: 11, cursor: 'pointer' }}
+                        >
+                            Close
+                        </button>
+                    </div>
+                    <DataTable columns={lineItemColumns} data={expandedItems} loading={false} searchPlaceholder="" />
+                </div>
+            )}
         </div>
     );
 }

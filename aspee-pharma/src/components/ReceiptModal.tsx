@@ -387,6 +387,19 @@ export default function ReceiptModal({ isOpen, onClose, onSuccess, record }: Rec
         }
     };
 
+    // If the route changes to one the already-selected customer isn't on,
+    // drop that customer rather than silently leave a mismatched receipt.
+    useEffect(() => {
+        if (!selectedCustomer || !routeId) return;
+        if (!routeFilteredCustomers.some(c => c.id === selectedCustomer.id)) {
+            setSelectedCustomer(null);
+            setCustomerInvoices([]);
+            setCustomerTotalOutstanding(0);
+            setAllocations([]);
+            toast.error('That customer is not on the selected route — please re-select a customer');
+        }
+    }, [routeId]);
+
     const handleSalesPersonChange = (spId: string) => {
         setSalesPersonId(spId);
         if (spId) {
@@ -396,7 +409,33 @@ export default function ReceiptModal({ isOpen, onClose, onSuccess, record }: Rec
         }
     };
 
-    const filteredCustomers = customers.filter(c => {
+    // Bind the Customer picker to whichever Route/Van is selected — same
+    // matching rule InvoiceModal uses (driver name / route_area text against
+    // the customer's sales_person / route, falling back to free-text
+    // location when neither is tagged) so a receipt can't be recorded
+    // against a customer who isn't actually on that route.
+    const selectedVan = vans.find(v => v.id === routeId);
+    const routeFilteredCustomers = React.useMemo(() => {
+        if (!routeId || !selectedVan) return customers;
+        const driverName = (selectedVan.driver_name || '').trim().toLowerCase();
+        const routeArea = (selectedVan.route_area || '').trim().toLowerCase();
+
+        return customers.filter((c) => {
+            const salesPerson = (c.sales_person || '').trim().toLowerCase();
+            const route = (c.route || '').trim().toLowerCase();
+
+            if (salesPerson || route) {
+                return (!!salesPerson && !!driverName && salesPerson === driverName)
+                    || (!!route && !!routeArea && route === routeArea);
+            }
+
+            const customerLocation = (c.location || '').trim().toLowerCase();
+            if (!customerLocation) return true;
+            return routeArea.includes(customerLocation) || customerLocation.includes(routeArea);
+        });
+    }, [customers, routeId, selectedVan]);
+
+    const filteredCustomers = routeFilteredCustomers.filter(c => {
         if (!searchTerm) return true;
         const t = searchTerm.toLowerCase();
         return c.name.toLowerCase().includes(t)
@@ -618,6 +657,13 @@ export default function ReceiptModal({ isOpen, onClose, onSuccess, record }: Rec
                                         ))
                                     )}
                                 </div>
+                            </div>
+                        )}
+                        {routeId && (
+                            <div style={{ fontSize: 10, color: routeFilteredCustomers.length === 0 ? 'var(--danger)' : 'var(--slate-500)', marginTop: 4 }}>
+                                {routeFilteredCustomers.length === 0
+                                    ? `No customers assigned to ${selectedVan?.driver_name || selectedVan?.route_area || 'this route'} yet.`
+                                    : `Showing ${routeFilteredCustomers.length} customer${routeFilteredCustomers.length === 1 ? '' : 's'} for ${selectedVan?.driver_name || selectedVan?.route_area || 'this route'}.`}
                             </div>
                         )}
                     </div>

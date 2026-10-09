@@ -314,11 +314,20 @@ export default function InvoiceModal({ isOpen, onClose, onSave, record }: Invoic
         if (field === 'product_id') {
             const prod = productMap[value];
             if (prod?.cash_price != null) newItems[index].unit_price = prod.cash_price;
+            else if (prod?.credit_price != null) newItems[index].unit_price = prod.credit_price;
             // New product — the previous line's Cash/Credit pill choice no longer
             // applies, so unlock Cash Sale / Credit Sale until one is picked again.
             newItems[index].sale_type = null;
             newItems[index] = recalcItem(newItems[index]);
-        } else if (['quantity', 'unit_price', 'discount_pct', 'returns_qty'].includes(field)) {
+        } else if (field === 'unit_price') {
+            // Price is only hand-typed when the product has no cash/credit price
+            // configured at all — see isPriceLocked below. Otherwise this field is
+            // readOnly and can't fire, but block it defensively either way.
+            const prod = productMap[newItems[index].product_id];
+            const hasConfiguredPrice = prod?.cash_price != null || prod?.credit_price != null;
+            if (hasConfiguredPrice) return;
+            newItems[index] = recalcItem(newItems[index]);
+        } else if (['quantity', 'discount_pct', 'returns_qty'].includes(field)) {
             // enforce ceiling
             if (field === 'discount_pct' && maxDiscountPct > 0 && Number(value) > maxDiscountPct) {
                 toast.error(`Max discount allowed is ${maxDiscountPct}%`);
@@ -643,22 +652,28 @@ export default function InvoiceModal({ isOpen, onClose, onSave, record }: Invoic
                                         <label style={{ fontSize: 10, fontWeight: 600, color: 'var(--slate-500)', textTransform: 'uppercase' }}>
                                             Unit Price
                                         </label>
-                                        <input
-                                            type="number"
-                                            min="0"
-                                            step="any"
-                                            value={item.unit_price}
-                                            onChange={(e) => handleUpdateItem(index, 'unit_price', e.target.value)}
-                                            readOnly={!!item.sale_type}
-                                            title={item.sale_type ? 'Locked by the Cash/Credit pill selected below — pick the other pill to change it' : undefined}
-                                            style={{
-                                                padding: '8px 12px', border: '1px solid var(--slate-200)', borderRadius: 6, fontSize: 12, outline: 'none', width: '100%',
-                                                background: item.sale_type ? 'var(--slate-50)' : undefined,
-                                                color: item.sale_type ? 'var(--slate-700)' : undefined,
-                                                fontWeight: item.sale_type ? 600 : undefined,
-                                                cursor: item.sale_type ? 'not-allowed' : undefined,
-                                            }}
-                                        />
+                                        {(() => {
+                                            const prod = productMap[item.product_id];
+                                            const priceLocked = !!item.product_id && (prod?.cash_price != null || prod?.credit_price != null);
+                                            return (
+                                                <input
+                                                    type="number"
+                                                    min="0"
+                                                    step="any"
+                                                    value={item.unit_price}
+                                                    onChange={(e) => handleUpdateItem(index, 'unit_price', e.target.value)}
+                                                    readOnly={priceLocked}
+                                                    title={priceLocked ? 'Price is set by the product\'s Cash/Credit price — pick a pill below to change it' : undefined}
+                                                    style={{
+                                                        padding: '8px 12px', border: '1px solid var(--slate-200)', borderRadius: 6, fontSize: 12, outline: 'none', width: '100%',
+                                                        background: priceLocked ? 'var(--slate-50)' : undefined,
+                                                        color: priceLocked ? 'var(--slate-700)' : undefined,
+                                                        fontWeight: priceLocked ? 600 : undefined,
+                                                        cursor: priceLocked ? 'not-allowed' : undefined,
+                                                    }}
+                                                />
+                                            );
+                                        })()}
                                         {item.product_id && (() => {
                                             const prod = productMap[item.product_id];
                                             const cashPrice = prod?.cash_price;

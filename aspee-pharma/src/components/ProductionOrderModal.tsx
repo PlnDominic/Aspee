@@ -315,6 +315,17 @@ export default function ProductionOrderModal({ isOpen, onClose, onSave, initialD
             return;
         }
 
+        if (batchNumber.trim()) {
+            const { data: dupe, error: dupeError } = await supabase
+                .from('production_orders')
+                .select('id')
+                .eq('batch_number', batchNumber.trim())
+                .neq('id', initialData?.id || '00000000-0000-0000-0000-000000000000')
+                .maybeSingle();
+            if (dupeError) { toast.error('Failed to verify batch number: ' + dupeError.message); return; }
+            if (dupe) { toast.error(`Batch number "${batchNumber.trim()}" is already used on another job order`); return; }
+        }
+
         isSubmittingRef.current = true;
         setLoading(true);
         try {

@@ -13,7 +13,7 @@ import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { exportToCsv } from '@/lib/csvExport';
 import { formatCurrency } from '@/lib/formatCurrency';
-import { useFetch, useAction, useTableData } from '@/lib/hooks';
+import { useFetch, useAction, useTableData, useCanAct } from '@/lib/hooks';
 import SendToMDModal from '@/components/SendToMDModal';
 import { logAudit } from '@/lib/auditLog';
 
@@ -51,6 +51,7 @@ export default function InvoicesPage() {
     const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
     const [isReportModalOpen, setIsReportModalOpen] = useState(false);
     const [viewInvoice, setViewInvoice] = useState<any>(null);
+    const canEdit = useCanAct('sales', 'edit');
 
     // Server-side state
     const [page, setPage] = useState(1);
@@ -217,14 +218,16 @@ export default function InvoicesPage() {
                     >
                         <Eye size={14} />
                     </button>
-                    <button
-                        onClick={() => { setSelectedInvoice(row); setIsModalOpen(true); }}
-                        style={{ padding: 6, borderRadius: 6, border: '1px solid var(--slate-200)', background: 'var(--card-bg)', color: 'var(--primary-600)', cursor: 'pointer' }}
-                        title="Edit"
-                    >
-                        <Pencil size={14} />
-                    </button>
-                    {normalizeInvoiceStatus(row.status) === 'DRAFT' && (
+                    {canEdit && (
+                        <button
+                            onClick={() => { setSelectedInvoice(row); setIsModalOpen(true); }}
+                            style={{ padding: 6, borderRadius: 6, border: '1px solid var(--slate-200)', background: 'var(--card-bg)', color: 'var(--primary-600)', cursor: 'pointer' }}
+                            title="Edit"
+                        >
+                            <Pencil size={14} />
+                        </button>
+                    )}
+                    {canEdit && normalizeInvoiceStatus(row.status) === 'DRAFT' && (
                         <button
                             onClick={() => handleDeleteInvoice(row.id, row.status)}
                             style={{ padding: 6, borderRadius: 6, border: '1px solid var(--slate-200)', background: 'var(--card-bg)', color: 'var(--danger)', cursor: 'pointer' }}
@@ -270,12 +273,14 @@ export default function InvoicesPage() {
                         >
                             <Download size={16} /> Export
                         </button>
-                        <button
-                            onClick={() => { setSelectedInvoice(null); setIsModalOpen(true); }}
-                            style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 18px', borderRadius: 8, border: 'none', background: 'linear-gradient(135deg, var(--primary-600), var(--primary-500))', fontSize: 11, fontWeight: 600, color: 'white', cursor: 'pointer' }}
-                        >
-                            <Plus size={16} /> New Invoice
-                        </button>
+                        {canEdit && (
+                            <button
+                                onClick={() => { setSelectedInvoice(null); setIsModalOpen(true); }}
+                                style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 18px', borderRadius: 8, border: 'none', background: 'linear-gradient(135deg, var(--primary-600), var(--primary-500))', fontSize: 11, fontWeight: 600, color: 'white', cursor: 'pointer' }}
+                            >
+                                <Plus size={16} /> New Invoice
+                            </button>
+                        )}
                     </div>
                 }
             />

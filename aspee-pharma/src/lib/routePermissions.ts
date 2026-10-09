@@ -14,7 +14,7 @@ export const routePermissions: Record<string, string[]> = {
     '/purchasing': ['Super Admin', 'Purchasing Manager', 'Accountant'],
     '/suppliers': ['Super Admin', 'Purchasing Manager', 'Accountant'],
     '/stores': ['Super Admin', 'Store Manager', 'Accountant'],
-    '/production': ['Super Admin', 'Production Manager', 'Store Manager', 'Accountant'],
+    '/production': ['Super Admin', 'Production Manager', 'Store Manager', 'Accountant', 'Quality Assurance'],
     '/qa': ['Super Admin', 'Quality Assurance', 'Accountant'],
     '/accounting': ['Super Admin', 'Accountant'],
     '/internal-audit': ['Super Admin', 'Internal Auditor'],

@@ -46,6 +46,17 @@ export default function ProductionPage() {
         mutationFn: async (orderData: any) => {
             const { id, items, ...header } = orderData;
 
+            // DB-level backstop for the batch number uniqueness the modal
+            // already checks client-side — surfaces as a friendly message
+            // instead of the raw "duplicate key value violates..." text if
+            // two users race the same batch number.
+            const friendlyBatchError = (error: any) => {
+                if (error?.code === '23505' && error?.message?.includes('production_orders_batch_number_unique')) {
+                    throw new Error(`Batch number "${header.batch_number}" is already used on another job order`);
+                }
+                throw error;
+            };
+
             if (id) {
                 // Update existing order
                 const { error } = await supabase
@@ -53,7 +64,7 @@ export default function ProductionPage() {
                     .update(header)
                     .eq('id', id);
 
-                if (error) throw error;
+                if (error) friendlyBatchError(error);
 
                 // Update items
                 await supabase.from('production_order_items').delete().eq('order_id', id);
@@ -78,7 +89,7 @@ export default function ProductionPage() {
                     .select()
                     .single();
 
-                if (headerError) throw headerError;
+                if (headerError) friendlyBatchError(headerError);
 
                 if (items && items.length > 0) {
                     const itemsToSave = items.map((item: any) => ({
@@ -135,6 +146,11 @@ export default function ProductionPage() {
                     <div style={{ fontSize: 10, color: 'var(--slate-500)', fontFamily: 'var(--font-mono)' }}>{v?.sku || '-'}</div>
                 </div>
             )
+        },
+        {
+            key: 'batch_number',
+            label: 'Batch No.',
+            render: (v: unknown) => v ? <span style={{ fontWeight: 600, fontFamily: 'var(--font-mono)', fontSize: 11 }}>{v as string}</span> : <span style={{ color: 'var(--slate-400)' }}>-</span>
         },
         {
             key: 'quantity',

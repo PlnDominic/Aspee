@@ -7,7 +7,7 @@ import SalesRequestModal from '@/components/SalesRequestModal';
 import { Plus, Eye, Edit2, Trash2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
-import { useCurrentUser } from '@/lib/hooks';
+import { useCurrentUser, useCanAct } from '@/lib/hooks';
 import { logAudit } from '@/lib/auditLog';
 
 const getSingleRelation = <T,>(value: T | T[] | null | undefined): T | null => {
@@ -17,6 +17,7 @@ const getSingleRelation = <T,>(value: T | T[] | null | undefined): T | null => {
 
 export default function SalesRequestsPage() {
     const { data: currentUser } = useCurrentUser();
+    const canEdit = useCanAct('sales', 'edit');
 
     const [requests, setRequests] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
@@ -170,7 +171,7 @@ export default function SalesRequestsPage() {
                     >
                         <Eye size={14} />
                     </button>
-                    {row.status === 'PENDING' && (
+                    {row.status === 'PENDING' && canEdit && (
                         <>
                             <button
                                 onClick={() => { setSelectedRequest(row); setReadOnly(false); setIsModalOpen(true); }}
@@ -200,12 +201,14 @@ export default function SalesRequestsPage() {
                 subtitle="Send finished-goods requests from the Sales department to Stores"
                 breadcrumbs={[{ label: 'Sales', href: '/sales/customers' }, { label: 'Sales Request' }]}
                 actions={
-                    <button
-                        onClick={() => { setSelectedRequest(null); setReadOnly(false); setIsModalOpen(true); }}
-                        style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 22px', borderRadius: 8, border: 'none', background: 'var(--primary-600)', color: 'white', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}
-                    >
-                        <Plus size={16} /> New Sales Request
-                    </button>
+                    canEdit ? (
+                        <button
+                            onClick={() => { setSelectedRequest(null); setReadOnly(false); setIsModalOpen(true); }}
+                            style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 22px', borderRadius: 8, border: 'none', background: 'var(--primary-600)', color: 'white', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}
+                        >
+                            <Plus size={16} /> New Sales Request
+                        </button>
+                    ) : undefined
                 }
             />
 

@@ -2,6 +2,7 @@ import React from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
+import { roleDefaultAccess } from '@/lib/modulePermissions';
 
 export const REPORT_DEPARTMENTS = [
     'Administration',
@@ -410,6 +411,37 @@ export function useModulePermissions() {
             return map;
         },
     });
+}
+
+// Single source of truth for "can this user actually act, or only look" —
+// resolves a per-user override (Settings → User Management → Module
+// Permissions) over the role default, same precedence the middleware and
+// Sidebar already use for route gating. Pages use this to decide whether to
+// render New/Edit/Delete buttons at all, not just whether the route loads —
+// that's the "view vs edit vs none, per button" access control.
+export function useModuleAccess(moduleKey: string): 'none' | 'view' | 'edit' {
+    const { data: currentUser } = useCurrentUser();
+    const { data: overrides } = useModulePermissions();
+
+    if (!currentUser) return 'none';
+    if (currentUser.role === 'Super Admin') return 'edit';
+
+    const override = overrides?.[moduleKey];
+    if (override) return override;
+
+    return roleDefaultAccess(currentUser.role, moduleKey);
+}
+
+// Convenience for gating a single button/action rather than a whole page:
+// pass the module key and the minimum access the action needs ('view' for
+// a read-only button, 'edit' for New/Edit/Delete). Renders nothing — not a
+// disabled button — below that level, so a view-only user doesn't even see
+// controls they can't use.
+export function useCanAct(moduleKey: string, require: 'view' | 'edit' = 'edit'): boolean {
+    const access = useModuleAccess(moduleKey);
+    if (access === 'none') return false;
+    if (require === 'view') return true;
+    return access === 'edit';
 }
 
 // Notification hook with Realtime

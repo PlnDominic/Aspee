@@ -4,9 +4,10 @@ import React, { useState } from 'react';
 import PageHeader from '@/components/PageHeader';
 import DataTable from '@/components/DataTable';
 import EntityLink from '@/components/EntityLink';
+import Link from 'next/link';
 import { Plus, Eye, Pencil, Trash2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
-import { useFetch, useAction } from '@/lib/hooks';
+import { useFetch, useAction, useCanAct } from '@/lib/hooks';
 import { toast } from 'sonner';
 import TransferModal from '@/components/TransferModal';
 import { useQueryClient } from '@tanstack/react-query';
@@ -18,6 +19,7 @@ export default function TransfersPage() {
     const [modalMode, setModalMode] = useState<'create' | 'edit' | 'view'>('create');
     const [selectedTransfer, setSelectedTransfer] = useState<any>(null);
     const queryClient = useQueryClient();
+    const canEdit = useCanAct('stores', 'edit');
 
     const { data: transfers = [], isLoading: loading } = useFetch<any[]>(
         ['stock_transfers', '*, from:stock_locations!from_location_id(name), to:stock_locations!to_location_id(name)'],
@@ -126,15 +128,22 @@ export default function TransfersPage() {
             render: (v: any) => {
                 if (!v?.name) return <span>-</span>;
                 const routeLabel = vanLabelByLocationName[v.name];
+                if (!routeLabel) {
+                    return (
+                        <EntityLink href={`/stores/stock?search=${encodeURIComponent(v.name)}`} subtle title="View stock at this location">
+                            {v.name}
+                        </EntityLink>
+                    );
+                }
                 return (
-                    <EntityLink href={`/stores/stock?search=${encodeURIComponent(v.name)}`} subtle title="View stock at this location">
-                        {routeLabel
-                            ? <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                <span>{routeLabel}</span>
-                                <span style={{ fontSize: 11, color: 'var(--slate-500)' }}>{v.name}</span>
-                            </div>
-                            : v.name}
-                    </EntityLink>
+                    <Link
+                        href={`/stores/route-activity?location=${encodeURIComponent(v.name)}`}
+                        title="View items received on this route and how they were sold to customers"
+                        style={{ textDecoration: 'none', display: 'flex', flexDirection: 'column', color: 'var(--primary-600)' }}
+                    >
+                        <span style={{ fontWeight: 600 }}>{routeLabel}</span>
+                        <span style={{ fontSize: 11, color: 'var(--slate-500)' }}>{v.name}</span>
+                    </Link>
                 );
             },
         },
@@ -150,20 +159,24 @@ export default function TransfersPage() {
                     >
                         <Eye size={14} />
                     </button>
-                    <button
-                        onClick={() => { setSelectedTransfer(row); setModalMode('edit'); setIsModalOpen(true); }}
-                        style={{ padding: 6, borderRadius: 6, border: '1px solid var(--slate-200)', background: 'var(--card-bg)', color: 'var(--primary-600)', cursor: 'pointer' }}
-                        title="Edit"
-                    >
-                        <Pencil size={14} />
-                    </button>
-                    <button
-                        onClick={() => handleDeleteTransfer(row.id)}
-                        style={{ padding: 6, borderRadius: 6, border: '1px solid var(--slate-200)', background: 'var(--card-bg)', color: 'var(--danger)', cursor: 'pointer' }}
-                        title="Delete"
-                    >
-                        <Trash2 size={14} />
-                    </button>
+                    {canEdit && (
+                        <>
+                            <button
+                                onClick={() => { setSelectedTransfer(row); setModalMode('edit'); setIsModalOpen(true); }}
+                                style={{ padding: 6, borderRadius: 6, border: '1px solid var(--slate-200)', background: 'var(--card-bg)', color: 'var(--primary-600)', cursor: 'pointer' }}
+                                title="Edit"
+                            >
+                                <Pencil size={14} />
+                            </button>
+                            <button
+                                onClick={() => handleDeleteTransfer(row.id)}
+                                style={{ padding: 6, borderRadius: 6, border: '1px solid var(--slate-200)', background: 'var(--card-bg)', color: 'var(--danger)', cursor: 'pointer' }}
+                                title="Delete"
+                            >
+                                <Trash2 size={14} />
+                            </button>
+                        </>
+                    )}
                 </div>
             )
         }
@@ -179,17 +192,19 @@ export default function TransfersPage() {
                     { label: 'Transfers' },
                 ]}
                 actions={
-                    <button
-                        onClick={() => { setModalMode('create'); setSelectedTransfer(null); setIsModalOpen(true); }}
-                        style={{
-                            display: 'flex', alignItems: 'center', gap: 8,
-                            padding: '9px 18px', borderRadius: 8, border: 'none',
-                            background: 'linear-gradient(135deg, var(--primary-600), var(--primary-500))',
-                            fontSize: 11, fontWeight: 600, color: 'white', cursor: 'pointer',
-                        }}
-                    >
-                        <Plus size={16} /> New Transfer
-                    </button>
+                    canEdit ? (
+                        <button
+                            onClick={() => { setModalMode('create'); setSelectedTransfer(null); setIsModalOpen(true); }}
+                            style={{
+                                display: 'flex', alignItems: 'center', gap: 8,
+                                padding: '9px 18px', borderRadius: 8, border: 'none',
+                                background: 'linear-gradient(135deg, var(--primary-600), var(--primary-500))',
+                                fontSize: 11, fontWeight: 600, color: 'white', cursor: 'pointer',
+                            }}
+                        >
+                            <Plus size={16} /> New Transfer
+                        </button>
+                    ) : undefined
                 }
             />
             <DataTable

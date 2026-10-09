@@ -70,7 +70,7 @@ const ROUTE_ROLES: Record<string, string[]> = {
     '/purchasing/grn':      ['Super Admin', 'Purchasing Manager', 'Quality Assurance', 'Accountant'],
     '/purchasing':          ['Super Admin', 'Purchasing Manager', 'Accountant'],
     '/stores':              ['Super Admin', 'Store Manager', 'Accountant'],
-    '/production':          ['Super Admin', 'Production Manager', 'Store Manager', 'Accountant'],
+    '/production':          ['Super Admin', 'Production Manager', 'Store Manager', 'Accountant', 'Quality Assurance'],
     '/qa/incoming':         ['Super Admin', 'Quality Assurance', 'Accountant'],
     '/qa/internal-reports': ['Super Admin', 'Quality Assurance', 'Accountant'],
     '/qa':                  ['Super Admin', 'Quality Assurance', 'Accountant'],
