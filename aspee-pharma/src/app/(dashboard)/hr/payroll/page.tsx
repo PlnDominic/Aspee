@@ -7,7 +7,7 @@ import StatusBadge from '@/components/StatusBadge';
 import EmployeePayrollModal from '@/components/EmployeePayrollModal';
 import { Users, Banknote, CheckCircle, Send, Edit2, Trash2, AlertTriangle } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
-import { useSupabaseQuery, useSave, useDelete } from '@/lib/hooks';
+import { useSupabaseQuery, useSave, useDelete, useCanAct } from '@/lib/hooks';
 import { useQueryClient } from '@tanstack/react-query';
 import { formatCurrency } from '@/lib/currency';
 import { toast } from 'sonner';
@@ -19,6 +19,7 @@ export default function HRPayrollPage() {
     const { data, isLoading } = useSupabaseQuery<any>('payroll', { orderBy: 'created_at', ascending: false });
     const payrollData = data ?? [];
     const queryClient = useQueryClient();
+    const canEdit = useCanAct('hr', 'edit');
 
     const [modalOpen, setModalOpen] = useState(false);
     const [selectedRecord, setSelectedRecord] = useState<any | null>(null);
@@ -119,12 +120,12 @@ export default function HRPayrollPage() {
                                 <Send size={12} /> Submit
                             </button>
                         )}
-                        {editable && (
+                        {editable && canEdit && (
                             <button onClick={() => { setSelectedRecord(row); setModalOpen(true); }} style={btnStyle}>
                                 <Edit2 size={14} />
                             </button>
                         )}
-                        {editable && (
+                        {editable && canEdit && (
                             <button onClick={() => handleDelete(row.id)} style={{ ...btnStyle, color: 'var(--danger)' }}>
                                 <Trash2 size={14} />
                             </button>
@@ -172,12 +173,14 @@ export default function HRPayrollPage() {
                                 <Send size={15} /> Submit All Drafts ({drafts})
                             </button>
                         )}
-                        <button
-                            onClick={() => { setSelectedRecord(null); setModalOpen(true); }}
-                            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', background: 'var(--primary-600)', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
-                        >
-                            + Add Entry
-                        </button>
+                        {canEdit && (
+                            <button
+                                onClick={() => { setSelectedRecord(null); setModalOpen(true); }}
+                                style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', background: 'var(--primary-600)', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
+                            >
+                                + Add Entry
+                            </button>
+                        )}
                     </div>
                 }
             />

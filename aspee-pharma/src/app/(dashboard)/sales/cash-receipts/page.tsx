@@ -7,7 +7,7 @@ import { Plus, Trash2, Save, Banknote, CreditCard, FileText, ClipboardList, Load
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { formatCurrency, CURRENCY_SYMBOL } from '@/lib/currency';
-import { useFetch } from '@/lib/hooks';
+import { useFetch, useCanAct } from '@/lib/hooks';
 import { useQueryClient } from '@tanstack/react-query';
 
 interface Customer { id: string; name: string; }
@@ -57,6 +57,7 @@ function emptyRow(idx: number): ReceiptRow {
 
 export default function CashReceiptRegistrationPage() {
     const queryClient = useQueryClient();
+    const canEdit = useCanAct('sales', 'edit');
     const [rows, setRows] = useState<ReceiptRow[]>(() => [emptyRow(0), emptyRow(1), emptyRow(2)]);
     const [savingAll, setSavingAll] = useState(false);
 
@@ -190,14 +191,16 @@ export default function CashReceiptRegistrationPage() {
                 subtitle="Sales back office — log receipts brought in by sales persons"
                 breadcrumbs={[{ label: 'Sales', href: '/sales/cash-receipts' }, { label: 'Cash Receipt Registration' }]}
                 actions={
-                    <button
-                        onClick={handleSaveAll}
-                        disabled={savingAll}
-                        style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 18px', borderRadius: 8, border: 'none', background: 'linear-gradient(135deg, var(--primary-600), var(--primary-500))', fontSize: 11, fontWeight: 600, color: 'white', cursor: savingAll ? 'not-allowed' : 'pointer', opacity: savingAll ? 0.6 : 1 }}
-                    >
-                        {savingAll ? <Loader2 size={16} className="spin" /> : <Save size={16} />}
-                        {savingAll ? 'Saving...' : 'Save All Receipts'}
-                    </button>
+                    canEdit ? (
+                        <button
+                            onClick={handleSaveAll}
+                            disabled={savingAll}
+                            style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 18px', borderRadius: 8, border: 'none', background: 'linear-gradient(135deg, var(--primary-600), var(--primary-500))', fontSize: 11, fontWeight: 600, color: 'white', cursor: savingAll ? 'not-allowed' : 'pointer', opacity: savingAll ? 0.6 : 1 }}
+                        >
+                            {savingAll ? <Loader2 size={16} className="spin" /> : <Save size={16} />}
+                            {savingAll ? 'Saving...' : 'Save All Receipts'}
+                        </button>
+                    ) : undefined
                 }
             />
 

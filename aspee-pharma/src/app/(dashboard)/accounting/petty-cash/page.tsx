@@ -8,13 +8,14 @@ import StatCard from '@/components/StatCard';
 import StatusBadge from '@/components/StatusBadge';
 import PettyCashModal from '@/components/PettyCashModal';
 import { Plus, Coins, Banknote, AlertTriangle, TrendingDown, Edit2 } from 'lucide-react';
-import { useSupabaseQuery } from '@/lib/hooks';
+import { useSupabaseQuery, useCanAct } from '@/lib/hooks';
 import { formatCurrency } from '@/lib/currency';
 
 export default function PettyCashPage() {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingRecord, setEditingRecord] = useState<any>(null);
     const queryClient = useQueryClient();
+    const canEdit = useCanAct('accounting', 'edit');
 
     const THRESHOLD = 500;
 
@@ -152,25 +153,27 @@ export default function PettyCashPage() {
             key: 'actions',
             label: '',
             render: (_v: unknown, row: any) => (
-                <button
-                    onClick={(e) => { e.stopPropagation(); handleOpenEdit(row); }}
-                    style={{
-                        border: 'none',
-                        background: 'var(--primary-50)',
-                        color: 'var(--primary-600)',
-                        width: '30px',
-                        height: '30px',
-                        borderRadius: '6px',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        transition: 'all 0.15s',
-                    }}
-                    title="Edit voucher"
-                >
-                    <Edit2 size={14} />
-                </button>
+                canEdit ? (
+                    <button
+                        onClick={(e) => { e.stopPropagation(); handleOpenEdit(row); }}
+                        style={{
+                            border: 'none',
+                            background: 'var(--primary-50)',
+                            color: 'var(--primary-600)',
+                            width: '30px',
+                            height: '30px',
+                            borderRadius: '6px',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            transition: 'all 0.15s',
+                        }}
+                        title="Edit voucher"
+                    >
+                        <Edit2 size={14} />
+                    </button>
+                ) : null
             ),
         },
     ];
@@ -182,24 +185,26 @@ export default function PettyCashPage() {
                 subtitle="Petty cash fund management and vouchers"
                 breadcrumbs={[{ label: 'Accounting', href: '/accounting/petty-cash' }, { label: 'Petty Cash' }]}
                 actions={
-                    <button
-                        onClick={handleOpenCreate}
-                        style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 8,
-                            padding: '9px 18px',
-                            borderRadius: 8,
-                            border: 'none',
-                            background: 'linear-gradient(135deg, var(--primary-600), var(--primary-500))',
-                            fontSize: 11,
-                            fontWeight: 600,
-                            color: 'white',
-                            cursor: 'pointer',
-                        }}
-                    >
-                        <Plus size={16} /> New Voucher
-                    </button>
+                    canEdit ? (
+                        <button
+                            onClick={handleOpenCreate}
+                            style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 8,
+                                padding: '9px 18px',
+                                borderRadius: 8,
+                                border: 'none',
+                                background: 'linear-gradient(135deg, var(--primary-600), var(--primary-500))',
+                                fontSize: 11,
+                                fontWeight: 600,
+                                color: 'white',
+                                cursor: 'pointer',
+                            }}
+                        >
+                            <Plus size={16} /> New Voucher
+                        </button>
+                    ) : undefined
                 }
             />
 

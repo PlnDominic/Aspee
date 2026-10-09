@@ -23,8 +23,10 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
+import { useCanAct } from '@/lib/hooks';
 
 export default function ProductionMaterialRequestsPage() {
+    const canEdit = useCanAct('production', 'edit');
     const [requests, setRequests] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -181,7 +183,7 @@ export default function ProductionMaterialRequestsPage() {
                         <Eye size={14} />
                     </button>
 
-                    {row.status !== 'Issued' && (
+                    {row.status !== 'Issued' && canEdit && (
                         <>
                             <button
                                 onClick={() => { setEditingRequest(row); setIsModalOpen(true); }}
@@ -246,18 +248,20 @@ export default function ProductionMaterialRequestsPage() {
                 subtitle="Track material requisitions and QA inspection status"
                 breadcrumbs={[{ label: 'Production', href: '/production' }, { label: 'Material Requests' }]}
                 actions={
-                    <button
-                        onClick={() => setIsModalOpen(true)}
-                        style={{
-                            display: 'flex', alignItems: 'center', gap: 8,
-                            padding: '8px 16px', borderRadius: 8,
-                            border: 'none', background: 'var(--primary-600)',
-                            color: 'white', fontSize: 11, fontWeight: 600, cursor: 'pointer',
-                        }}
-                    >
-                        <Plus size={16} />
-                        New Request
-                    </button>
+                    canEdit ? (
+                        <button
+                            onClick={() => setIsModalOpen(true)}
+                            style={{
+                                display: 'flex', alignItems: 'center', gap: 8,
+                                padding: '8px 16px', borderRadius: 8,
+                                border: 'none', background: 'var(--primary-600)',
+                                color: 'white', fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                            }}
+                        >
+                            <Plus size={16} />
+                            New Request
+                        </button>
+                    ) : undefined
                 }
             />
 

@@ -9,7 +9,7 @@ import MaterialRequestModal from '@/components/MaterialRequestModal';
 import { Plus, Package, Clock, Boxes, Edit2, Trash2, ClipboardList, Beaker, Factory, PencilRuler, Layers3 } from 'lucide-react';
 import { bulkConversionLabel } from '@/lib/unitConversions';
 import { supabase } from '@/lib/supabase';
-import { useSupabaseQuery, useFetch } from '@/lib/hooks';
+import { useSupabaseQuery, useFetch, useCanAct } from '@/lib/hooks';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { logAudit } from '@/lib/auditLog';
@@ -101,6 +101,7 @@ const sectionStyle: React.CSSProperties = {
 
 export default function ProductsPage() {
     const queryClient = useQueryClient();
+    const canEdit = useCanAct('stores', 'edit');
     const { data: products = [], isLoading: loading } = useFetch<any[]>(
         ['products-with-qa'],
         async () => {
@@ -360,24 +361,28 @@ export default function ProductsPage() {
                             <ClipboardList size={14} />
                         </button>
                     )}
-                    <button
-                        onClick={() => {
-                            setModalMode('edit');
-                            setSelectedProduct(row);
-                            setIsModalOpen(true);
-                        }}
-                        style={actionButtonStyle('var(--primary-50)', 'var(--primary-600)')}
-                        title="Edit product"
-                    >
-                        <Edit2 size={14} />
-                    </button>
-                    <button
-                        onClick={() => handleDeleteProduct(row.id)}
-                        style={actionButtonStyle('var(--danger-light)', 'var(--danger)')}
-                        title="Delete product"
-                    >
-                        <Trash2 size={14} />
-                    </button>
+                    {canEdit && (
+                        <>
+                            <button
+                                onClick={() => {
+                                    setModalMode('edit');
+                                    setSelectedProduct(row);
+                                    setIsModalOpen(true);
+                                }}
+                                style={actionButtonStyle('var(--primary-50)', 'var(--primary-600)')}
+                                title="Edit product"
+                            >
+                                <Edit2 size={14} />
+                            </button>
+                            <button
+                                onClick={() => handleDeleteProduct(row.id)}
+                                style={actionButtonStyle('var(--danger-light)', 'var(--danger)')}
+                                title="Delete product"
+                            >
+                                <Trash2 size={14} />
+                            </button>
+                        </>
+                    )}
                 </div>
             ),
         },
@@ -404,29 +409,31 @@ export default function ProductsPage() {
                     { label: 'Products' },
                 ]}
                 actions={
-                    <button
-                        style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 8,
-                            padding: '10px 18px',
-                            borderRadius: 12,
-                            border: 'none',
-                            background: 'linear-gradient(135deg, var(--primary-600), var(--primary-500))',
-                            fontSize: 12,
-                            fontWeight: 700,
-                            color: 'white',
-                            cursor: 'pointer',
-                            boxShadow: '0 12px 24px rgba(6, 182, 212, 0.18)',
-                        }}
-                        onClick={() => {
-                            setModalMode('create');
-                            setSelectedProduct(null);
-                            setIsModalOpen(true);
-                        }}
-                    >
-                        <Plus size={16} /> Add Product
-                    </button>
+                    canEdit ? (
+                        <button
+                            style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 8,
+                                padding: '10px 18px',
+                                borderRadius: 12,
+                                border: 'none',
+                                background: 'linear-gradient(135deg, var(--primary-600), var(--primary-500))',
+                                fontSize: 12,
+                                fontWeight: 700,
+                                color: 'white',
+                                cursor: 'pointer',
+                                boxShadow: '0 12px 24px rgba(6, 182, 212, 0.18)',
+                            }}
+                            onClick={() => {
+                                setModalMode('create');
+                                setSelectedProduct(null);
+                                setIsModalOpen(true);
+                            }}
+                        >
+                            <Plus size={16} /> Add Product
+                        </button>
+                    ) : undefined
                 }
             />
 

@@ -8,13 +8,14 @@ import StatCard from '@/components/StatCard';
 import StatusBadge from '@/components/StatusBadge';
 import ExpenseModal from '@/components/ExpenseModal';
 import { Plus, Banknote, TrendingUp, Receipt, Clock, Edit2, Trash2 } from 'lucide-react';
-import { useSupabaseQuery, useDelete } from '@/lib/hooks';
+import { useSupabaseQuery, useDelete, useCanAct } from '@/lib/hooks';
 import { formatCurrency } from '@/lib/currency';
 
 export default function ExpensesPage() {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedExpense, setSelectedExpense] = useState<any>(null);
     const queryClient = useQueryClient();
+    const canEdit = useCanAct('accounting', 'edit');
 
     const { data, isLoading: loading } = useSupabaseQuery<any>('expenses', {
         orderBy: 'date',
@@ -112,20 +113,24 @@ export default function ExpensesPage() {
             width: '100px',
             render: (_: any, row: any) => (
                 <div style={{ display: 'flex', gap: '8px' }}>
-                    <button
-                        onClick={(e) => { e.stopPropagation(); openEdit(row); }}
-                        style={{ border: 'none', background: 'var(--primary-50)', color: 'var(--primary-600)', width: '30px', height: '30px', borderRadius: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                        title="Edit Expense"
-                    >
-                        <Edit2 size={14} />
-                    </button>
-                    <button
-                        onClick={(e) => { e.stopPropagation(); handleDelete(row.id); }}
-                        style={{ border: 'none', background: 'var(--danger-50)', color: 'var(--danger)', width: '30px', height: '30px', borderRadius: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                        title="Delete Expense"
-                    >
-                        <Trash2 size={14} />
-                    </button>
+                    {canEdit && (
+                        <>
+                            <button
+                                onClick={(e) => { e.stopPropagation(); openEdit(row); }}
+                                style={{ border: 'none', background: 'var(--primary-50)', color: 'var(--primary-600)', width: '30px', height: '30px', borderRadius: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                title="Edit Expense"
+                            >
+                                <Edit2 size={14} />
+                            </button>
+                            <button
+                                onClick={(e) => { e.stopPropagation(); handleDelete(row.id); }}
+                                style={{ border: 'none', background: 'var(--danger-50)', color: 'var(--danger)', width: '30px', height: '30px', borderRadius: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                title="Delete Expense"
+                            >
+                                <Trash2 size={14} />
+                            </button>
+                        </>
+                    )}
                 </div>
             )
         }
@@ -138,12 +143,14 @@ export default function ExpensesPage() {
                 subtitle="Track and categorise business expenses"
                 breadcrumbs={[{ label: 'Accounting', href: '/accounting/expenses' }, { label: 'Expenses' }]}
                 actions={
-                    <button
-                        onClick={openCreate}
-                        style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 18px', borderRadius: 8, border: 'none', background: 'linear-gradient(135deg, var(--primary-600), var(--primary-500))', fontSize: 11, fontWeight: 600, color: 'white', cursor: 'pointer' }}
-                    >
-                        <Plus size={16} /> Record Expense
-                    </button>
+                    canEdit ? (
+                        <button
+                            onClick={openCreate}
+                            style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 18px', borderRadius: 8, border: 'none', background: 'linear-gradient(135deg, var(--primary-600), var(--primary-500))', fontSize: 11, fontWeight: 600, color: 'white', cursor: 'pointer' }}
+                        >
+                            <Plus size={16} /> Record Expense
+                        </button>
+                    ) : undefined
                 }
             />
 

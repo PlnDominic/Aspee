@@ -21,8 +21,10 @@ import { toast } from 'sonner';
 import PurchaseRequestViewModal from '@/components/PurchaseRequestViewModal';
 import PrintablePurchaseRequisition from '@/components/PrintablePurchaseRequisition';
 import PurchaseRequestModal from '@/components/PurchaseRequestModal';
+import { useCanAct } from '@/lib/hooks';
 
 export default function PurchasingRequestsPage() {
+    const canEdit = useCanAct('purchasing', 'edit');
     const [requests, setRequests] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [selectedRequest, setSelectedRequest] = useState<any>(null);
@@ -132,22 +134,26 @@ export default function PurchasingRequestsPage() {
                     >
                         <FileText size={14} />
                     </button>
-                    <button
-                        onClick={() => { setSelectedRequest(row); setIsEditModalOpen(true); }}
-                        title="Edit"
-                        aria-label="Edit purchase request"
-                        style={{ width: 32, height: 32, padding: 0, borderRadius: 6, border: '1px solid var(--amber-200, #fde68a)', background: 'var(--amber-50, #fffbeb)', color: 'var(--amber-700, #b45309)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                    >
-                        <Edit2 size={14} />
-                    </button>
-                    <button
-                        onClick={() => handleDelete(row)}
-                        title="Delete"
-                        aria-label="Delete purchase request"
-                        style={{ width: 32, height: 32, padding: 0, borderRadius: 6, border: '1px solid var(--danger-200, #fecaca)', background: 'var(--danger-50, #fef2f2)', color: 'var(--danger, #dc2626)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                    >
-                        <Trash2 size={14} />
-                    </button>
+                    {canEdit && (
+                        <>
+                            <button
+                                onClick={() => { setSelectedRequest(row); setIsEditModalOpen(true); }}
+                                title="Edit"
+                                aria-label="Edit purchase request"
+                                style={{ width: 32, height: 32, padding: 0, borderRadius: 6, border: '1px solid var(--amber-200, #fde68a)', background: 'var(--amber-50, #fffbeb)', color: 'var(--amber-700, #b45309)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                            >
+                                <Edit2 size={14} />
+                            </button>
+                            <button
+                                onClick={() => handleDelete(row)}
+                                title="Delete"
+                                aria-label="Delete purchase request"
+                                style={{ width: 32, height: 32, padding: 0, borderRadius: 6, border: '1px solid var(--danger-200, #fecaca)', background: 'var(--danger-50, #fef2f2)', color: 'var(--danger, #dc2626)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                            >
+                                <Trash2 size={14} />
+                            </button>
+                        </>
+                    )}
                     {row.status === 'Approved' && (
                         <button
                             title="Create PO"

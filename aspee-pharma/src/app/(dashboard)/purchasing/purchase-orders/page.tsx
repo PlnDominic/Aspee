@@ -14,7 +14,7 @@ import { toast } from 'sonner';
 import { formatCurrency } from '@/lib/formatCurrency';
 import { logAudit } from '@/lib/auditLog';
 import { autoPostJournal } from '@/lib/autoPostJournal';
-import { useSupabaseQuery, useAction } from '@/lib/hooks';
+import { useSupabaseQuery, useAction, useCanAct } from '@/lib/hooks';
 import SendToMDModal from '@/components/SendToMDModal';
 import { Send } from 'lucide-react';
 
@@ -25,6 +25,7 @@ export default function PurchaseOrdersPage() {
     const [isReportModalOpen, setIsReportModalOpen] = useState(false);
     const [isApprovalModalOpen, setIsApprovalModalOpen] = useState(false);
     const [poToApprove, setPoToApprove] = useState<any>(null);
+    const canEdit = useCanAct('purchasing', 'edit');
 
     const { data: purchaseOrders, isLoading: loading } = useSupabaseQuery<any>('purchase_orders', {
         columns: '*, suppliers(name)',
@@ -375,17 +376,19 @@ export default function PurchaseOrdersPage() {
                         >
                             <Download size={16} /> Export
                         </button>
-                        <button
-                            onClick={openCreateModal}
-                            style={{
-                                display: 'flex', alignItems: 'center', gap: 8,
-                                padding: '9px 18px', borderRadius: 8,
-                                border: 'none', background: 'linear-gradient(135deg, var(--primary-600), var(--primary-500))',
-                                fontSize: 11, fontWeight: 600, color: 'white', cursor: 'pointer',
-                            }}
-                        >
-                            <Plus size={16} /> Create PO
-                        </button>
+                        {canEdit && (
+                            <button
+                                onClick={openCreateModal}
+                                style={{
+                                    display: 'flex', alignItems: 'center', gap: 8,
+                                    padding: '9px 18px', borderRadius: 8,
+                                    border: 'none', background: 'linear-gradient(135deg, var(--primary-600), var(--primary-500))',
+                                    fontSize: 11, fontWeight: 600, color: 'white', cursor: 'pointer',
+                                }}
+                            >
+                                <Plus size={16} /> Create PO
+                            </button>
+                        )}
                     </div>
                 }
             />
@@ -452,28 +455,32 @@ export default function PurchaseOrdersPage() {
                                 >
                                     <Eye size={16} />
                                 </button>
-                                <button
-                                    onClick={() => openEditModal(row)}
-                                    title="Edit PO"
-                                    style={{
-                                        border: 'none', background: 'var(--primary-50)', color: 'var(--primary-600)',
-                                        width: '32px', height: '32px', borderRadius: '6px',
-                                        display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer'
-                                    }}
-                                >
-                                    <Edit2 size={16} />
-                                </button>
-                                <button
-                                    onClick={() => handleDeletePO(row.id as string)}
-                                    title="Delete PO"
-                                    style={{
-                                        border: 'none', background: 'var(--danger-50)', color: 'var(--danger)',
-                                        width: '32px', height: '32px', borderRadius: '6px',
-                                        display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer'
-                                    }}
-                                >
-                                    <Trash2 size={16} />
-                                </button>
+                                {canEdit && (
+                                    <>
+                                        <button
+                                            onClick={() => openEditModal(row)}
+                                            title="Edit PO"
+                                            style={{
+                                                border: 'none', background: 'var(--primary-50)', color: 'var(--primary-600)',
+                                                width: '32px', height: '32px', borderRadius: '6px',
+                                                display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer'
+                                            }}
+                                        >
+                                            <Edit2 size={16} />
+                                        </button>
+                                        <button
+                                            onClick={() => handleDeletePO(row.id as string)}
+                                            title="Delete PO"
+                                            style={{
+                                                border: 'none', background: 'var(--danger-50)', color: 'var(--danger)',
+                                                width: '32px', height: '32px', borderRadius: '6px',
+                                                display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer'
+                                            }}
+                                        >
+                                            <Trash2 size={16} />
+                                        </button>
+                                    </>
+                                )}
                             </div>
                         )
                     }

@@ -12,7 +12,7 @@ import { generatePDF } from '@/lib/pdfGenerator';
 import { Plus, Download, Upload, Users, Banknote, AlertTriangle, CreditCard, Edit2, Trash2, Phone, FileText, IdCard, Tag, MapPin, UserCheck, Eye } from 'lucide-react';
 import EntityDocumentsModal from '@/components/compliance/EntityDocumentsModal';
 import { supabase } from '@/lib/supabase';
-import { useFetch, useDelete } from '@/lib/hooks';
+import { useFetch, useDelete, useCanAct } from '@/lib/hooks';
 import { useQueryClient } from '@tanstack/react-query';
 import { formatCurrency } from '@/lib/currency';
 import { toast } from 'sonner';
@@ -85,6 +85,7 @@ export default function CustomersPage() {
     );
     const customers = data ?? [];
     const queryClient = useQueryClient();
+    const canEdit = useCanAct('sales', 'edit');
 
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
@@ -392,26 +393,30 @@ export default function CustomersPage() {
                     >
                         <IdCard size={14} />
                     </button>
-                    <button
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedCustomer(row);
-                            setViewOnly(false);
-                            setIsModalOpen(true);
-                        }}
-                        style={actionButtonStyle}
-                    >
-                        <Edit2 size={14} />
-                    </button>
-                    <button
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            handleDelete(row.id);
-                        }}
-                        style={{ ...actionButtonStyle, color: 'var(--danger)' }}
-                    >
-                        <Trash2 size={14} />
-                    </button>
+                    {canEdit && (
+                        <>
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedCustomer(row);
+                                    setViewOnly(false);
+                                    setIsModalOpen(true);
+                                }}
+                                style={actionButtonStyle}
+                            >
+                                <Edit2 size={14} />
+                            </button>
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDelete(row.id);
+                                }}
+                                style={{ ...actionButtonStyle, color: 'var(--danger)' }}
+                            >
+                                <Trash2 size={14} />
+                            </button>
+                        </>
+                    )}
                 </div>
             )
         }
@@ -434,34 +439,38 @@ export default function CustomersPage() {
                         }}>
                             <Download size={16} /> Export SOA
                         </button>
-                        <button
-                            onClick={() => setIsImportModalOpen(true)}
-                            style={{
-                                display: 'flex', alignItems: 'center', gap: 8,
-                                padding: '9px 16px', borderRadius: 8,
-                                border: '1px solid var(--slate-200)', background: 'var(--card-bg)',
-                                fontSize: 11, fontWeight: 500, color: 'var(--slate-700)',
-                                cursor: 'pointer',
-                            }}
-                        >
-                            <Upload size={16} /> Import Excel
-                        </button>
-                        <button
-                            onClick={() => {
-                                setSelectedCustomer(null);
-                                setViewOnly(false);
-                                setIsModalOpen(true);
-                            }}
-                            style={{
-                                display: 'flex', alignItems: 'center', gap: 8,
-                                padding: '9px 18px', borderRadius: 8,
-                                border: 'none', background: 'linear-gradient(135deg, var(--primary-600), var(--primary-500))',
-                                fontSize: 11, fontWeight: 600, color: 'white',
-                                cursor: 'pointer', boxShadow: '0 1px 3px rgba(37, 99, 235, 0.3)',
-                            }}
-                        >
-                            <Plus size={16} /> Add Customer
-                        </button>
+                        {canEdit && (
+                            <button
+                                onClick={() => setIsImportModalOpen(true)}
+                                style={{
+                                    display: 'flex', alignItems: 'center', gap: 8,
+                                    padding: '9px 16px', borderRadius: 8,
+                                    border: '1px solid var(--slate-200)', background: 'var(--card-bg)',
+                                    fontSize: 11, fontWeight: 500, color: 'var(--slate-700)',
+                                    cursor: 'pointer',
+                                }}
+                            >
+                                <Upload size={16} /> Import Excel
+                            </button>
+                        )}
+                        {canEdit && (
+                            <button
+                                onClick={() => {
+                                    setSelectedCustomer(null);
+                                    setViewOnly(false);
+                                    setIsModalOpen(true);
+                                }}
+                                style={{
+                                    display: 'flex', alignItems: 'center', gap: 8,
+                                    padding: '9px 18px', borderRadius: 8,
+                                    border: 'none', background: 'linear-gradient(135deg, var(--primary-600), var(--primary-500))',
+                                    fontSize: 11, fontWeight: 600, color: 'white',
+                                    cursor: 'pointer', boxShadow: '0 1px 3px rgba(37, 99, 235, 0.3)',
+                                }}
+                            >
+                                <Plus size={16} /> Add Customer
+                            </button>
+                        )}
                     </>
                 }
             />

@@ -8,7 +8,7 @@ import StatCard from '@/components/StatCard';
 import StatusBadge from '@/components/StatusBadge';
 import TaxPeriodModal from '@/components/TaxPeriodModal';
 import { Plus, Banknote, TrendingUp, TrendingDown, Calendar, Pencil } from 'lucide-react';
-import { useSupabaseQuery } from '@/lib/hooks';
+import { useSupabaseQuery, useCanAct } from '@/lib/hooks';
 import { formatCurrency } from '@/lib/currency';
 
 const statusVariant = (s: string): 'success' | 'warning' | 'danger' | 'default' => {
@@ -24,6 +24,7 @@ export default function TaxPage() {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedRecord, setSelectedRecord] = useState<any>(null);
     const queryClient = useQueryClient();
+    const canEdit = useCanAct('accounting', 'edit');
 
     const { data, isLoading: loading } = useSupabaseQuery<any>('tax_periods', {
         orderBy: 'created_at',
@@ -108,23 +109,25 @@ export default function TaxPage() {
             label: 'Actions',
             render: (_: any, row: any) => (
                 <div style={{ display: 'flex', gap: 8 }}>
-                    <button
-                        onClick={() => {
-                            setSelectedRecord(row);
-                            setIsModalOpen(true);
-                        }}
-                        style={{
-                            padding: 6,
-                            borderRadius: 6,
-                            border: '1px solid var(--slate-200)',
-                            background: 'var(--card-bg)',
-                            color: 'var(--primary-600)',
-                            cursor: 'pointer',
-                        }}
-                        title="Edit"
-                    >
-                        <Pencil size={14} />
-                    </button>
+                    {canEdit && (
+                        <button
+                            onClick={() => {
+                                setSelectedRecord(row);
+                                setIsModalOpen(true);
+                            }}
+                            style={{
+                                padding: 6,
+                                borderRadius: 6,
+                                border: '1px solid var(--slate-200)',
+                                background: 'var(--card-bg)',
+                                color: 'var(--primary-600)',
+                                cursor: 'pointer',
+                            }}
+                            title="Edit"
+                        >
+                            <Pencil size={14} />
+                        </button>
+                    )}
                 </div>
             ),
         },
@@ -137,27 +140,29 @@ export default function TaxPage() {
                 subtitle="VAT/GST tracking, calculations, and filing"
                 breadcrumbs={[{ label: 'Accounting', href: '/accounting/tax' }, { label: 'Tax Management' }]}
                 actions={
-                    <button
-                        onClick={() => {
-                            setSelectedRecord(null);
-                            setIsModalOpen(true);
-                        }}
-                        style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 8,
-                            padding: '9px 18px',
-                            borderRadius: 8,
-                            border: 'none',
-                            background: 'linear-gradient(135deg, var(--primary-600), var(--primary-500))',
-                            fontSize: 11,
-                            fontWeight: 600,
-                            color: 'white',
-                            cursor: 'pointer',
-                        }}
-                    >
-                        <Plus size={16} /> New Period
-                    </button>
+                    canEdit ? (
+                        <button
+                            onClick={() => {
+                                setSelectedRecord(null);
+                                setIsModalOpen(true);
+                            }}
+                            style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 8,
+                                padding: '9px 18px',
+                                borderRadius: 8,
+                                border: 'none',
+                                background: 'linear-gradient(135deg, var(--primary-600), var(--primary-500))',
+                                fontSize: 11,
+                                fontWeight: 600,
+                                color: 'white',
+                                cursor: 'pointer',
+                            }}
+                        >
+                            <Plus size={16} /> New Period
+                        </button>
+                    ) : undefined
                 }
             />
 

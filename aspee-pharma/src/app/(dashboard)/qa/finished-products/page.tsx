@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { useSupabaseQuery } from '@/lib/hooks';
+import { useSupabaseQuery, useCanAct } from '@/lib/hooks';
 import { useQueryClient } from '@tanstack/react-query';
 import PageHeader from '@/components/PageHeader';
 import DataTable from '@/components/DataTable';
@@ -20,6 +20,7 @@ export default function QAFinishedProductsPage() {
     });
     const records = data ?? [];
     const queryClient = useQueryClient();
+    const canEdit = useCanAct('qa', 'edit');
 
     const router = useRouter();
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -207,30 +208,34 @@ export default function QAFinishedProductsPage() {
                     >
                         <Eye size={14} />
                     </button>
-                    <button
-                        onClick={(e) => handleEdit(row, e)}
-                        title="Edit"
-                        style={{
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            width: 28, height: 28, borderRadius: 6,
-                            border: '1px solid var(--slate-200)', background: 'white',
-                            color: 'var(--primary-600)', fontSize: 12, cursor: 'pointer'
-                        }}
-                    >
-                        <Pencil size={14} />
-                    </button>
-                    <button
-                        onClick={(e) => handleDelete(row, e)}
-                        title="Delete"
-                        style={{
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            width: 28, height: 28, borderRadius: 6,
-                            border: '1px solid var(--slate-200)', background: 'white',
-                            color: 'var(--red-600)', fontSize: 12, cursor: 'pointer'
-                        }}
-                    >
-                        <Trash2 size={14} />
-                    </button>
+                    {canEdit && (
+                        <>
+                            <button
+                                onClick={(e) => handleEdit(row, e)}
+                                title="Edit"
+                                style={{
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    width: 28, height: 28, borderRadius: 6,
+                                    border: '1px solid var(--slate-200)', background: 'white',
+                                    color: 'var(--primary-600)', fontSize: 12, cursor: 'pointer'
+                                }}
+                            >
+                                <Pencil size={14} />
+                            </button>
+                            <button
+                                onClick={(e) => handleDelete(row, e)}
+                                title="Delete"
+                                style={{
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    width: 28, height: 28, borderRadius: 6,
+                                    border: '1px solid var(--slate-200)', background: 'white',
+                                    color: 'var(--red-600)', fontSize: 12, cursor: 'pointer'
+                                }}
+                            >
+                                <Trash2 size={14} />
+                            </button>
+                        </>
+                    )}
                 </div>
             )
         }
@@ -274,18 +279,20 @@ export default function QAFinishedProductsPage() {
                         >
                             <Download size={16} /> Export
                         </button>
-                        <button
-                            onClick={() => { setSelectedRecord(null); setIsModalOpen(true); }}
-                            style={{
-                                display: 'flex', alignItems: 'center', gap: 8,
-                                padding: '9px 18px', borderRadius: 8,
-                                border: 'none', background: 'linear-gradient(135deg, var(--primary-600), var(--primary-500))',
-                                fontSize: 11, fontWeight: 600, color: 'white',
-                                cursor: 'pointer',
-                            }}
-                        >
-                            <Plus size={16} /> Add Analysis Record
-                        </button>
+                        {canEdit && (
+                            <button
+                                onClick={() => { setSelectedRecord(null); setIsModalOpen(true); }}
+                                style={{
+                                    display: 'flex', alignItems: 'center', gap: 8,
+                                    padding: '9px 18px', borderRadius: 8,
+                                    border: 'none', background: 'linear-gradient(135deg, var(--primary-600), var(--primary-500))',
+                                    fontSize: 11, fontWeight: 600, color: 'white',
+                                    cursor: 'pointer',
+                                }}
+                            >
+                                <Plus size={16} /> Add Analysis Record
+                            </button>
+                        )}
                     </>
                 }
             />

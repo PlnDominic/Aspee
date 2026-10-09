@@ -7,7 +7,7 @@ import StatCard from '@/components/StatCard';
 import StatusBadge from '@/components/StatusBadge';
 import { Plus, Eye, Trash2, AlertTriangle, Package, Hash, Download } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
-import { useFetch, useAction } from '@/lib/hooks';
+import { useFetch, useAction, useCanAct } from '@/lib/hooks';
 import { toast } from 'sonner';
 import { useQueryClient } from '@tanstack/react-query';
 import MaterialDefectModal from '@/components/MaterialDefectModal';
@@ -27,6 +27,7 @@ export default function MaterialDefectsPage() {
     const [modalMode, setModalMode] = useState<'create' | 'view'>('create');
     const [selectedRecord, setSelectedRecord] = useState<any>(null);
     const queryClient = useQueryClient();
+    const canEdit = useCanAct('stores', 'edit');
 
     const { data: records = [], isLoading: loading } = useFetch<any[]>(
         ['stock_material_defects'],
@@ -182,13 +183,15 @@ export default function MaterialDefectsPage() {
                     >
                         <Eye size={14} />
                     </button>
-                    <button
-                        onClick={() => handleDelete(row.id)}
-                        style={{ padding: 6, borderRadius: 6, border: '1px solid var(--slate-200)', background: 'var(--card-bg)', color: 'var(--danger)', cursor: 'pointer' }}
-                        title="Delete"
-                    >
-                        <Trash2 size={14} />
-                    </button>
+                    {canEdit && (
+                        <button
+                            onClick={() => handleDelete(row.id)}
+                            style={{ padding: 6, borderRadius: 6, border: '1px solid var(--slate-200)', background: 'var(--card-bg)', color: 'var(--danger)', cursor: 'pointer' }}
+                            title="Delete"
+                        >
+                            <Trash2 size={14} />
+                        </button>
+                    )}
                 </div>
             ),
         },
@@ -212,12 +215,14 @@ export default function MaterialDefectsPage() {
                         >
                             <Download size={15} /> Export
                         </button>
-                        <button
-                            onClick={() => { setModalMode('create'); setSelectedRecord(null); setIsModalOpen(true); }}
-                            style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 18px', borderRadius: 8, border: 'none', background: 'linear-gradient(135deg, #dc2626, #ef4444)', fontSize: 11, fontWeight: 600, color: 'white', cursor: 'pointer' }}
-                        >
-                            <Plus size={15} /> Log Defect
-                        </button>
+                        {canEdit && (
+                            <button
+                                onClick={() => { setModalMode('create'); setSelectedRecord(null); setIsModalOpen(true); }}
+                                style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 18px', borderRadius: 8, border: 'none', background: 'linear-gradient(135deg, #dc2626, #ef4444)', fontSize: 11, fontWeight: 600, color: 'white', cursor: 'pointer' }}
+                            >
+                                <Plus size={15} /> Log Defect
+                            </button>
+                        )}
                     </div>
                 }
             />

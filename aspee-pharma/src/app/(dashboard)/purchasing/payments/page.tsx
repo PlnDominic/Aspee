@@ -10,7 +10,7 @@ import { Plus, Eye, CreditCard, Edit2, Trash2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { formatCurrency } from '@/lib/formatCurrency';
-import { useFetch, useAction } from '@/lib/hooks';
+import { useFetch, useAction, useCanAct } from '@/lib/hooks';
 import { logAudit } from '@/lib/auditLog';
 import { autoPostJournal } from '@/lib/autoPostJournal';
 
@@ -18,6 +18,7 @@ export default function SupplierPaymentsPage() {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedPayment, setSelectedPayment] = useState<any>(null);
     const [modalMode, setModalMode] = useState<'create' | 'edit' | 'view'>('create');
+    const canEdit = useCanAct('purchasing', 'edit');
 
     const { data: paymentsList, isLoading: loading } = useFetch<any[]>(
         ['supplier_payments', '*, purchase_orders:po_id(po_number, total_amount, supplier_id, currency), suppliers:supplier_id(name)'],
@@ -289,28 +290,32 @@ export default function SupplierPaymentsPage() {
                     >
                         <Eye size={16} />
                     </button>
-                    <button
-                        onClick={() => handleEditPayment(row)}
-                        title="Edit Payment"
-                        style={{
-                            border: 'none', background: 'var(--primary-50)', color: 'var(--primary-600)',
-                            width: '32px', height: '32px', borderRadius: '6px',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer'
-                        }}
-                    >
-                        <Edit2 size={16} />
-                    </button>
-                    <button
-                        onClick={() => handleDeletePayment(row.id as string)}
-                        title="Delete Payment"
-                        style={{
-                            border: 'none', background: 'var(--danger-50)', color: 'var(--danger)',
-                            width: '32px', height: '32px', borderRadius: '6px',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer'
-                        }}
-                    >
-                        <Trash2 size={16} />
-                    </button>
+                    {canEdit && (
+                        <>
+                            <button
+                                onClick={() => handleEditPayment(row)}
+                                title="Edit Payment"
+                                style={{
+                                    border: 'none', background: 'var(--primary-50)', color: 'var(--primary-600)',
+                                    width: '32px', height: '32px', borderRadius: '6px',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer'
+                                }}
+                            >
+                                <Edit2 size={16} />
+                            </button>
+                            <button
+                                onClick={() => handleDeletePayment(row.id as string)}
+                                title="Delete Payment"
+                                style={{
+                                    border: 'none', background: 'var(--danger-50)', color: 'var(--danger)',
+                                    width: '32px', height: '32px', borderRadius: '6px',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer'
+                                }}
+                            >
+                                <Trash2 size={16} />
+                            </button>
+                        </>
+                    )}
                 </div>
             )
         }
@@ -326,17 +331,19 @@ export default function SupplierPaymentsPage() {
                     { label: 'Supplier Payments' },
                 ]}
                 actions={
-                    <button
-                        onClick={handleCreatePayment}
-                        style={{
-                            display: 'flex', alignItems: 'center', gap: 8,
-                            padding: '9px 18px', borderRadius: 8, border: 'none',
-                            background: 'linear-gradient(135deg, var(--primary-600), var(--primary-500))',
-                            fontSize: 11, fontWeight: 600, color: 'white', cursor: 'pointer',
-                        }}
-                    >
-                        <Plus size={16} /> Record Payment
-                    </button>
+                    canEdit ? (
+                        <button
+                            onClick={handleCreatePayment}
+                            style={{
+                                display: 'flex', alignItems: 'center', gap: 8,
+                                padding: '9px 18px', borderRadius: 8, border: 'none',
+                                background: 'linear-gradient(135deg, var(--primary-600), var(--primary-500))',
+                                fontSize: 11, fontWeight: 600, color: 'white', cursor: 'pointer',
+                            }}
+                        >
+                            <Plus size={16} /> Record Payment
+                        </button>
+                    ) : undefined
                 }
             />
             <DataTable columns={columns} data={payments} searchPlaceholder="Search payments..." loading={loading} />

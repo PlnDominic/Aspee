@@ -9,6 +9,7 @@ import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { Plus, ShieldCheck, AlertTriangle, CalendarDays, FileText, Upload, Trash2, Send } from 'lucide-react';
 import SendToMDModal from '@/components/SendToMDModal';
+import { useCanAct } from '@/lib/hooks';
 
 const BUCKET = 'compliance-documents';
 
@@ -46,6 +47,7 @@ function safeFileName(name: string) {
 }
 
 export default function RegulatorsPage() {
+  const canEdit = useCanAct('compliance', 'edit');
   const [rows, setRows] = React.useState<RegulatoryDoc[]>([]);
   const [loading, setLoading] = React.useState(false);
   const [isReportModalOpen, setIsReportModalOpen] = React.useState(false);
@@ -229,10 +231,14 @@ export default function RegulatorsPage() {
       label: '',
       render: (_: any, row: RegulatoryDoc) => (
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-          <button onClick={() => openModal(row)} style={actionBtn}>Edit</button>
-          <button onClick={() => remove(row)} style={{ ...actionBtn, color: 'var(--danger)' }}>
-            <Trash2 size={14} style={{ display: 'inline', marginRight: 6 }} /> Delete
-          </button>
+          {canEdit && (
+            <>
+              <button onClick={() => openModal(row)} style={actionBtn}>Edit</button>
+              <button onClick={() => remove(row)} style={{ ...actionBtn, color: 'var(--danger)' }}>
+                <Trash2 size={14} style={{ display: 'inline', marginRight: 6 }} /> Delete
+              </button>
+            </>
+          )}
         </div>
       )
     }
@@ -264,9 +270,11 @@ export default function RegulatorsPage() {
             >
                 <Send size={15} /> Send Weekly Report
             </button>
-            <button onClick={() => openModal()} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 16px', borderRadius: 10, border: 'none', background: 'var(--primary-600)', color: 'white', fontWeight: 800, cursor: 'pointer' }}>
-              <Plus size={16} /> Add Regulator Document
-            </button>
+            {canEdit && (
+              <button onClick={() => openModal()} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 16px', borderRadius: 10, border: 'none', background: 'var(--primary-600)', color: 'white', fontWeight: 800, cursor: 'pointer' }}>
+                <Plus size={16} /> Add Regulator Document
+              </button>
+            )}
           </div>
         }
       />

@@ -9,7 +9,7 @@ import BOMModal from '@/components/BOMModal';
 import { Plus, Package, FileText, CheckCircle, AlertTriangle, Eye, Pencil, Trash2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
-import { useFetch, useAction } from '@/lib/hooks';
+import { useFetch, useAction, useCanAct } from '@/lib/hooks';
 import { useQueryClient } from '@tanstack/react-query';
 
 interface BOM {
@@ -32,6 +32,7 @@ export default function BOMPage() {
     const [modalMode, setModalMode] = useState<'create' | 'edit' | 'view'>('create');
     const [selectedBOM, setSelectedBOM] = useState<any>(null);
     const queryClient = useQueryClient();
+    const canEdit = useCanAct('production', 'edit');
 
     const { data: boms = [], isLoading: loading } = useFetch<any[]>(
         ['bill_of_materials', 'with-counts'],
@@ -251,27 +252,31 @@ export default function BOMPage() {
                     >
                         <Eye size={14} />
                     </button>
-                    <button
-                        onClick={() => { setSelectedBOM(row); setModalMode('edit'); setIsModalOpen(true); }}
-                        style={{ padding: 6, borderRadius: 6, border: '1px solid var(--slate-200)', background: 'var(--card-bg)', color: 'var(--primary-600)', cursor: 'pointer' }}
-                        title="Edit"
-                    >
-                        <Pencil size={14} />
-                    </button>
-                    <button
-                        onClick={() => handleDuplicateBOM(row)}
-                        style={{ padding: 6, borderRadius: 6, border: '1px solid var(--slate-200)', background: 'var(--card-bg)', color: 'var(--amber-600)', cursor: 'pointer' }}
-                        title="Duplicate"
-                    >
-                        <Plus size={14} />
-                    </button>
-                    <button
-                        onClick={() => handleDeleteBOM(row.id)}
-                        style={{ padding: 6, borderRadius: 6, border: '1px solid var(--slate-200)', background: 'var(--card-bg)', color: 'var(--danger)', cursor: 'pointer' }}
-                        title="Delete"
-                    >
-                        <Trash2 size={14} />
-                    </button>
+                    {canEdit && (
+                        <>
+                            <button
+                                onClick={() => { setSelectedBOM(row); setModalMode('edit'); setIsModalOpen(true); }}
+                                style={{ padding: 6, borderRadius: 6, border: '1px solid var(--slate-200)', background: 'var(--card-bg)', color: 'var(--primary-600)', cursor: 'pointer' }}
+                                title="Edit"
+                            >
+                                <Pencil size={14} />
+                            </button>
+                            <button
+                                onClick={() => handleDuplicateBOM(row)}
+                                style={{ padding: 6, borderRadius: 6, border: '1px solid var(--slate-200)', background: 'var(--card-bg)', color: 'var(--amber-600)', cursor: 'pointer' }}
+                                title="Duplicate"
+                            >
+                                <Plus size={14} />
+                            </button>
+                            <button
+                                onClick={() => handleDeleteBOM(row.id)}
+                                style={{ padding: 6, borderRadius: 6, border: '1px solid var(--slate-200)', background: 'var(--card-bg)', color: 'var(--danger)', cursor: 'pointer' }}
+                                title="Delete"
+                            >
+                                <Trash2 size={14} />
+                            </button>
+                        </>
+                    )}
                 </div>
             )
         }
@@ -291,12 +296,14 @@ export default function BOMPage() {
                 subtitle="Define and manage raw material compositions for finished products"
                 breadcrumbs={[{ label: 'Production' }, { label: 'Bill of Materials' }]}
                 actions={
-                    <button
-                        onClick={() => { setModalMode('create'); setSelectedBOM(null); setIsModalOpen(true); }}
-                        style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 18px', borderRadius: 8, border: 'none', background: 'linear-gradient(135deg, var(--primary-600), var(--primary-500))', fontSize: 13, fontWeight: 600, color: 'white', cursor: 'pointer' }}
-                    >
-                        <Plus size={16} /> New BOM
-                    </button>
+                    canEdit ? (
+                        <button
+                            onClick={() => { setModalMode('create'); setSelectedBOM(null); setIsModalOpen(true); }}
+                            style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 18px', borderRadius: 8, border: 'none', background: 'linear-gradient(135deg, var(--primary-600), var(--primary-500))', fontSize: 13, fontWeight: 600, color: 'white', cursor: 'pointer' }}
+                        >
+                            <Plus size={16} /> New BOM
+                        </button>
+                    ) : undefined
                 }
             />
 

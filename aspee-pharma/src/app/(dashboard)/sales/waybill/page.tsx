@@ -9,8 +9,10 @@ import { FileText, Plus, Eye, Trash2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { formatCurrency } from '@/lib/formatCurrency';
+import { useCanAct } from '@/lib/hooks';
 
 export default function WaybillPage() {
+    const canEdit = useCanAct('sales', 'edit');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedWaybill, setSelectedWaybill] = useState<any>(null);
     const [waybills, setWaybills] = useState<any[]>([]);
@@ -153,7 +155,7 @@ export default function WaybillPage() {
                     >
                         <Eye size={14} />
                     </button>
-                    {row.source !== 'sales_request' && (
+                    {row.source !== 'sales_request' && canEdit && (
                         <button
                             onClick={() => handleDeleteWaybill(row)}
                             style={{ padding: 6, borderRadius: 6, border: '1px solid var(--slate-200)', background: 'var(--card-bg)', color: 'var(--danger)', cursor: 'pointer' }}
@@ -179,20 +181,22 @@ export default function WaybillPage() {
                 subtitle="Generate and track stock-loading waybills for van sales routes"
                 breadcrumbs={[{ label: 'Sales', href: '/sales/invoices' }, { label: 'Waybills' }]}
                 actions={
-                    <button
-                        onClick={() => {
-                            setSelectedWaybill(null);
-                            setIsModalOpen(true);
-                        }}
-                        style={{
-                            display: 'flex', alignItems: 'center', gap: 8,
-                            padding: '9px 18px', borderRadius: 8, border: 'none',
-                            background: 'linear-gradient(135deg, var(--primary-600), var(--primary-500))',
-                            fontSize: 11, fontWeight: 600, color: 'white', cursor: 'pointer',
-                        }}
-                    >
-                        <Plus size={16} /> Generate Waybill
-                    </button>
+                    canEdit ? (
+                        <button
+                            onClick={() => {
+                                setSelectedWaybill(null);
+                                setIsModalOpen(true);
+                            }}
+                            style={{
+                                display: 'flex', alignItems: 'center', gap: 8,
+                                padding: '9px 18px', borderRadius: 8, border: 'none',
+                                background: 'linear-gradient(135deg, var(--primary-600), var(--primary-500))',
+                                fontSize: 11, fontWeight: 600, color: 'white', cursor: 'pointer',
+                            }}
+                        >
+                            <Plus size={16} /> Generate Waybill
+                        </button>
+                    ) : undefined
                 }
             />
 

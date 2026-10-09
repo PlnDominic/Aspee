@@ -7,7 +7,7 @@ import StatCard from '@/components/StatCard';
 import StatusBadge from '@/components/StatusBadge';
 import VanModal from '@/components/VanModal';
 import { Plus, Route, Banknote, MapPin, Users, Edit2, Trash2, Eye } from 'lucide-react';
-import { useSupabaseQuery, useDelete } from '@/lib/hooks';
+import { useSupabaseQuery, useDelete, useCanAct } from '@/lib/hooks';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { formatCurrency } from '@/lib/currency';
@@ -17,6 +17,7 @@ export default function RoutesPage() {
     const { data, isLoading: loading } = useSupabaseQuery<any>('vans');
     const vans = data ?? [];
     const queryClient = useQueryClient();
+    const canEdit = useCanAct('sales', 'edit');
 
     const { data: loadedValueMap = {} } = useQuery<Record<string, number>>({
         queryKey: ['vans', 'loaded-values', vans.map(v => v.van_id).join(',')],
@@ -196,20 +197,24 @@ export default function RoutesPage() {
                     >
                         <Eye size={14} />
                     </button>
-                    <button
-                        onClick={() => { setSelectedVan(row); setViewOnly(false); setIsModalOpen(true); }}
-                        style={{ padding: 6, borderRadius: 6, border: '1px solid var(--slate-200)', background: 'var(--card-bg)', color: 'var(--primary-600)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                        title="Edit Route"
-                    >
-                        <Edit2 size={14} />
-                    </button>
-                    <button
-                        onClick={() => handleDelete(row.id)}
-                        style={{ padding: 6, borderRadius: 6, border: '1px solid var(--slate-200)', background: 'var(--card-bg)', color: 'var(--danger)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                        title="Delete Route"
-                    >
-                        <Trash2 size={14} />
-                    </button>
+                    {canEdit && (
+                        <>
+                            <button
+                                onClick={() => { setSelectedVan(row); setViewOnly(false); setIsModalOpen(true); }}
+                                style={{ padding: 6, borderRadius: 6, border: '1px solid var(--slate-200)', background: 'var(--card-bg)', color: 'var(--primary-600)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                title="Edit Route"
+                            >
+                                <Edit2 size={14} />
+                            </button>
+                            <button
+                                onClick={() => handleDelete(row.id)}
+                                style={{ padding: 6, borderRadius: 6, border: '1px solid var(--slate-200)', background: 'var(--card-bg)', color: 'var(--danger)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                title="Delete Route"
+                            >
+                                <Trash2 size={14} />
+                            </button>
+                        </>
+                    )}
                 </div>
             )
         }
@@ -222,12 +227,14 @@ export default function RoutesPage() {
                 subtitle="Sales person route assignments, locations, and daily operations"
                 breadcrumbs={[{ label: 'Routes' }]}
                 actions={
-                    <button
-                        onClick={() => { setSelectedVan(null); setViewOnly(false); setIsModalOpen(true); }}
-                        style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 18px', borderRadius: 8, border: 'none', background: 'linear-gradient(135deg, var(--primary-600), var(--primary-500))', fontSize: 11, fontWeight: 600, color: 'white', cursor: 'pointer' }}
-                    >
-                        <Plus size={16} /> Add Route
-                    </button>
+                    canEdit ? (
+                        <button
+                            onClick={() => { setSelectedVan(null); setViewOnly(false); setIsModalOpen(true); }}
+                            style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 18px', borderRadius: 8, border: 'none', background: 'linear-gradient(135deg, var(--primary-600), var(--primary-500))', fontSize: 11, fontWeight: 600, color: 'white', cursor: 'pointer' }}
+                        >
+                            <Plus size={16} /> Add Route
+                        </button>
+                    ) : undefined
                 }
             />
 

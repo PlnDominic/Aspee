@@ -8,7 +8,7 @@ import StatusBadge from '@/components/StatusBadge';
 import EmployeePayrollModal from '@/components/EmployeePayrollModal';
 import { Users, Banknote, CheckCircle, CreditCard, Edit2, Info } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
-import { useSupabaseQuery, useSave, useDelete } from '@/lib/hooks';
+import { useSupabaseQuery, useSave, useDelete, useCanAct } from '@/lib/hooks';
 import { useQueryClient } from '@tanstack/react-query';
 import { formatCurrency } from '@/lib/currency';
 import { toast } from 'sonner';
@@ -17,6 +17,7 @@ import { toast } from 'sonner';
 const ACCOUNTS_STATUSES = ['Approved by HR', 'Processed', 'Paid'];
 
 export default function PayrollPage() {
+    const canEdit = useCanAct('accounting', 'edit');
     const { data, isLoading: loading } = useSupabaseQuery<any>('payroll', {
         orderBy: 'created_at',
         ascending: false,
@@ -115,7 +116,7 @@ export default function PayrollPage() {
                             Mark Paid
                         </button>
                     )}
-                    {row.status !== 'Paid' && (
+                    {row.status !== 'Paid' && canEdit && (
                         <button
                             onClick={() => { setSelectedRecord(row); setIsModalOpen(true); }}
                             style={actionButtonStyle}

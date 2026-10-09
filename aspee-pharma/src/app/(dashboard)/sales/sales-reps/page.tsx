@@ -8,13 +8,14 @@ import StatCard from '@/components/StatCard';
 import StatusBadge from '@/components/StatusBadge';
 import SalesRepModal from '@/components/SalesRepModal';
 import { Plus, Users, UserCheck, UserX, Edit2, Trash2, Power, PowerOff } from 'lucide-react';
-import { useSupabaseQuery, useAction, useDelete } from '@/lib/hooks';
+import { useSupabaseQuery, useAction, useDelete, useCanAct } from '@/lib/hooks';
 import { supabase } from '@/lib/supabase';
 
 export default function SalesRepsPage() {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingRecord, setEditingRecord] = useState<any>(null);
     const queryClient = useQueryClient();
+    const canEdit = useCanAct('sales', 'edit');
 
     const { data, isLoading: loading } = useSupabaseQuery<any>('sales_reps', {
         orderBy: 'name',
@@ -81,13 +82,15 @@ export default function SalesRepsPage() {
             label: 'Actions',
             render: (_v: unknown, row: any) => (
                 <div style={{ display: 'flex', gap: 8 }}>
-                    <button
-                        onClick={(e) => { e.stopPropagation(); handleOpenEdit(row); }}
-                        style={actionButtonStyle}
-                        title="Edit sales rep"
-                    >
-                        <Edit2 size={14} />
-                    </button>
+                    {canEdit && (
+                        <button
+                            onClick={(e) => { e.stopPropagation(); handleOpenEdit(row); }}
+                            style={actionButtonStyle}
+                            title="Edit sales rep"
+                        >
+                            <Edit2 size={14} />
+                        </button>
+                    )}
                     <button
                         onClick={(e) => { e.stopPropagation(); handleToggleStatus(row); }}
                         style={{
@@ -99,13 +102,15 @@ export default function SalesRepsPage() {
                     >
                         {row.status === 'Active' ? <PowerOff size={14} /> : <Power size={14} />}
                     </button>
-                    <button
-                        onClick={(e) => { e.stopPropagation(); handleDelete(row); }}
-                        style={{ ...actionButtonStyle, color: 'var(--danger)' }}
-                        title="Remove sales rep"
-                    >
-                        <Trash2 size={14} />
-                    </button>
+                    {canEdit && (
+                        <button
+                            onClick={(e) => { e.stopPropagation(); handleDelete(row); }}
+                            style={{ ...actionButtonStyle, color: 'var(--danger)' }}
+                            title="Remove sales rep"
+                        >
+                            <Trash2 size={14} />
+                        </button>
+                    )}
                 </div>
             ),
         },
@@ -118,24 +123,26 @@ export default function SalesRepsPage() {
                 subtitle="Roster of van sales reps and sales managers — not tied to system login accounts"
                 breadcrumbs={[{ label: 'Sales', href: '/sales/sales-reps' }, { label: 'Sales Reps' }]}
                 actions={
-                    <button
-                        onClick={handleOpenCreate}
-                        style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 8,
-                            padding: '9px 18px',
-                            borderRadius: 8,
-                            border: 'none',
-                            background: 'linear-gradient(135deg, var(--primary-600), var(--primary-500))',
-                            fontSize: 11,
-                            fontWeight: 600,
-                            color: 'white',
-                            cursor: 'pointer',
-                        }}
-                    >
-                        <Plus size={16} /> Add Sales Rep
-                    </button>
+                    canEdit ? (
+                        <button
+                            onClick={handleOpenCreate}
+                            style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 8,
+                                padding: '9px 18px',
+                                borderRadius: 8,
+                                border: 'none',
+                                background: 'linear-gradient(135deg, var(--primary-600), var(--primary-500))',
+                                fontSize: 11,
+                                fontWeight: 600,
+                                color: 'white',
+                                cursor: 'pointer',
+                            }}
+                        >
+                            <Plus size={16} /> Add Sales Rep
+                        </button>
+                    ) : undefined
                 }
             />
 

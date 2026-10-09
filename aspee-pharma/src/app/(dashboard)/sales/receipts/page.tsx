@@ -11,7 +11,7 @@ import { Plus, CreditCard, Banknote, CheckCircle, Clock, Eye, Pencil, Trash2 } f
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { formatCurrency } from '@/lib/currency';
-import { useFetch } from '@/lib/hooks';
+import { useFetch, useCanAct } from '@/lib/hooks';
 import { useQueryClient } from '@tanstack/react-query';
 import ReceiptViewModal from '@/components/ReceiptViewModal';
 import { logAudit } from '@/lib/auditLog';
@@ -21,6 +21,7 @@ export default function ReceiptsPage() {
     const [viewReceipt, setViewReceipt] = useState<any>(null);
     const [editReceipt, setEditReceipt] = useState<any>(null);
     const queryClient = useQueryClient();
+    const canEdit = useCanAct('sales', 'edit');
 
     const { data: receiptsList, isLoading: loading } = useFetch<any[]>(
         ['sales_receipts'],
@@ -213,20 +214,24 @@ export default function ReceiptsPage() {
                     >
                         <Eye size={14} />
                     </button>
-                    <button
-                        onClick={() => handleEditReceipt(row)}
-                        title="Edit Receipt"
-                        style={{ padding: 6, borderRadius: 6, border: '1px solid var(--slate-200)', background: 'var(--card-bg)', color: 'var(--primary-600)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                    >
-                        <Pencil size={14} />
-                    </button>
-                    <button
-                        onClick={() => handleDeleteReceipt(row)}
-                        title={row.confirmation_status === 'confirmed' ? 'Delete Receipt (confirmed by Accounts — Accounts role required)' : 'Delete Receipt'}
-                        style={{ padding: 6, borderRadius: 6, border: '1px solid var(--slate-200)', background: 'var(--card-bg)', color: 'var(--danger)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                    >
-                        <Trash2 size={14} />
-                    </button>
+                    {canEdit && (
+                        <>
+                            <button
+                                onClick={() => handleEditReceipt(row)}
+                                title="Edit Receipt"
+                                style={{ padding: 6, borderRadius: 6, border: '1px solid var(--slate-200)', background: 'var(--card-bg)', color: 'var(--primary-600)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                            >
+                                <Pencil size={14} />
+                            </button>
+                            <button
+                                onClick={() => handleDeleteReceipt(row)}
+                                title={row.confirmation_status === 'confirmed' ? 'Delete Receipt (confirmed by Accounts — Accounts role required)' : 'Delete Receipt'}
+                                style={{ padding: 6, borderRadius: 6, border: '1px solid var(--slate-200)', background: 'var(--card-bg)', color: 'var(--danger)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                            >
+                                <Trash2 size={14} />
+                            </button>
+                        </>
+                    )}
                 </div>
             )
         },
@@ -246,12 +251,14 @@ export default function ReceiptsPage() {
                 subtitle="Payment receipts and collections"
                 breadcrumbs={[{ label: 'Sales', href: '/sales/receipts' }, { label: 'Receipts' }]}
                 actions={
-                    <button
-                        onClick={() => setIsModalOpen(true)}
-                        style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 18px', borderRadius: 8, border: 'none', background: 'linear-gradient(135deg, var(--primary-600), var(--primary-500))', fontSize: 11, fontWeight: 600, color: 'white', cursor: 'pointer' }}
-                    >
-                        <Plus size={16} /> Record Receipt
-                    </button>
+                    canEdit ? (
+                        <button
+                            onClick={() => setIsModalOpen(true)}
+                            style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 18px', borderRadius: 8, border: 'none', background: 'linear-gradient(135deg, var(--primary-600), var(--primary-500))', fontSize: 11, fontWeight: 600, color: 'white', cursor: 'pointer' }}
+                        >
+                            <Plus size={16} /> Record Receipt
+                        </button>
+                    ) : undefined
                 }
             />
 

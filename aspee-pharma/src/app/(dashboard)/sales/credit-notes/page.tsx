@@ -11,7 +11,7 @@ import { Plus, FileText, Banknote, Clock, CheckCircle, Edit2, Eye, Trash2 } from
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { formatCurrency } from '@/lib/currency';
-import { useFetch } from '@/lib/hooks';
+import { useFetch, useCanAct } from '@/lib/hooks';
 import { useQueryClient } from '@tanstack/react-query';
 
 export default function CreditNotesPage() {
@@ -19,6 +19,7 @@ export default function CreditNotesPage() {
     const [editingRecord, setEditingRecord] = useState<any>(null);
     const [viewOnly, setViewOnly] = useState(false);
     const queryClient = useQueryClient();
+    const canEdit = useCanAct('sales', 'edit');
 
     const { data: creditNotesList, isLoading: loading, error } = useFetch<any[]>(
         ['credit_notes'],
@@ -162,14 +163,16 @@ export default function CreditNotesPage() {
                     >
                         <Eye size={14} />
                     </button>
-                    <button
-                        onClick={(e) => { e.stopPropagation(); handleEdit(row); }}
-                        title="Edit"
-                        style={{ padding: 6, borderRadius: 6, border: '1px solid var(--slate-200)', background: 'var(--card-bg)', color: 'var(--primary-600)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                    >
-                        <Edit2 size={14} />
-                    </button>
-                    {row.status === 'Draft' && (
+                    {canEdit && (
+                        <button
+                            onClick={(e) => { e.stopPropagation(); handleEdit(row); }}
+                            title="Edit"
+                            style={{ padding: 6, borderRadius: 6, border: '1px solid var(--slate-200)', background: 'var(--card-bg)', color: 'var(--primary-600)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                        >
+                            <Edit2 size={14} />
+                        </button>
+                    )}
+                    {row.status === 'Draft' && canEdit && (
                         <button
                             onClick={(e) => { e.stopPropagation(); handleDelete(row); }}
                             title="Delete"
@@ -197,24 +200,26 @@ export default function CreditNotesPage() {
                 subtitle="Returns, price corrections, and sales adjustments"
                 breadcrumbs={[{ label: 'Sales', href: '/sales/credit-notes' }, { label: 'Credit Notes' }]}
                 actions={
-                    <button
-                        onClick={handleNewCreditNote}
-                        style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 8,
-                            padding: '9px 18px',
-                            borderRadius: 8,
-                            border: 'none',
-                            background: 'linear-gradient(135deg, var(--primary-600), var(--primary-500))',
-                            fontSize: 11,
-                            fontWeight: 600,
-                            color: 'white',
-                            cursor: 'pointer'
-                        }}
-                    >
-                        <Plus size={16} /> New Credit Note
-                    </button>
+                    canEdit ? (
+                        <button
+                            onClick={handleNewCreditNote}
+                            style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 8,
+                                padding: '9px 18px',
+                                borderRadius: 8,
+                                border: 'none',
+                                background: 'linear-gradient(135deg, var(--primary-600), var(--primary-500))',
+                                fontSize: 11,
+                                fontWeight: 600,
+                                color: 'white',
+                                cursor: 'pointer'
+                            }}
+                        >
+                            <Plus size={16} /> New Credit Note
+                        </button>
+                    ) : undefined
                 }
             />
 

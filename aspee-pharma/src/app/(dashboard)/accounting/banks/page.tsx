@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabase';
 import { formatCurrency } from '@/lib/currency';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
+import { useCanAct } from '@/lib/hooks';
 
 interface BankAccount {
     id: string;
@@ -28,6 +29,7 @@ interface BankTransaction {
 
 export default function BanksPage() {
     const queryClient = useQueryClient();
+    const canEdit = useCanAct('accounting', 'edit');
     const [activeTab, setActiveTab] = useState<'overview' | string>('overview');
     const [modal, setModal] = useState<{ bank: BankAccount; type: 'deposit' | 'withdrawal' } | null>(null);
     const [editingTx, setEditingTx] = useState<BankTransaction | null>(null);
@@ -376,20 +378,22 @@ export default function BanksPage() {
                             </div>
 
                             {/* Action buttons */}
-                            <div style={{ display: 'flex', gap: 8 }}>
-                                <button
-                                    onClick={() => setModal({ bank: activeBank, type: 'deposit' })}
-                                    style={{ padding: '10px 18px', borderRadius: 9, border: '1px solid #bbf7d0', background: '#f0fdf4', color: '#15803d', fontWeight: 700, fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
-                                >
-                                    <ArrowDownCircle size={14} /> Deposit
-                                </button>
-                                <button
-                                    onClick={() => setModal({ bank: activeBank, type: 'withdrawal' })}
-                                    style={{ padding: '10px 18px', borderRadius: 9, border: '1px solid #fecaca', background: '#fef2f2', color: '#b91c1c', fontWeight: 700, fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
-                                >
-                                    <ArrowUpCircle size={14} /> Withdrawal
-                                </button>
-                            </div>
+                            {canEdit && (
+                                <div style={{ display: 'flex', gap: 8 }}>
+                                    <button
+                                        onClick={() => setModal({ bank: activeBank, type: 'deposit' })}
+                                        style={{ padding: '10px 18px', borderRadius: 9, border: '1px solid #bbf7d0', background: '#f0fdf4', color: '#15803d', fontWeight: 700, fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
+                                    >
+                                        <ArrowDownCircle size={14} /> Deposit
+                                    </button>
+                                    <button
+                                        onClick={() => setModal({ bank: activeBank, type: 'withdrawal' })}
+                                        style={{ padding: '10px 18px', borderRadius: 9, border: '1px solid #fecaca', background: '#fef2f2', color: '#b91c1c', fontWeight: 700, fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
+                                    >
+                                        <ArrowUpCircle size={14} /> Withdrawal
+                                    </button>
+                                </div>
+                            )}
                         </div>
                     </div>
 
@@ -451,20 +455,24 @@ export default function BanksPage() {
                                                 </td>
                                                 <td style={{ padding: '13px 20px', textAlign: 'right', whiteSpace: 'nowrap' }}>
                                                     <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-                                                        <button
-                                                            onClick={() => setEditingTx(tx)}
-                                                            title="Edit transaction"
-                                                            style={actionButtonStyle}
-                                                        >
-                                                            <Edit2 size={14} />
-                                                        </button>
-                                                        <button
-                                                            onClick={() => handleDeleteTx(tx)}
-                                                            title="Delete transaction"
-                                                            style={{ ...actionButtonStyle, color: 'var(--danger)' }}
-                                                        >
-                                                            <Trash2 size={14} />
-                                                        </button>
+                                                        {canEdit && (
+                                                            <>
+                                                                <button
+                                                                    onClick={() => setEditingTx(tx)}
+                                                                    title="Edit transaction"
+                                                                    style={actionButtonStyle}
+                                                                >
+                                                                    <Edit2 size={14} />
+                                                                </button>
+                                                                <button
+                                                                    onClick={() => handleDeleteTx(tx)}
+                                                                    title="Delete transaction"
+                                                                    style={{ ...actionButtonStyle, color: 'var(--danger)' }}
+                                                                >
+                                                                    <Trash2 size={14} />
+                                                                </button>
+                                                            </>
+                                                        )}
                                                     </div>
                                                 </td>
                                             </tr>

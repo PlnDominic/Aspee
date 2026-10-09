@@ -9,13 +9,14 @@ import EntityLink from '@/components/EntityLink';
 import { Plus, Eye, Edit2, Trash2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
-import { useFetch, useAction, useTableData } from '@/lib/hooks';
+import { useFetch, useAction, useTableData, useCanAct } from '@/lib/hooks';
 import { autoPostJournal, hasAutoPostedNote } from '@/lib/autoPostJournal';
 
 export default function GRNPage() {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedGRN, setSelectedGRN] = useState<any>(null);
     const [modalMode, setModalMode] = useState<'create' | 'edit' | 'view'>('create');
+    const canEdit = useCanAct('purchasing', 'edit');
 
     // Server-side state
     const [page, setPage] = useState(1);
@@ -192,20 +193,24 @@ export default function GRNPage() {
                     >
                         <Eye size={14} />
                     </button>
-                    <button
-                        onClick={() => handleEditGRN(row)}
-                        style={{ padding: 6, borderRadius: 6, border: 'none', background: 'var(--blue-50)', color: 'var(--blue-600)', cursor: 'pointer' }}
-                        title="Edit"
-                    >
-                        <Edit2 size={14} />
-                    </button>
-                    <button
-                        onClick={() => handleDeleteGRN(row.id)}
-                        style={{ padding: 6, borderRadius: 6, border: 'none', background: 'var(--danger-light)', color: 'var(--danger)', cursor: 'pointer' }}
-                        title="Delete"
-                    >
-                        <Trash2 size={14} />
-                    </button>
+                    {canEdit && (
+                        <>
+                            <button
+                                onClick={() => handleEditGRN(row)}
+                                style={{ padding: 6, borderRadius: 6, border: 'none', background: 'var(--blue-50)', color: 'var(--blue-600)', cursor: 'pointer' }}
+                                title="Edit"
+                            >
+                                <Edit2 size={14} />
+                            </button>
+                            <button
+                                onClick={() => handleDeleteGRN(row.id)}
+                                style={{ padding: 6, borderRadius: 6, border: 'none', background: 'var(--danger-light)', color: 'var(--danger)', cursor: 'pointer' }}
+                                title="Delete"
+                            >
+                                <Trash2 size={14} />
+                            </button>
+                        </>
+                    )}
                 </div>
             )
         }
@@ -221,9 +226,11 @@ export default function GRNPage() {
                     { label: 'Goods Receipt Notes' },
                 ]}
                 actions={
-                    <button onClick={handleCreateGRN} className="btn-primary" style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 18px', borderRadius: 8, border: 'none', background: 'linear-gradient(135deg, var(--primary-600), var(--primary-500))', fontSize: 11, fontWeight: 600, color: 'white', cursor: 'pointer' }}>
-                        <Plus size={16} /> Create GRN
-                    </button>
+                    canEdit ? (
+                        <button onClick={handleCreateGRN} className="btn-primary" style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 18px', borderRadius: 8, border: 'none', background: 'linear-gradient(135deg, var(--primary-600), var(--primary-500))', fontSize: 11, fontWeight: 600, color: 'white', cursor: 'pointer' }}>
+                            <Plus size={16} /> Create GRN
+                        </button>
+                    ) : undefined
                 }
             />
             

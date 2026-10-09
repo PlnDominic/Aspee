@@ -8,9 +8,10 @@ import SupplierModal from '@/components/SupplierModal';
 import SupplierProfileModal from '@/components/SupplierProfileModal';
 import EntityLink from '@/components/EntityLink';
 import { Plus, Download, Edit2, Trash2, Mail, Phone, BookOpen, Eye } from 'lucide-react';
-import { useSupabaseQuery, useSave, useDelete } from '@/lib/hooks';
+import { useSupabaseQuery, useSave, useDelete, useCanAct } from '@/lib/hooks';
 
 export default function SuppliersPage() {
+    const canEdit = useCanAct('purchasing', 'edit');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isProfileOpen, setIsProfileOpen] = useState(false);
     const [selectedSupplier, setSelectedSupplier] = useState<any | null>(null);
@@ -132,22 +133,26 @@ export default function SuppliersPage() {
                             <BookOpen size={14} />
                         </span>
                     </EntityLink>
-                    <button
-                        onClick={() => {
-                            setSelectedSupplier(row);
-                            setIsModalOpen(true);
-                        }}
-                        title="Edit Supplier"
-                        style={actionButtonStyle}
-                    >
-                        <Edit2 size={14} />
-                    </button>
-                    <button
-                        onClick={() => handleDelete(row.id)}
-                        style={{ ...actionButtonStyle, color: 'var(--danger)' }}
-                    >
-                        <Trash2 size={14} />
-                    </button>
+                    {canEdit && (
+                        <>
+                            <button
+                                onClick={() => {
+                                    setSelectedSupplier(row);
+                                    setIsModalOpen(true);
+                                }}
+                                title="Edit Supplier"
+                                style={actionButtonStyle}
+                            >
+                                <Edit2 size={14} />
+                            </button>
+                            <button
+                                onClick={() => handleDelete(row.id)}
+                                style={{ ...actionButtonStyle, color: 'var(--danger)' }}
+                            >
+                                <Trash2 size={14} />
+                            </button>
+                        </>
+                    )}
                 </div>
             )
         }
@@ -177,21 +182,23 @@ export default function SuppliersPage() {
                         >
                             <Download size={16} /> Export
                         </button>
-                        <button
-                            onClick={() => {
-                                setSelectedSupplier(null);
-                                setIsModalOpen(true);
-                            }}
-                            style={{
-                                display: 'flex', alignItems: 'center', gap: 8,
-                                padding: '9px 18px', borderRadius: 8,
-                                border: 'none', background: 'linear-gradient(135deg, var(--primary-600), var(--primary-500))',
-                                fontSize: 11, fontWeight: 600, color: 'white',
-                                cursor: 'pointer', boxShadow: '0 1px 3px rgba(37, 99, 235, 0.3)',
-                            }}
-                        >
-                            <Plus size={16} /> Add Supplier
-                        </button>
+                        {canEdit && (
+                            <button
+                                onClick={() => {
+                                    setSelectedSupplier(null);
+                                    setIsModalOpen(true);
+                                }}
+                                style={{
+                                    display: 'flex', alignItems: 'center', gap: 8,
+                                    padding: '9px 18px', borderRadius: 8,
+                                    border: 'none', background: 'linear-gradient(135deg, var(--primary-600), var(--primary-500))',
+                                    fontSize: 11, fontWeight: 600, color: 'white',
+                                    cursor: 'pointer', boxShadow: '0 1px 3px rgba(37, 99, 235, 0.3)',
+                                }}
+                            >
+                                <Plus size={16} /> Add Supplier
+                            </button>
+                        )}
                     </>
                 }
             />

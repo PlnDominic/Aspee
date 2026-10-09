@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import PageHeader from '@/components/PageHeader';
 import DataTable from '@/components/DataTable';
 import StatusBadge from '@/components/StatusBadge';
-import { useSupabaseQuery } from '@/lib/hooks';
+import { useSupabaseQuery, useCanAct } from '@/lib/hooks';
 import { 
     Truck, 
     Search, 
@@ -22,6 +22,7 @@ import {
 import QARawMaterialModal from '@/components/QARawMaterialModal';
 
 export default function QAIncomingMaterialsPage() {
+    const canEdit = useCanAct('qa', 'edit');
     const [searchTerm, setSearchTerm] = useState('');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedGrn, setSelectedGrn] = useState<any>(null);
@@ -134,24 +135,26 @@ export default function QAIncomingMaterialsPage() {
                     >
                         <Eye size={16} />
                     </button>
-                    <button
-                        onClick={() => handleEditGRN(row)}
-                        style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            width: 32,
-                            height: 32,
-                            borderRadius: 6,
-                            border: 'none',
-                            background: 'var(--blue-50)',
-                            color: 'var(--blue-600)',
-                            cursor: 'pointer'
-                        }}
-                        title="Edit QA Inspection"
-                    >
-                        <Edit2 size={16} />
-                    </button>
+                    {canEdit && (
+                        <button
+                            onClick={() => handleEditGRN(row)}
+                            style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                width: 32,
+                                height: 32,
+                                borderRadius: 6,
+                                border: 'none',
+                                background: 'var(--blue-50)',
+                                color: 'var(--blue-600)',
+                                cursor: 'pointer'
+                            }}
+                            title="Edit QA Inspection"
+                        >
+                            <Edit2 size={16} />
+                        </button>
+                    )}
                     <button
                         onClick={() => handleInspect(row)}
                         style={{
