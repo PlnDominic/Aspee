@@ -5,7 +5,7 @@ import Modal from './Modal';
 import { User, Mail, Phone, Shield, Building2, Activity, Lock, KeyRound } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
-import { MODULES, roleDefaultAccess, editWindowDaysForRole, formatEditWindow, type ModuleAccess } from '@/lib/modulePermissions';
+import { MODULES, BUTTONS, roleDefaultAccess, editWindowDaysForRole, formatEditWindow, type ModuleAccess } from '@/lib/modulePermissions';
 
 interface UserFormData {
     id?: string;
@@ -18,6 +18,7 @@ interface UserFormData {
     mfa_enabled: boolean;
     edit_window_override_days: number | null;
     permissions: Record<string, ModuleAccess | ''>;
+    buttonPermissions: Record<string, ModuleAccess | ''>;
 }
 
 interface UserModalProps {
@@ -63,6 +64,7 @@ const initialFormData: UserFormData = {
     mfa_enabled: false,
     edit_window_override_days: null,
     permissions: {},
+    buttonPermissions: {},
 };
 
 export default function UserModal({ isOpen, onClose, onSuccess, record }: UserModalProps) {
@@ -83,6 +85,7 @@ export default function UserModal({ isOpen, onClose, onSuccess, record }: UserMo
                 mfa_enabled: record.mfa_enabled || false,
                 edit_window_override_days: record.edit_window_override_days ?? null,
                 permissions: {},
+                buttonPermissions: {},
             });
 
             // Load this user's saved module overrides — an empty result for a
@@ -102,6 +105,19 @@ export default function UserModal({ isOpen, onClose, onSuccess, record }: UserMo
                     MODULES.forEach((mod) => { loaded[mod.key] = ''; });
                     (data || []).forEach((row: any) => { loaded[row.module] = row.access; });
                     setFormData(prev => ({ ...prev, permissions: loaded }));
+
+                    const { data: buttonData, error: buttonError } = await supabase
+                        .from('user_button_permissions')
+                        .select('module, button, access')
+                        .eq('user_id', record.id);
+                    if (buttonError) {
+                        toast.error('Failed to load button permissions: ' + buttonError.message);
+                        return;
+                    }
+                    const buttons: Record<string, ModuleAccess | ''> = {};
+                    BUTTONS.forEach((button) => { buttons[`${button.module}.${button.key}`] = ''; });
+                    (buttonData || []).forEach((row: any) => { buttons[`${row.module}.${row.button}`] = row.access; });
+                    setFormData(prev => ({ ...prev, buttonPermissions: buttons }));
                 } finally {
                     setLoadingPermissions(false);
                 }
@@ -283,6 +299,34 @@ export default function UserModal({ isOpen, onClose, onSuccess, record }: UserMo
                                 </div>
                             );
                         })}
+                    </div>
+
+                    <div style={{ marginTop: 18 }}>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--slate-700)', marginBottom: 6 }}>Button-level overrides</div>
+                        <p style={{ fontSize: 10, color: 'var(--slate-500)', margin: '0 0 10px' }}>Each button inherits its module access unless explicitly set here.</p>
+                        <div className="user-perm-table">
+                            <div className="user-perm-row user-perm-head"><span>Button</span><span>Access</span></div>
+                            {BUTTONS.map((button) => {
+                                const key = `${button.module}.${button.key}`;
+                                const moduleDefault = roleDefaultAccess(formData.role, button.module);
+                                return (
+                                    <div className="user-perm-row" key={key}>
+                                        <span className="user-perm-label">{button.label}</span>
+                                        <select
+                                            className="user-form-input"
+                                            value={formData.buttonPermissions[key] ?? ''}
+                                            disabled={loadingPermissions}
+                                            onChange={(e) => setFormData((prev) => ({ ...prev, buttonPermissions: { ...prev.buttonPermissions, [key]: e.target.value as ModuleAccess | '' } }))}
+                                        >
+                                            <option value="">Module default ({moduleDefault === 'edit' ? 'Full Edit' : moduleDefault === 'view' ? 'View Only' : 'No Access'})</option>
+                                            <option value="none">No Access</option>
+                                            <option value="view">View Only</option>
+                                            <option value="edit">Full Edit</option>
+                                        </select>
+                                    </div>
+                                );
+                            })}
+                        </div>
                     </div>
 
                     <div className="user-form-field full-width" style={{ marginTop: 14 }}>

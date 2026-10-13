@@ -444,6 +444,35 @@ export function useCanAct(moduleKey: string, require: 'view' | 'edit' = 'edit'):
     return access === 'edit';
 }
 
+export function useButtonPermissions() {
+    const { data: currentUser } = useCurrentUser();
+
+    return useQuery({
+        queryKey: ['buttonPermissions', currentUser?.id],
+        enabled: !!currentUser?.id,
+        queryFn: async () => {
+            const { data, error } = await supabase
+                .from('user_button_permissions')
+                .select('module, button, access')
+                .eq('user_id', currentUser!.id);
+            if (error) throw error;
+            const map: Record<string, 'none' | 'view' | 'edit'> = {};
+            (data || []).forEach((row: any) => { map[`${row.module}.${row.button}`] = row.access; });
+            return map;
+        },
+    });
+}
+
+export function useCanButton(moduleKey: string, buttonKey: string, require: 'view' | 'edit' = 'edit'): boolean {
+    const moduleAccess = useModuleAccess(moduleKey);
+    const { data: overrides } = useButtonPermissions();
+    const access = overrides?.[`${moduleKey}.${buttonKey}`];
+    if (moduleAccess === 'none') return false;
+    if (require === 'edit' && moduleAccess !== 'edit') return false;
+    if (!access) return true;
+    return access !== 'none' && (require === 'view' || access === 'edit');
+}
+
 // Notification hook with Realtime
 export function useNotifications() {
     const queryClient = useQueryClient();

@@ -1,13 +1,14 @@
 'use client';
 
 import React, { useState } from 'react';
+import Link from 'next/link';
 import PageHeader from '@/components/PageHeader';
 import DataTable from '@/components/DataTable';
 import StatCard from '@/components/StatCard';
 import StatusBadge from '@/components/StatusBadge';
 import VanModal from '@/components/VanModal';
 import { Plus, Route, Banknote, MapPin, Users, Edit2, Trash2, Eye } from 'lucide-react';
-import { useSupabaseQuery, useDelete, useCanAct } from '@/lib/hooks';
+import { useSupabaseQuery, useDelete, useCanAct, useCanButton } from '@/lib/hooks';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { formatCurrency } from '@/lib/currency';
@@ -18,6 +19,7 @@ export default function RoutesPage() {
     const vans = data ?? [];
     const queryClient = useQueryClient();
     const canEdit = useCanAct('sales', 'edit');
+    const canViewRouteActivity = useCanButton('stores', 'route_activity', 'view');
 
     const { data: loadedValueMap = {} } = useQuery<Record<string, number>>({
         queryKey: ['vans', 'loaded-values', vans.map(v => v.van_id).join(',')],
@@ -190,6 +192,13 @@ export default function RoutesPage() {
             width: '140px',
             render: (_: any, row: any) => (
                 <div style={{ display: 'flex', gap: '8px' }}>
+                    {canViewRouteActivity && <Link
+                        href={`/stores/route-activity?location=${encodeURIComponent(`Sales Van - ${row.van_id}`)}`}
+                        style={{ padding: 6, borderRadius: 6, border: '1px solid var(--slate-200)', background: 'var(--card-bg)', color: 'var(--success)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                        title="View received stock and customer sales"
+                    >
+                        <Route size={14} />
+                    </Link>}
                     <button
                         onClick={() => { setSelectedVan(row); setViewOnly(true); setIsModalOpen(true); }}
                         style={{ padding: 6, borderRadius: 6, border: '1px solid var(--slate-200)', background: 'var(--card-bg)', color: 'var(--slate-600)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}

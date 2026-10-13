@@ -55,7 +55,7 @@ export default function UserManagementPage() {
         try {
             // ── Editing an existing user ──────────────────────────────────────
             if (formData.id) {
-                const { id, permissions, ...updateData } = formData;
+                const { id, permissions, buttonPermissions, ...updateData } = formData;
                 const { error } = await supabase
                     .from('system_users')
                     .update(updateData)
@@ -85,6 +85,28 @@ export default function UserManagementPage() {
                         .eq('user_id', id)
                         .in('module', toClear);
                     if (clearError) throw clearError;
+                }
+
+                const buttonEntries = Object.entries(buttonPermissions || {}) as [string, string][];
+                const buttonToUpsert = buttonEntries.filter(([, access]) => access).map(([key, access]) => {
+                    const [module, button] = key.split('.');
+                    return { user_id: id, module, button, access };
+                });
+                if (buttonToUpsert.length > 0) {
+                    const { error: buttonUpsertError } = await supabase
+                        .from('user_button_permissions')
+                        .upsert(buttonToUpsert, { onConflict: 'user_id,module,button' });
+                    if (buttonUpsertError) throw buttonUpsertError;
+                }
+                for (const [key, access] of buttonEntries.filter(([, value]) => !value)) {
+                    const [module, button] = key.split('.');
+                    const { error: clearButtonError } = await supabase
+                        .from('user_button_permissions')
+                        .delete()
+                        .eq('user_id', id)
+                        .eq('module', module)
+                        .eq('button', button);
+                    if (clearButtonError) throw clearButtonError;
                 }
 
                 await logAudit({

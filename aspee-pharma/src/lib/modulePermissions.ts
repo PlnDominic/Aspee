@@ -12,6 +12,12 @@ export interface ModuleDef {
     label: string;
 }
 
+export interface ButtonDef {
+    key: string;
+    label: string;
+    module: string;
+}
+
 export const MODULES: ModuleDef[] = [
     { key: 'sales', label: 'Sales' },
     { key: 'purchasing', label: 'Purchasing' },
@@ -22,6 +28,17 @@ export const MODULES: ModuleDef[] = [
     { key: 'hr', label: 'HR' },
     { key: 'internal_audit', label: 'Internal Audit' },
     { key: 'compliance', label: 'Compliance' },
+];
+
+export const BUTTONS: ButtonDef[] = [
+    { module: 'sales', key: 'invoice_edit', label: 'Edit invoice' },
+    { module: 'sales', key: 'invoice_delete', label: 'Delete draft invoice' },
+    { module: 'sales', key: 'invoice_create', label: 'Create invoice' },
+    { module: 'stores', key: 'sales_request_edit', label: 'Edit sales request' },
+    { module: 'stores', key: 'sales_request_create', label: 'Create sales request' },
+    { module: 'stores', key: 'route_activity', label: 'View route activity' },
+    { module: 'production', key: 'job_order_complete', label: 'Complete job order' },
+    { module: 'qa', key: 'job_order_view', label: 'View job orders' },
 ];
 
 export function roleDefaultAccess(role: string, moduleKey: string): ModuleAccess {
@@ -105,4 +122,3 @@ export function moduleForRoute(pathname: string): string | null {
     }
     return null;
 }
-
