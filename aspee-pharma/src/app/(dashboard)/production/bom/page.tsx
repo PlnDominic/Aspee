@@ -194,12 +194,15 @@ export default function BOMPage() {
         {
             key: 'finished_product',
             label: 'Finished Product',
-            render: (v: any) => (
-                <div>
-                    <div style={{ fontWeight: 600, fontSize: 12 }}>{v?.name || '-'}</div>
-                    <div style={{ fontSize: 10, color: 'var(--slate-500)', fontFamily: 'var(--font-mono)' }}>{v?.sku || '-'}</div>
-                </div>
-            )
+            render: (v: any) => {
+                const product = Array.isArray(v) ? v[0] : v;
+                return (
+                    <div>
+                        <div style={{ fontWeight: 600, fontSize: 12 }}>{product?.name || '-'}</div>
+                        <div style={{ fontSize: 10, color: 'var(--slate-500)', fontFamily: 'var(--font-mono)' }}>{product?.sku || '-'}</div>
+                    </div>
+                );
+            }
         },
         {
             key: 'item_count',
