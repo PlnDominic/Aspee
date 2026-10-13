@@ -39,13 +39,23 @@ export default function BOMPage() {
         async () => {
             const { data, error } = await supabase
                 .from('bill_of_materials')
-                .select(`
-                    *,
-                    finished_product:products(name, sku)
-                `)
+                .select('*')
                 .order('created_at', { ascending: false });
 
             if (error) return { data: null, error };
+
+            const finishedProductIds = [...new Set((data || [])
+                .map((bom: any) => bom.finished_product_id)
+                .filter(Boolean))];
+            const { data: finishedProducts } = finishedProductIds.length > 0
+                ? await supabase
+                    .from('products')
+                    .select('id, name, sku')
+                    .in('id', finishedProductIds)
+                : { data: [] };
+            const finishedProductsById = Object.fromEntries(
+                (finishedProducts || []).map((product: any) => [product.id, product])
+            );
 
             const bomsWithCounts = await Promise.all((data || []).map(async (bom: any) => {
                 try {
@@ -54,9 +64,17 @@ export default function BOMPage() {
                         .select('*', { count: 'exact', head: true })
                         .eq('bom_id', bom.id);
 
-                    return { ...bom, item_count: count || 0 };
+                    return {
+                        ...bom,
+                        finished_product: finishedProductsById[bom.finished_product_id] || null,
+                        item_count: count || 0,
+                    };
                 } catch {
-                    return { ...bom, item_count: 0 };
+                    return {
+                        ...bom,
+                        finished_product: finishedProductsById[bom.finished_product_id] || null,
+                        item_count: 0,
+                    };
                 }
             }));
 
@@ -194,11 +212,15 @@ export default function BOMPage() {
         {
             key: 'finished_product',
             label: 'Finished Product',
-            render: (v: any) => {
+            render: (v: any, row: any) => {
                 const product = Array.isArray(v) ? v[0] : v;
+                const legacyName = typeof row.name === 'string'
+                    ? row.name.replace(/^BOM\s+for\s+/i, '').trim()
+                    : '';
+                const productName = product?.name || row.product_name || row.finished_product_name || legacyName;
                 return (
                     <div>
-                        <div style={{ fontWeight: 600, fontSize: 12 }}>{product?.name || '-'}</div>
+                        <div style={{ fontWeight: 600, fontSize: 12 }}>{productName || '-'}</div>
                         <div style={{ fontSize: 10, color: 'var(--slate-500)', fontFamily: 'var(--font-mono)' }}>{product?.sku || '-'}</div>
                     </div>
                 );
