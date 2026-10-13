@@ -235,13 +235,14 @@ export default function ProductionCompletionModal({ isOpen, onClose, onSuccess, 
 
     const rawMaterials = items.filter(item => item.product?.material_type !== 'Packaging Material');
     const pkgMaterials = items.filter(item => item.product?.material_type === 'Packaging Material');
+    const completionBatchNumber = productionOrder.batch_number?.trim() || `BATCH-${productionOrder.order_number}`;
 
     return (
         <Modal
             isOpen={isOpen}
             onClose={onClose}
             title="Complete Job Order & Transfer"
-            subtitle={`Confirm yield and material consumption for ${productionOrder.order_number}`}
+            subtitle={`Confirm yield and material consumption for ${productionOrder.order_number} · Batch: ${completionBatchNumber}`}
             width={750}
         >
             <form onSubmit={handleSubmit} className="mr-form">
@@ -278,6 +279,20 @@ export default function ProductionCompletionModal({ isOpen, onClose, onSuccess, 
                         <span style={{ fontSize: 11, color: 'var(--slate-500)', marginTop: 4 }}>
                             Target was {productionOrder.quantity}
                         </span>
+                    </div>
+
+                    <div className="form-field">
+                        <label>Batch Number</label>
+                        <div className="input-wrapper disabled">
+                            <span style={{ paddingLeft: 10, fontSize: 13, fontWeight: 600, fontFamily: 'var(--font-mono)' }}>
+                                {completionBatchNumber}
+                            </span>
+                        </div>
+                        {!productionOrder.batch_number && (
+                            <span style={{ fontSize: 11, color: 'var(--slate-500)', marginTop: 4 }}>
+                                Auto-generated during completion
+                            </span>
+                        )}
                     </div>
                 </div>
 

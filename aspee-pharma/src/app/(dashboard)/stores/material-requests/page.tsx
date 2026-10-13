@@ -36,6 +36,7 @@ export default function MaterialRequestsPage() {
                     *,
                     production_order:production_orders(
                         order_number,
+                        batch_number,
                         product:products(name)
                     )
                 `)

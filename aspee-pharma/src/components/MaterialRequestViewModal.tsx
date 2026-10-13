@@ -164,6 +164,10 @@ export default function MaterialRequestViewModal({ isOpen, onClose, request, onI
                         <div className="value">{request.production_order?.order_number || 'Internal Request'}</div>
                     </div>
                     <div className="summary-card">
+                        <label>Batch Number</label>
+                        <div className="value">{request.production_order?.batch_number || '—'}</div>
+                    </div>
+                    <div className="summary-card">
                         <label>Status</label>
                         <div className="value"><StatusBadge status={request.status} /></div>
                     </div>

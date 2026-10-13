@@ -144,7 +144,7 @@ export default function MaterialRequestModal({ isOpen, onClose, onSuccess, produ
         try {
             const { data, error } = await supabase
                 .from('production_orders')
-                .select('id, order_number, status, quantity, batches, product_id, product:products(name)')
+                .select('id, order_number, batch_number, status, quantity, batches, product_id, product:products(name)')
                 .in('status', ['Draft', 'Released', 'In Progress'])
                 .order('created_at', { ascending: false });
             
@@ -466,10 +466,10 @@ export default function MaterialRequestModal({ isOpen, onClose, onSuccess, produ
 
     const subtitle = productionOrder
         ? requestType === 'Raw Material'
-            ? `Request raw materials for Job Order ${productionOrder?.order_number}`
+            ? `Request raw materials for Job Order ${productionOrder?.order_number}${productionOrder?.batch_number ? ` (Batch: ${productionOrder.batch_number})` : ''}`
             : requestType === 'Packaging Material'
-                ? `Request packaging materials for Job Order ${productionOrder?.order_number}`
-                : `New request for Production Order ${productionOrder?.order_number}`
+                ? `Request packaging materials for Job Order ${productionOrder?.order_number}${productionOrder?.batch_number ? ` (Batch: ${productionOrder.batch_number})` : ''}`
+                : `New request for Production Order ${productionOrder?.order_number}${productionOrder?.batch_number ? ` (Batch: ${productionOrder.batch_number})` : ''}`
         : product
             ? `Direct request for ${product?.name || 'Materials'}`
             : 'Create a new material request for production';
@@ -504,7 +504,7 @@ export default function MaterialRequestModal({ isOpen, onClose, onSuccess, produ
                                 <option value="">Select job order (Optional)</option>
                                 {allJobOrders.map(o => (
                                     <option key={o.id} value={o.id}>
-                                        {o.order_number} - {o.product?.name} ({o.status})
+                                        {o.order_number}{o.batch_number ? ` · Batch: ${o.batch_number}` : ''} - {o.product?.name} ({o.status})
                                     </option>
                                 ))}
                             </select>
