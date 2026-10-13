@@ -43,13 +43,17 @@ export default function ProductionMaterialRequestsPage() {
                     *,
                     production_order:production_orders(
                         order_number,
+                        batch_number,
                         product:products(name)
                     )
                 `)
                 .order('created_at', { ascending: false });
 
             if (error) throw error;
-            setRequests(data || []);
+            setRequests((data || []).map((request: any) => ({
+                ...request,
+                batch_number: request.production_order?.batch_number || null,
+            })));
         } catch (error: any) {
             toast.error('Failed to fetch material requests: ' + error.message);
         } finally {
@@ -132,6 +136,13 @@ export default function ProductionMaterialRequestsPage() {
                     <div style={{ fontSize: 10, color: 'var(--slate-500)' }}>{v?.product?.name ? <EntityLink href={`/stores/products?search=${encodeURIComponent(v.product.name)}`} subtle>{v.product.name}</EntityLink> : '-'}</div>
                 </div>
             )
+        },
+        {
+            key: 'batch_number',
+            label: 'Batch No.',
+            render: (v: string | null) => v
+                ? <span style={{ fontWeight: 600, fontFamily: 'var(--font-mono)', fontSize: 11 }}>{v}</span>
+                : <span style={{ color: 'var(--slate-400)' }}>-</span>
         },
         {
             key: 'priority',
