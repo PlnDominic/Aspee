@@ -83,7 +83,6 @@ export default function InvoicesPage() {
 
     const invoices = pagedData?.data ?? [];
     const total = pagedData?.total ?? 0;
-    const isInvoiceEditable = (invoice: any) => normalizeInvoiceStatus(invoice?.status) === 'DRAFT';
 
     // Separate fetch for global stats (Scalability fix: don't calculate from paged rows)
     const { data: statsData } = useFetch<any>(
@@ -141,11 +140,12 @@ export default function InvoicesPage() {
     });
 
     const deleteMutation = useAction<{ id: string; status: string }>({
-        mutationFn: async ({ id, status }) => {
-            if (normalizeInvoiceStatus(status) !== 'DRAFT') {
-                throw new Error('Cannot delete an invoice that has already been issued.');
-            }
-
+        mutationFn: async ({ id }) => {
+            // No status check here — how recent an invoice can be edited or
+            // deleted is governed by each user's edit-window (Settings → User
+            // Management → Edit Window Override, role default otherwise),
+            // enforced server-side via RLS on these two tables. A delete
+            // outside that window is rejected by Postgres, not by the client.
             const { error: deleteItemsError } = await supabase.from('sales_invoice_items').delete().eq('invoice_id', id);
             if (deleteItemsError) throw deleteItemsError;
 
@@ -155,13 +155,22 @@ export default function InvoicesPage() {
             await logAudit({
                 action: 'DELETE',
                 module: 'Sales',
-                description: `Deleted draft invoice ${id}`,
+                description: `Deleted invoice ${id}`,
                 record_id: id,
                 record_type: 'sales_invoices',
             });
         },
         invalidateKeys: ['sales_invoices'],
         successMessage: 'Invoice deleted.',
+        onError: (error: any) => {
+            // RLS denial (outside edit window, or view-only access) surfaces as a
+            // raw Postgres policy error — translate it to something actionable.
+            // useAction's own onError already toasts error.message first; this
+            // follow-up toast gives the real reason.
+            if (error?.code === '42501' || /row-level security/i.test(error?.message || '')) {
+                toast.error('You are outside your edit window for this invoice, or do not have delete access. Ask an admin to extend your Edit Window Override in User Management if this is a mistake.');
+            }
+        },
     });
 
     const handleSaveInvoice = async (invoiceData: any) => {
@@ -170,13 +179,8 @@ export default function InvoicesPage() {
     };
 
     const handleDeleteInvoice = async (id: string, currentStatus: string) => {
-        if (normalizeInvoiceStatus(currentStatus) !== 'DRAFT') {
-            toast.error('Cannot delete an invoice that has already been issued.');
-            return;
-        }
-
         if (!confirm('Are you sure you want to delete this invoice?')) return;
-        await deleteMutation.mutateAsync({ id, status: currentStatus });
+        deleteMutation.mutate({ id, status: currentStatus });
     };
 
     const handleExport = () => {
@@ -222,16 +226,16 @@ export default function InvoicesPage() {
                     >
                         <Eye size={14} />
                     </button>
-                    {canEdit && canEditInvoice && isInvoiceEditable(row) && (
+                    {canEdit && canEditInvoice && (
                         <button
-                            onClick={() => { if (!isInvoiceEditable(row)) { toast.error('Issued invoices are permanently locked.'); return; } setSelectedInvoice(row); setIsModalOpen(true); }}
+                            onClick={() => { setSelectedInvoice(row); setIsModalOpen(true); }}
                             style={{ padding: 6, borderRadius: 6, border: '1px solid var(--slate-200)', background: 'var(--card-bg)', color: 'var(--primary-600)', cursor: 'pointer' }}
                             title="Edit"
                         >
                             <Pencil size={14} />
                         </button>
                     )}
-                    {canEdit && canDeleteInvoice && normalizeInvoiceStatus(row.status) === 'DRAFT' && (
+                    {canEdit && canDeleteInvoice && (
                         <button
                             onClick={() => handleDeleteInvoice(row.id, row.status)}
                             style={{ padding: 6, borderRadius: 6, border: '1px solid var(--slate-200)', background: 'var(--card-bg)', color: 'var(--danger)', cursor: 'pointer' }}
