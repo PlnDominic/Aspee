@@ -29,7 +29,8 @@ type ReportTab =
     | 'cheques_received'
     | 'shortage_excess'
     | 'requisitions'
-    | 'product_distribution';
+    | 'product_distribution'
+    | 'product_sales_by_rep';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -304,6 +305,7 @@ export default function SalesReportsPage() {
         { key: 'shortage_excess',      label: 'Shortage & Excess / Salesperson', icon: <AlertTriangle size={15} /> },
         { key: 'requisitions',         label: 'Product Requisitions',         icon: <ClipboardList size={15} /> },
         { key: 'product_distribution', label: 'Products Distribution',        icon: <Package size={15} /> },
+        { key: 'product_sales_by_rep', label: 'Product Sales / Sales Rep',    icon: <Users size={15} /> },
     ];
 
     return (
@@ -353,6 +355,7 @@ export default function SalesReportsPage() {
             {activeTab === 'shortage_excess'      && <ShortageExcess />}
             {activeTab === 'requisitions'         && <RequisitionsReport />}
             {activeTab === 'product_distribution' && <ProductDistributionReport />}
+            {activeTab === 'product_sales_by_rep' && <ProductSalesByRepReport />}
         </div>
     );
 }
@@ -1818,6 +1821,191 @@ function ProductDistributionReport() {
                 loading={loading}
                 searchPlaceholder="Search product or SKU..."
             />
+        </div>
+    );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// PRODUCT SALES BY SALES REP — bulk row per rep, click to drill into their products
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function ProductSalesByRepReport() {
+    const [data, setData] = useState<any[]>([]);
+    const [loading, setLoading] = useState(false);
+    const [startDate, setStartDate] = useState(firstOfMonth);
+    const [endDate, setEndDate] = useState(today);
+    const [expandedRep, setExpandedRep] = useState<string | null>(null);
+
+    const fetch = useCallback(async () => {
+        setLoading(true);
+        try {
+            const vanMap = await buildVanMap();
+
+            const { data: items, error } = await supabase
+                .from('sales_invoice_items')
+                .select(`
+                    quantity, unit_price, total_price,
+                    product:products(id, name, sku, unit),
+                    invoice:sales_invoices!inner(invoice_number, customer_name, date, status, route_id)
+                `)
+                .in('invoice.status', ['Issued', 'ISSUED', 'Partially Paid', 'PARTIALLY PAID', 'Paid', 'PAID'])
+                .gte('invoice.date', startDate)
+                .lte('invoice.date', endDate);
+
+            if (error) throw error;
+
+            const rows = (items || [])
+                .map((r: any) => {
+                    const inv = r.invoice;
+                    const prod = r.product;
+                    if (!inv || !prod) return null;
+                    const van = inv.route_id ? vanMap[inv.route_id] : null;
+                    return {
+                        rep_key: inv.route_id || 'unassigned',
+                        rep_name: van?.driver_name || 'Unassigned',
+                        route_area: van?.route_area || 'No Route',
+                        invoice_number: inv.invoice_number,
+                        customer_name: inv.customer_name || '-',
+                        product_id: prod.id,
+                        product_name: prod.name,
+                        sku: prod.sku,
+                        unit: prod.unit,
+                        quantity: Number(r.quantity) || 0,
+                        total: Number(r.total_price) || 0,
+                    };
+                })
+                .filter(Boolean) as any[];
+
+            setData(rows);
+        } catch (e: any) { toast.error(e.message); }
+        finally { setLoading(false); }
+    }, [startDate, endDate]);
+
+    useEffect(() => { fetch(); }, [fetch]);
+
+    // Bulk rows: one per sales rep.
+    const repSummaries = React.useMemo(() => {
+        const byRep = new Map<string, any>();
+        for (const r of data) {
+            const existing = byRep.get(r.rep_key);
+            if (existing) {
+                existing.product_ids.add(r.product_id);
+                existing.total_qty += r.quantity;
+                existing.total_revenue += r.total;
+            } else {
+                byRep.set(r.rep_key, {
+                    rep_key: r.rep_key,
+                    rep_name: r.rep_name,
+                    route_area: r.route_area,
+                    product_ids: new Set([r.product_id]),
+                    total_qty: r.quantity,
+                    total_revenue: r.total,
+                });
+            }
+        }
+        return Array.from(byRep.values())
+            .map(r => ({ ...r, product_count: r.product_ids.size }))
+            .sort((a, b) => b.total_revenue - a.total_revenue);
+    }, [data]);
+
+    // Per-product breakdown for the expanded rep.
+    const repProductBreakdown = React.useMemo(() => {
+        if (!expandedRep) return [];
+        const byProduct = new Map<string, any>();
+        for (const r of data) {
+            if (r.rep_key !== expandedRep) continue;
+            const existing = byProduct.get(r.product_id);
+            if (existing) {
+                existing.quantity += r.quantity;
+                existing.total += r.total;
+                existing.invoice_count += 1;
+            } else {
+                byProduct.set(r.product_id, {
+                    product_id: r.product_id,
+                    product_name: r.product_name,
+                    sku: r.sku,
+                    unit: r.unit,
+                    quantity: r.quantity,
+                    total: r.total,
+                    invoice_count: 1,
+                });
+            }
+        }
+        return Array.from(byProduct.values()).sort((a, b) => b.total - a.total);
+    }, [data, expandedRep]);
+
+    const totalQty = repSummaries.reduce((s, r) => s + r.total_qty, 0);
+    const totalRevenue = repSummaries.reduce((s, r) => s + r.total_revenue, 0);
+
+    const repColumns = [
+        { key: 'rep_name', label: 'Sales Rep', render: (v: any) => <span style={{ fontWeight: 700, color: 'var(--slate-800)' }}>{v}</span> },
+        { key: 'route_area', label: 'Route' },
+        { key: 'product_count', label: 'Products Sold', render: (v: any) => <span style={{ fontWeight: 600 }}>{v} product{v === 1 ? '' : 's'}</span> },
+        { key: 'total_qty', label: 'Total Qty', render: (v: any) => <span style={{ fontWeight: 700 }}>{Number(v).toLocaleString()}</span> },
+        { key: 'total_revenue', label: 'Revenue', render: (v: any) => <span style={{ fontWeight: 800, color: 'var(--primary-600)' }}>{formatCurrency(v)}</span> },
+    ];
+
+    const productColumns = [
+        {
+            key: 'product_name', label: 'Product', render: (v: any, row: any) => (
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                    <span style={{ fontWeight: 600, fontSize: 12 }}>{v}</span>
+                    <span style={{ fontSize: 10, color: 'var(--slate-400)', fontFamily: 'var(--font-mono)' }}>{row.sku}</span>
+                </div>
+            )
+        },
+        { key: 'quantity', label: 'Qty', render: (v: any, row: any) => <span style={{ fontWeight: 700 }}>{Number(v).toLocaleString()} <span style={{ fontWeight: 400, fontSize: 11 }}>{row.unit}</span></span> },
+        { key: 'invoice_count', label: 'Invoices', render: (v: any) => <span style={{ color: 'var(--slate-600)' }}>{v}</span> },
+        { key: 'total', label: 'Revenue', render: (v: any) => <span style={{ fontWeight: 700 }}>{formatCurrency(v)}</span> },
+    ];
+
+    const expandedRepLabel = repSummaries.find(r => r.rep_key === expandedRep);
+
+    return (
+        <div>
+            <FilterBar startDate={startDate} endDate={endDate} onStartChange={setStartDate} onEndChange={setEndDate}
+                onRefresh={fetch} loading={loading}
+                extra={
+                    <ExportBtn onClick={() => exportToCsv(`product_sales_by_rep_${today}.csv`, data, [
+                        { header: 'Sales Rep',  accessor: (r: any) => r.rep_name },
+                        { header: 'Route',      accessor: (r: any) => r.route_area },
+                        { header: 'Invoice',    accessor: (r: any) => r.invoice_number },
+                        { header: 'Customer',   accessor: (r: any) => r.customer_name },
+                        { header: 'Product',    accessor: (r: any) => r.product_name },
+                        { header: 'SKU',        accessor: (r: any) => r.sku },
+                        { header: 'Quantity',   accessor: (r: any) => r.quantity },
+                        { header: 'Revenue',    accessor: (r: any) => r.total.toFixed(2) },
+                    ])} />
+                }
+            />
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 16, marginBottom: 20 }}>
+                <StatCard title="Sales Reps"  value={repSummaries.length} icon={<Users size={20} />} color="blue" />
+                <StatCard title="Total Units Sold" value={totalQty.toLocaleString()} icon={<Package size={20} />} color="teal" />
+                <StatCard title="Total Revenue" value={formatCurrency(totalRevenue)} icon={<Banknote size={20} />} color="green" />
+            </div>
+            <DataTable
+                columns={repColumns}
+                data={repSummaries}
+                loading={loading}
+                searchPlaceholder="Search sales rep or route..."
+                onRowClick={(row) => setExpandedRep(prev => prev === row.rep_key ? null : row.rep_key)}
+            />
+            {expandedRep && (
+                <div style={{ marginTop: 16, padding: 16, border: '1.5px solid var(--primary-200, #bfdbfe)', borderRadius: 10, background: 'var(--primary-50, #eff6ff)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--primary-700)' }}>
+                            Products sold by {expandedRepLabel?.rep_name} ({expandedRepLabel?.route_area})
+                        </span>
+                        <button
+                            onClick={() => setExpandedRep(null)}
+                            style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid var(--slate-200)', background: 'var(--card-bg)', fontSize: 11, cursor: 'pointer' }}
+                        >
+                            Close
+                        </button>
+                    </div>
+                    <DataTable columns={productColumns} data={repProductBreakdown} loading={false} searchPlaceholder="" />
+                </div>
+            )}
         </div>
     );
 }

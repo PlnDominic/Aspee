@@ -9,6 +9,7 @@ import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { useCurrentUser, useCanAct } from '@/lib/hooks';
 import { logAudit } from '@/lib/auditLog';
+import { formatCurrency } from '@/lib/formatCurrency';
 
 const getSingleRelation = <T,>(value: T | T[] | null | undefined): T | null => {
     if (Array.isArray(value)) return value[0] ?? null;
@@ -48,7 +49,7 @@ export default function SalesRequestsPage() {
                         quantity_approved,
                         quantity_issued,
                         notes,
-                        product:products(id, name, sku, unit)
+                        product:products(id, name, sku, unit, cash_price, credit_price)
                     )
                 `)
                 .order('created_at', { ascending: false });
@@ -74,6 +75,13 @@ export default function SalesRequestsPage() {
                     total_requested: items.reduce((sum: number, item: any) => sum + (Number(item.quantity_requested) || 0), 0),
                     total_approved: items.reduce((sum: number, item: any) => sum + (Number(item.quantity_approved) || 0), 0),
                     total_issued: items.reduce((sum: number, item: any) => sum + (Number(item.quantity_issued) || 0), 0),
+                    // Value at the product's cash price (falls back to credit price
+                    // when no cash price is set) — an estimate of what's being
+                    // requested, not a final invoiced amount.
+                    total_value: items.reduce((sum: number, item: any) => {
+                        const price = item.product?.cash_price ?? item.product?.credit_price ?? 0;
+                        return sum + (Number(item.quantity_requested) || 0) * Number(price || 0);
+                    }, 0),
                 };
             });
 
@@ -142,7 +150,8 @@ export default function SalesRequestsPage() {
                 const summary = (row.items || []).map((item: any) => {
                     const qty = Number(item.quantity_requested || 0).toLocaleString();
                     const unit = item.product?.unit || 'units';
-                    return `${qty} ${unit}`;
+                    const price = item.product?.cash_price ?? item.product?.credit_price;
+                    return `${qty} ${unit}${price != null ? ` @ ${formatCurrency(Number(price))}` : ''}`;
                 }).join(', ');
 
                 return (
@@ -152,6 +161,11 @@ export default function SalesRequestsPage() {
                     </div>
                 );
             },
+        },
+        {
+            key: 'total_value',
+            label: 'Value',
+            render: (value: number) => <span style={{ fontWeight: 700, color: 'var(--primary-700)' }}>{formatCurrency(Number(value) || 0)}</span>,
         },
         {
             key: 'created_at',
