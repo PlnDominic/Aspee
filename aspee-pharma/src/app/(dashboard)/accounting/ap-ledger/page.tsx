@@ -18,7 +18,7 @@ import {
 
 interface LedgerLine {
     date: string;
-    type: 'Bill' | 'Payment';
+    type: 'Opening Balance' | 'Bill' | 'Payment';
     ref: string;
     description: string;
     debit: number;   // GHS — reduces payable (payment)
@@ -36,6 +36,7 @@ interface SupplierLedger {
     supplierName: string;
     category: string;
     status: string;
+    openingBalance: number;
     totalBilled: number;
     totalPaid: number;
     balanceDue: number;
@@ -70,7 +71,7 @@ function AccountsPayableLedgerContent() {
         ['ap_ledger'],
         async () => {
             const [suppliersRes, poRes, paymentsRes, glRes] = await Promise.all([
-                supabase.from('suppliers').select('id, name, category, status').order('name'),
+                supabase.from('suppliers').select('id, name, category, status, opening_balance').order('name'),
                 supabase
                     .from('purchase_orders')
                     .select('id, po_number, supplier_id, total_amount, currency, exchange_rate, status, approved_at, created_at'),
@@ -120,17 +121,34 @@ function AccountsPayableLedgerContent() {
 
         const bySupplier = new Map<string, SupplierLedger>();
         for (const s of suppliers) {
-            bySupplier.set(s.id, {
+            const openingBalance = Number(s.opening_balance) || 0;
+            const ledger: SupplierLedger = {
                 supplierId: s.id,
                 supplierName: s.name,
                 category: s.category,
                 status: s.status,
+                openingBalance,
                 totalBilled: 0,
                 totalPaid: 0,
                 balanceDue: 0,
                 hasForeignCurrency: false,
                 lines: [],
-            });
+            };
+            if (openingBalance !== 0) {
+                ledger.lines.push({
+                    date: '',
+                    type: 'Opening Balance',
+                    ref: '—',
+                    description: 'Opening balance brought forward',
+                    debit: openingBalance < 0 ? -openingBalance : 0,
+                    credit: openingBalance > 0 ? openingBalance : 0,
+                    runningBalance: 0,
+                    nativeCurrency: 'GHS',
+                    nativeAmount: Math.abs(openingBalance),
+                    exchangeRate: 1,
+                });
+            }
+            bySupplier.set(s.id, ledger);
         }
 
         for (const po of purchaseOrders) {
@@ -192,8 +210,8 @@ function AccountsPayableLedgerContent() {
                 running += l.credit - l.debit;
                 return { ...l, runningBalance: running };
             });
-            ledger.balanceDue = ledger.totalBilled - ledger.totalPaid;
-            if (ledger.totalBilled > 0 || ledger.totalPaid > 0) result.push(ledger);
+            ledger.balanceDue = ledger.openingBalance + ledger.totalBilled - ledger.totalPaid;
+            if (ledger.openingBalance !== 0 || ledger.totalBilled > 0 || ledger.totalPaid > 0) result.push(ledger);
         }
 
         return result.sort((a, b) => b.balanceDue - a.balanceDue);

@@ -21,7 +21,7 @@ import {
 
 interface LedgerLine {
     date: string;
-    type: 'Invoice' | 'Receipt' | 'Credit Note';
+    type: 'Opening Balance' | 'Invoice' | 'Receipt' | 'Credit Note';
     ref: string;
     description: string;
     debit: number;   // increases receivable (invoice raised)
@@ -34,6 +34,7 @@ interface CustomerLedger {
     customerName: string;
     category: string;
     route: string;
+    openingBalance: number;
     totalInvoiced: number;
     totalReceived: number;
     totalCredited: number;
@@ -135,6 +136,7 @@ function AccountsReceivableLedgerContent() {
                     customerName: name || 'Unknown',
                     category: '',
                     route: '',
+                    openingBalance: 0,
                     totalInvoiced: 0,
                     totalReceived: 0,
                     totalCredited: 0,
@@ -146,11 +148,26 @@ function AccountsReceivableLedgerContent() {
             return ledger;
         };
 
-        // Seed from the customers master so metadata (category, route) is available
+        // Seed from the customers master so metadata (category, route) is
+        // available, and so the opening balance brought into the system is
+        // part of the receivable, not just a number shown on that one
+        // customer's own Statement of Account.
         for (const c of customers) {
             const ledger = getOrCreate(c.name);
             ledger.category = c.customer_category || c.category || '';
             ledger.route = c.route || '';
+            ledger.openingBalance = Number(c.opening_balance) || 0;
+            if (ledger.openingBalance !== 0) {
+                ledger.lines.push({
+                    date: '',
+                    type: 'Opening Balance',
+                    ref: '—',
+                    description: 'Opening balance brought forward',
+                    debit: ledger.openingBalance > 0 ? ledger.openingBalance : 0,
+                    credit: ledger.openingBalance < 0 ? -ledger.openingBalance : 0,
+                    runningBalance: 0,
+                });
+            }
         }
 
         for (const inv of invoices) {
@@ -218,8 +235,8 @@ function AccountsReceivableLedgerContent() {
                 running += l.debit - l.credit;
                 return { ...l, runningBalance: running };
             });
-            ledger.balanceDue = ledger.totalInvoiced - ledger.totalReceived - ledger.totalCredited;
-            if (ledger.totalInvoiced > 0 || ledger.totalReceived > 0 || ledger.totalCredited > 0) {
+            ledger.balanceDue = ledger.openingBalance + ledger.totalInvoiced - ledger.totalReceived - ledger.totalCredited;
+            if (ledger.openingBalance !== 0 || ledger.totalInvoiced > 0 || ledger.totalReceived > 0 || ledger.totalCredited > 0) {
                 result.push(ledger);
             }
         }
