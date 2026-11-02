@@ -9,6 +9,7 @@ import SupplierProfileModal from '@/components/SupplierProfileModal';
 import EntityLink from '@/components/EntityLink';
 import { Plus, Download, Edit2, Trash2, Mail, Phone, BookOpen, Eye } from 'lucide-react';
 import { useSupabaseQuery, useSave, useDelete, useCanAct } from '@/lib/hooks';
+import { postOpeningBalanceJournal } from '@/lib/autoPostJournal';
 
 export default function SuppliersPage() {
     const canEdit = useCanAct('purchasing', 'edit');
@@ -26,6 +27,16 @@ export default function SuppliersPage() {
         successMessage: {
             create: 'Supplier added successfully',
             update: 'Supplier updated successfully',
+        },
+        // Keeps the GL's Accounts Payable control account in sync with this
+        // supplier's opening balance — see postOpeningBalanceJournal.
+        onSuccess: (data: any) => {
+            void postOpeningBalanceJournal({
+                type: 'supplier',
+                entityId: data.id,
+                entityName: data.name,
+                openingBalance: Number(data.opening_balance) || 0,
+            });
         },
     });
 

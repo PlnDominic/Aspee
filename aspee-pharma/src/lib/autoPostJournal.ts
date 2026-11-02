@@ -14,6 +14,11 @@
  *   Credit Note       → DR Sales Revenue           / CR Accounts Receivable
  *   Expense Approved  → DR [Expense COA Account]  / CR Cash at Bank / Petty Cash
  *   Petty Cash Replenished (via Bank Transfer) → DR Petty Cash / CR Cash at Bank
+ *   Customer/Supplier Opening Balance → see postOpeningBalanceJournal below —
+ *     handled separately from the event system above because it represents
+ *     current state (one entry per entity, replaced on edit) rather than a
+ *     one-off transaction, and its debit/credit sides flip depending on the
+ *     sign of the balance.
  */
 
 import { supabase } from '@/lib/supabase';
@@ -316,5 +321,74 @@ export async function autoPostJournal(payload: AutoJournalPayload): Promise<void
 
     if (error) {
         console.error('[autoPostJournal] Failed to post GL entry:', error.message, entry);
+    }
+}
+
+/**
+ * Posts (or re-posts) the single journal entry representing a customer's or
+ * supplier's opening balance.
+ *
+ * Unlike autoPostJournal's event log — one row per transaction, never
+ * touched again — this is a snapshot of current state: each entity gets at
+ * most one "opening balance" entry, identified by a deterministic `notes`
+ * tag keyed on (type, entityId). Every call deletes that entry first, then
+ * re-inserts it at the current amount (or leaves it deleted if the balance
+ * is now zero) — so editing or clearing a customer/supplier's opening
+ * balance in CustomerModal/SupplierModal keeps the GL in sync instead of
+ * stacking a new entry on top of the old one.
+ *
+ * Accounts Receivable/Payable are an Asset/Liability respectively, so the
+ * debit/credit side flips with the sign of the balance:
+ *   Customer owes us (opening_balance > 0)   → DR Accounts Receivable / CR Opening Balance Equity
+ *   Customer in credit (opening_balance < 0) → DR Opening Balance Equity / CR Accounts Receivable
+ *   We owe supplier (opening_balance > 0)    → DR Opening Balance Equity / CR Accounts Payable
+ *   We're in credit with supplier (< 0)      → DR Accounts Payable / CR Opening Balance Equity
+ *
+ * "Opening Balance Equity" is a standard bookkeeping suspense account for
+ * balances brought into a system rather than earned/incurred — if it isn't
+ * already in Chart of Accounts (Accounting → Settings), add it there with
+ * type "Equity" so it's grouped correctly on the Statement of Financial
+ * Position; the journal entry itself doesn't require that row to exist.
+ */
+export async function postOpeningBalanceJournal(opts: {
+    type: 'customer' | 'supplier';
+    entityId: string;
+    entityName: string;
+    openingBalance: number;
+    date?: string;
+}): Promise<void> {
+    const { type, entityId, entityName, openingBalance, date } = opts;
+    const notesTag = `Auto-posted opening balance for ${type} ${entityId}`;
+
+    const { error: deleteError } = await supabase.from('journal_entries').delete().eq('notes', notesTag);
+    if (deleteError) {
+        console.error('[postOpeningBalanceJournal] Failed to clear previous entry:', deleteError.message);
+    }
+
+    const amt = Math.abs(Number(openingBalance) || 0);
+    if (amt === 0) return;
+
+    const controlAccount = type === 'customer' ? 'Accounts Receivable' : 'Accounts Payable';
+    // AR is debit-normal (customer owes us -> debit AR); AP is credit-normal
+    // (we owe supplier -> credit AP). A negative balance flips both.
+    const controlAccountIsDebit = type === 'customer' ? openingBalance > 0 : openingBalance < 0;
+
+    const entry = {
+        entry_number: generateEntryNumber(type === 'customer' ? 'COB' : 'SOB'),
+        date: date || new Date().toISOString().split('T')[0],
+        description: `Opening balance — ${entityName}`,
+        ref_type: type === 'customer' ? 'Sales' : 'Purchase',
+        debit_account: controlAccountIsDebit ? controlAccount : 'Opening Balance Equity',
+        debit_amount: amt,
+        credit_account: controlAccountIsDebit ? 'Opening Balance Equity' : controlAccount,
+        credit_amount: amt,
+        created_by: 'System',
+        notes: notesTag,
+        counterparty_name: entityName,
+    };
+
+    const { error } = await supabase.from('journal_entries').insert([entry]);
+    if (error) {
+        console.error('[postOpeningBalanceJournal] Failed to post GL entry:', error.message, entry);
     }
 }

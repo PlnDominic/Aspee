@@ -10,6 +10,7 @@ import {
     ArrowLeft, Download, Printer, Banknote, Receipt
 } from 'lucide-react';
 import { formatCurrency } from '@/lib/currency';
+import { postOpeningBalanceJournal } from '@/lib/autoPostJournal';
 
 interface CustomerModalProps {
     isOpen: boolean;
@@ -324,6 +325,15 @@ export default function CustomerModal({ isOpen, onClose, onSuccess, record, read
                     const msg = uploadError?.message || 'Ghana Card upload failed';
                     toast.warning(`Customer saved, but Ghana Card upload failed: ${msg}`);
                 }
+
+                // Keeps the GL's Accounts Receivable control account in sync with
+                // this customer's opening balance — see postOpeningBalanceJournal.
+                await postOpeningBalanceJournal({
+                    type: 'customer',
+                    entityId: customerId,
+                    entityName: formData.name,
+                    openingBalance: Number(formData.opening_balance) || 0,
+                });
             }
 
             onSuccess();
