@@ -82,11 +82,14 @@ export default function FinancialPositionPage() {
 
     const fetchARByCustomer = async () => {
         try {
-            const { data: invoices, error } = await supabase
-                .from('sales_invoices')
-                .select('id, customer_name, total_amount, status')
-                .in('status', ['Issued', 'ISSUED', 'Partially Paid', 'PARTIALLY PAID', 'Overdue', 'OVERDUE'])
-                .lte('date', endDate);
+            const [{ data: invoices, error }, { data: customers }] = await Promise.all([
+                supabase
+                    .from('sales_invoices')
+                    .select('id, customer_name, total_amount, status')
+                    .in('status', ['Issued', 'ISSUED', 'Partially Paid', 'PARTIALLY PAID', 'Overdue', 'OVERDUE'])
+                    .lte('date', endDate),
+                supabase.from('customers').select('name, opening_balance'),
+            ]);
             if (error) throw error;
 
             const ids = (invoices || []).map((i: any) => i.id);
@@ -101,7 +104,16 @@ export default function FinancialPositionPage() {
                 }
             }
 
+            // Seed from each customer's opening balance first — matches the GL
+            // posting from postOpeningBalanceJournal, which is what feeds
+            // ledgerReceivables above. Without this, the drill-down total
+            // wouldn't add up to the headline figure for any customer with an
+            // opening balance.
             const balanceMap: Record<string, number> = {};
+            for (const c of customers || []) {
+                const opening = Number(c.opening_balance) || 0;
+                if (opening !== 0) balanceMap[c.name] = (balanceMap[c.name] || 0) + opening;
+            }
             for (const inv of invoices || []) {
                 const outstanding = Number(inv.total_amount) - (paidMap[inv.id] || 0);
                 if (outstanding > 0.01) {
@@ -111,6 +123,7 @@ export default function FinancialPositionPage() {
 
             setArByCustomer(
                 Object.entries(balanceMap)
+                    .filter(([, outstanding]) => outstanding > 0.01)
                     .map(([customer_name, outstanding]) => ({ customer_name, outstanding }))
                     .sort((a, b) => b.outstanding - a.outstanding)
             );
@@ -135,16 +148,11 @@ export default function FinancialPositionPage() {
                 .lte('created_at', endDate + 'T23:59:59');
             if (error) throw error;
 
-            const supplierIds = Array.from(new Set(
-                (orders || [])
-                    .map((po: any) => po.supplier_id)
-                    .filter(Boolean)
-            ));
-
+            // All suppliers, not just those with a PO — a supplier with only an
+            // opening balance (no purchase orders yet) still owes/is owed money.
             const { data: suppliers } = await supabase
                 .from('suppliers')
-                .select('id, name')
-                .in('id', supplierIds.length > 0 ? supplierIds : ['00000000-0000-0000-0000-000000000000']);
+                .select('id, name, opening_balance');
             const nameById: Record<string, string> = {};
             for (const s of suppliers || []) nameById[s.id] = s.name;
 
@@ -172,16 +180,23 @@ export default function FinancialPositionPage() {
                 paidMap[p.supplier_id] = (paidMap[p.supplier_id] || 0) + value;
             }
 
+            // Seed from each supplier's opening balance first — matches the GL
+            // posting from postOpeningBalanceJournal, which is what feeds
+            // ledgerTradeCreditors above.
             const balanceMap: Record<string, number> = {};
-            for (const supplierId of Object.keys(billedMap)) {
-                const outstanding = billedMap[supplierId] - (paidMap[supplierId] || 0);
-                if (outstanding > 0.01) {
-                    balanceMap[nameById[supplierId] || 'Unknown Supplier'] = outstanding;
-                }
+            for (const s of suppliers || []) {
+                const opening = Number(s.opening_balance) || 0;
+                if (opening !== 0) balanceMap[s.name] = (balanceMap[s.name] || 0) + opening;
+            }
+            for (const supplierId of new Set([...Object.keys(billedMap), ...Object.keys(paidMap)])) {
+                const outstanding = (billedMap[supplierId] || 0) - (paidMap[supplierId] || 0);
+                const name = nameById[supplierId] || 'Unknown Supplier';
+                balanceMap[name] = (balanceMap[name] || 0) + outstanding;
             }
 
             setApBySupplier(
                 Object.entries(balanceMap)
+                    .filter(([, outstanding]) => outstanding > 0.01)
                     .map(([supplier_name, outstanding]) => ({ supplier_name, outstanding }))
                     .sort((a, b) => b.outstanding - a.outstanding)
             );
